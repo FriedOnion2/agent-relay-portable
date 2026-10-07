@@ -75,7 +75,8 @@ def report(conv, target, options, destination, native=False):
                         paired.add(id(b))
         for turn in conv.turns:
             for b in turn.blocks:
-                category, label = 'preserved', b.kind
+                category, label = 'preserved', {ir.TEXT:'正文', ir.TOOL_CALL:'工具调用',
+                    ir.TOOL_RESULT:'工具结果', ir.THINKING:'思考', ir.IMAGE:'图像', ir.RAW:'原始块'}.get(b.kind, b.kind)
                 if target != 'dsh' and turn.role not in (ir.USER, ir.ASSISTANT):
                     category, label = 'dropped', '来源系统上下文'
                 elif b.kind == ir.RAW:
