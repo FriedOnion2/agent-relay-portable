@@ -27,6 +27,9 @@ MAX_BODY = 4 * 1024 * 1024
 class RelayServer(ThreadingHTTPServer):
     # Preserve in-flight writes when the user stops the service.
     daemon_threads = False
+    # Windows SO_REUSEADDR permits a second live listener on the same port.
+    allow_reuse_address = sys.platform != "win32"
+    allow_reuse_port = False
 
 
 class Handler(BaseHTTPRequestHandler):
