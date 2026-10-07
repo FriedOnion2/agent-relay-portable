@@ -83,7 +83,7 @@ class WindowsProfilesTests(unittest.TestCase):
         dst = registry.get("claude", home=str(self.root / "linux-claude"))
         with patch.dict(registry._CACHE, {"claude": dst}):
             for cwd in (None, "C:\\project", "relative", str(self.root / "missing")):
-                with self.assertRaisesRegex(ValueError, "Ubuntu 项目目录"):
+                with self.assertRaisesRegex(ValueError, "本机项目目录"):
                     registry.transfer(key, sid, "claude", cwd=cwd)
             registry.transfer(key, sid, "claude", cwd=str(self.root), session_id="migrated")
         conv = dst.read("migrated")

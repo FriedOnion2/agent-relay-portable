@@ -211,7 +211,7 @@ class NativeImportTests(unittest.TestCase):
         for key in ("claude", "claude_sdk", "workbuddy", "dsh", "codebuddy"):
             registry._CACHE[key] = registry.get(key, home=str(self.profile / "would-write"))
             sid = registry.list_sessions("windows_" + key)[0]["id"]
-            with self.assertRaisesRegex(ValueError, "Windows 来源"):
+            with self.assertRaisesRegex(ValueError, "来源重叠"):
                 native_import.import_windows(key, sid, str(self.cwd))
         self.assertFalse((self.profile / "would-write").exists())
 

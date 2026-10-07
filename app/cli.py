@@ -35,7 +35,7 @@ from relay import registry  # noqa: E402
 from relay import ir  # noqa: E402
 
 AGENTS = list(bootstrap.SOURCES)
-READ_AGENTS = list(dict.fromkeys(AGENTS + ["windows_" + k for k in bootstrap.SOURCES]))
+READ_AGENTS = AGENTS + [prefix + k for prefix in ("windows_", "ubuntu_") for k in AGENTS]
 
 
 def cmd_windows_users(args):
@@ -52,13 +52,18 @@ def cmd_windows_users(args):
 
 
 def cmd_import_windows(args):
-    from relay.native_import import import_windows
-    result = import_windows(args.agent, args.id, args.cwd, session_id=args.session_id,
-                            dsh_compression=args.dsh_compression)
+    from relay import native_import
+    options = dict(session_id=args.session_id, dsh_compression=args.dsh_compression)
+    if args.cmd == "export-windows":
+        options["project_path"] = args.project_path
+    result = getattr(native_import, args.cmd.replace("-", "_"))(args.agent, args.id, args.cwd, **options)
     if args.json:
         _print_json(result)
         return
-    print(f"✓ 已导入 Ubuntu {bootstrap.SOURCES[result['to']['source']][0]}")
+    native = result['to']['source']
+    if native.startswith("windows_"):
+        native = native[len("windows_"):]
+    print(f"✓ 已迁到 {result['target_os']} {bootstrap.SOURCES[native][0]}")
     print(f"  新文件: {result['to']['path']}\n  原生会话 ID: {result['to']['native_id']}")
     if result["resume_command"]:
         print(f"  续聊命令: {result['resume_command']}")
@@ -67,28 +72,33 @@ def cmd_import_windows(args):
 
 
 def cmd_windows_use(args):
-    from relay.windows import PROFILE_ENV
     import platform
-    if platform.system() != "Linux":
-        raise ValueError("windows-use 仅用于 Ubuntu / Linux 读取挂载的 Windows 分区")
+    ubuntu = getattr(args, "cmd", "windows-use") == "ubuntu-use"
+    from relay.windows import PROFILE_ENV as WINDOWS_ENV
+    from relay.ubuntu import PROFILE_ENV as UBUNTU_ENV
+    env = UBUNTU_ENV if ubuntu else WINDOWS_ENV
+    key = "ubuntu_user_home" if ubuntu else "windows_user_home"
+    label = "Ubuntu" if ubuntu else "Windows"
+    if platform.system() != ("Windows" if ubuntu else "Linux"):
+        raise ValueError("ubuntu-use 用于 Windows；windows-use 用于 Ubuntu / Linux")
     if args.clear and args.path:
         raise ValueError("目录与 --clear 不能同时使用")
     path = ""
     if not args.clear:
         if not args.path:
-            raise ValueError("请填写 Windows 用户目录，或用 --clear 清除选择")
+            raise ValueError("请填写用户目录，或用 --clear 清除选择")
         profile = Path(args.path).expanduser()
         if not profile.is_absolute() or not profile.is_dir():
-            raise ValueError("请填写已挂载且存在的 Windows 用户目录绝对路径（…/Users/用户名）")
+            raise ValueError("请填写当前系统可访问且存在的用户目录绝对路径")
         if not os.access(profile, os.R_OK | os.X_OK):
-            raise ValueError("Windows 用户目录没有读取权限")
+            raise ValueError(f"{label} 用户目录没有读取权限")
         path = str(profile)
     config = bootstrap.config_path()
     # Preserve unknown keys and refuse to replace a malformed local config.
     cfg = json.loads(config.read_text(encoding="utf-8-sig")) if config.exists() else {}
     if not isinstance(cfg, dict):
         raise ValueError("config.json 不是 JSON 对象，请先修复配置")
-    cfg["windows_user_home"] = path
+    cfg[key] = path
     import tempfile
     with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=str(config.parent),
                                      prefix=".config-", suffix=".partial", delete=False) as f:
@@ -99,10 +109,10 @@ def cmd_windows_use(args):
         os.replace(str(temporary), str(config))
     finally:
         temporary.unlink(missing_ok=True)
-    os.environ[PROFILE_ENV] = path
+    os.environ[env] = path
     registry._CACHE.clear()
-    print(f"已保存 Windows 只读用户目录：{path}" if path else "已清除 Windows 用户目录选择")
-    print("重启服务后生效；Windows / macOS 启动时会忽略此项。")
+    print(f"已保存 {label} 用户目录：{path}" if path else f"已清除 {label} 用户目录选择")
+    print("重启服务后生效；切换系统时忽略不适用的来源配置。")
 
 
 def _print_json(obj):
@@ -315,10 +325,29 @@ def build_parser():
     p10.add_argument("--dsh-compression", choices=["zstd", "none"], default="zstd")
     p10.add_argument("--json", action="store_true")
     p10.set_defaults(func=cmd_import_windows)
+    p11 = sub.add_parser("ubuntu-use", help="保存 Windows 可访问的 Ubuntu 用户目录备份")
+    p11.add_argument("path", nargs="?")
+    p11.add_argument("--clear", action="store_true")
+    p11.set_defaults(func=cmd_windows_use)
+    native_commands = []
+    for name, help_text in (("export-windows", "Ubuntu 会话写入已挂载的 Windows 对应软件"),
+                            ("import-ubuntu", "Windows 导入 Ubuntu 用户目录备份中的原生会话")):
+        command = sub.add_parser(name, help=help_text)
+        command.add_argument("agent", choices=AGENTS if name == "export-windows" else READ_AGENTS)
+        command.add_argument("id")
+        command.add_argument("--cwd", required=True, help="Windows 绝对项目路径，如 D:\\project")
+        if name == "export-windows":
+            command.add_argument("--project-path", required=True, help="该项目在 Ubuntu 中的挂载路径")
+        command.add_argument("--session-id")
+        command.add_argument("--dsh-compression", choices=["zstd", "none"], default="zstd")
+        command.add_argument("--json", action="store_true")
+        command.set_defaults(func=cmd_import_windows)
+        native_commands.append(command)
     # Per-command override can be passed through the Linux launcher. Choices
     # are built before parsing, so recognize Windows source names explicitly.
-    for command in (p1, p2, p3, p4, p5, p6, p7, p10):
+    for command in (p1, p2, p3, p4, p5, p6, p7, p10, *native_commands):
         command.add_argument("--windows-user", help="临时选择 Windows 用户目录，不保存配置")
+        command.add_argument("--ubuntu-user", help="临时选择 Windows 可访问的 Ubuntu 用户目录备份")
 
     return p
 
@@ -327,6 +356,15 @@ def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
+        if getattr(args, "ubuntu_user", None):
+            from relay.ubuntu import PROFILE_ENV as UBUNTU_ENV, selected_profile as selected_ubuntu
+            import platform
+            if platform.system() != "Windows":
+                raise ValueError("--ubuntu-user 仅用于 Windows")
+            os.environ[UBUNTU_ENV] = args.ubuntu_user
+            _CFG["ubuntu_user_home"] = args.ubuntu_user
+            selected_ubuntu()
+            registry._CACHE.clear()
         if getattr(args, "windows_user", None):
             import platform
             from relay.windows import PROFILE_ENV, selected_profile

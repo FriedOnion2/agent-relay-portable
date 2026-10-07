@@ -17,6 +17,7 @@ from .adapters.codebuddy import CodeBuddyAdapter
 from .adapters.markdown import render as render_markdown
 from .adapters.base import BaseAdapter
 from .windows import WindowsSource, selected_profile
+from .ubuntu import UbuntuSource, selected_profile as selected_ubuntu
 
 _ADAPTERS = {"workbuddy": WorkBuddyAdapter, "dsh": DshAdapter,
              "codebuddy": CodeBuddyAdapter, "claude": ClaudeAdapter,
@@ -29,17 +30,18 @@ def get(source: str, **kw) -> BaseAdapter:
     if not isinstance(source, str) or not source.strip():
         raise ValueError("缺少 agent 名称")
     key = source.lower()
-    if key.startswith("windows_"):
-        native = key[len("windows_"):]
-        profile = selected_profile()
+    if key.startswith(("windows_", "ubuntu_")):
+        ubuntu = key.startswith("ubuntu_")
+        native = key.split("_", 1)[1]
+        profile = selected_ubuntu() if ubuntu else selected_profile()
         if native not in _ADAPTERS or not profile:
-            raise KeyError("Windows 来源未配置，请先运行 windows-users / windows-use")
+            raise KeyError("跨系统来源未配置，请先运行 windows-use / ubuntu-use")
         if kw.keys() - {"clean"}:
-            raise ValueError("Windows 来源的根目录由 windows_user_home 指定")
+            raise ValueError("跨系统来源的根目录由 windows_user_home / ubuntu_user_home 指定")
         cached = _CACHE.get(key)
         if not kw and cached and cached.profile == profile:
             return cached
-        a = WindowsSource(native, _ADAPTERS[native], profile, **kw)
+        a = (UbuntuSource if ubuntu else WindowsSource)(native, _ADAPTERS[native], profile, **kw)
         if not kw:
             _CACHE[key] = a
         return a
@@ -55,7 +57,8 @@ def get(source: str, **kw) -> BaseAdapter:
 
 def all_keys() -> List[str]:
     keys = list(_ADAPTERS)
-    return keys + ["windows_" + key for key in keys] if selected_profile() else keys
+    return (keys + (["windows_" + key for key in keys] if selected_profile() else [])
+            + (["ubuntu_" + key for key in keys] if selected_ubuntu() else []))
 
 
 def writable_keys() -> List[str]:
@@ -68,6 +71,8 @@ def sources_info() -> List[Dict[str, Any]]:
         try:
             a = get(k)
             info = a.info()
+            if k in _ADAPTERS and selected_profile():
+                info.update(native_export=True, native_export_target="windows_" + k)
             if info["available"]:
                 s = list(a.discover())
                 info["session_count"] = len(s)
@@ -110,7 +115,7 @@ def transfer(source: str, sid: str, target: str, cwd: str | None = None,
         raise ValueError(f"{dst.label} 尚不支持作为迁移目标")
     if isinstance(src, WindowsSource):
         if not cwd or not os.path.isabs(cwd) or not os.path.isdir(cwd):
-            raise ValueError("从 Windows 迁出需指定存在的 Ubuntu 项目目录（--cwd /home/…）")
+            raise ValueError("从跨系统来源迁出需指定存在的本机项目目录（--cwd）")
     conv = src.read(sid)
     if conv.truncated:
         raise ValueError("源会话超过读取限制，迁移已停止；可导出已读取的部分内容")

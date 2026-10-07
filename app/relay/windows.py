@@ -107,7 +107,7 @@ class WindowsSource(ReadOnlyAdapter):
         result = super().info()
         result.update(homes=self.roots, windows_profile=self.profile,
                       native_import=True, native_target=self.source,
-                      write_note="Windows 跨系统来源只读，不写回 Windows 会话目录")
+                      write_note="浏览适配器只读；写回需使用 Ubuntu 本机来源的对应软件迁移入口")
         if not Path(self.profile).is_dir():
             result["error"] = "Windows 用户目录不可访问，请先挂载分区并核对路径"
         elif not os.access(self.profile, os.R_OK | os.X_OK):

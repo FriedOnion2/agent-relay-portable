@@ -156,7 +156,7 @@ class Handler(BaseHTTPRequestHandler):
             body = json.loads(raw.decode("utf-8") or "{}")
             if not isinstance(body, dict):
                 return self._error("请求体必须是 JSON 对象")
-            for key in ("source", "id", "target", "cwd", "session_id", "title", "dsh_compression"):
+            for key in ("source", "id", "target", "cwd", "session_id", "title", "dsh_compression", "project_path"):
                 if key in body and body[key] is not None and not isinstance(body[key], str):
                     return self._error(f"{key} 必须是字符串")
             for key in ("remap_tools", "include_thinking", "include_tools"):
@@ -166,6 +166,16 @@ class Handler(BaseHTTPRequestHandler):
             return self._error(f"请求体解析失败: {e}")
 
         try:
+            if u.path in ("/api/import-ubuntu", "/api/export-windows"):
+                from relay.native_import import import_ubuntu, export_windows
+                if not (body.get("source") and body.get("id") and body.get("cwd")):
+                    return self._error("缺少来源 / 会话 ID / Windows 项目路径")
+                options = dict(session_id=body.get("session_id") or None,
+                               dsh_compression=body.get("dsh_compression") or "zstd")
+                if u.path == "/api/export-windows":
+                    options["project_path"] = body.get("project_path")
+                importer = export_windows if u.path == "/api/export-windows" else import_ubuntu
+                return self._json(importer(body["source"], body["id"], body["cwd"], **options))
             if u.path == "/api/import-windows":
                 from relay.native_import import import_windows
                 if not (body.get("source") and body.get("id") and body.get("cwd")):

@@ -1,4 +1,4 @@
-"""Import validated Windows artifacts into the same Linux agent's store.
+"""Migrate native artifacts between Windows and Ubuntu stores in both directions.
 
 This is intentionally separate from an IR writer: native records, unknown
 fields, branch history and tool arguments are retained instead of synthesized.
@@ -10,13 +10,16 @@ import copy
 import datetime as dt
 import json
 import os
+import ntpath
+import platform
 import re
 import shlex
 import shutil
 import tempfile
 import uuid
 from contextlib import contextmanager
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
+from types import SimpleNamespace
 
 from .adapters.base import _norm_cwd
 from .adapters.workbuddy import WorkBuddyAdapter
@@ -33,7 +36,7 @@ def _jsonl(path):
     if not raw or len(raw) > MAX_BYTES:
         raise ValueError("原生会话为空或超过 32 MiB，无法完整迁移")
     if not raw.endswith(b"\n"):
-        raise ValueError("原生会话末行未完整写入，请关闭 Windows 软件后重试")
+        raise ValueError("原生会话末行未完整写入，请关闭源软件后重试")
     try:
         rows = [json.loads(line) for line in raw.decode("utf-8-sig").splitlines() if line.strip()]
     except (ValueError, UnicodeError) as exc:
@@ -105,8 +108,10 @@ def _inside(path, root):
 
 
 def _check_destination(path, source):
-    if _inside(path, source.profile) or any(_inside(path, root) for root in source.roots):
-        raise ValueError("Ubuntu 目标目录指向 Windows 来源，已停止写入；请修正 agent_homes / 环境变量")
+    profile = getattr(source, "profile", None)
+    if (profile and _inside(path, profile)) or any(
+            _inside(path, root) or _inside(root, path) for root in source.roots):
+        raise ValueError("目标目录与来源重叠，已停止写入；请修正用户目录 / agent_homes / 环境变量")
 
 
 def _map_path(value, old_cwd, new_cwd):
@@ -119,7 +124,10 @@ def _map_path(value, old_cwd, new_cwd):
     windows = len(old) > 1 and old[1] == ":"
     candidate, prefix = (normalized.lower(), old.lower()) if windows else (normalized, old)
     if candidate.startswith(prefix + "/"):
-        return new_cwd.rstrip("/") + normalized[len(old):]
+        suffix = normalized[len(old):]
+        if "\\" in new_cwd and PureWindowsPath(new_cwd).is_absolute():
+            return new_cwd.rstrip("/\\") + suffix.replace("/", "\\")
+        return new_cwd.rstrip("/") + suffix
     return value
 
 
@@ -209,10 +217,10 @@ def _native_jsonl(source, target, conv, cwd, requested_id):
                 index = Path(target.index_path)
                 original = index.read_bytes() if index.exists() else b""
                 if len(original) > MAX_BYTES:
-                    raise ValueError("Ubuntu Codex 标题索引过大，已停止迁移")
+                    raise ValueError("目标 Codex 标题索引过大，已停止迁移")
                 current = _jsonl(index) if original else []
                 if any(str(row.get("id") or row.get("thread_id")) == sid for row in current):
-                    raise FileExistsError("Ubuntu Codex 标题索引中已存在此 ID，请指定新 --session-id")
+                    raise FileExistsError("目标 Codex 标题索引中已存在此 ID，请指定新 --session-id")
                 _publish_jsonl(path, rows)
                 try:
                     if (index.read_bytes() if index.exists() else b"") != original:
@@ -232,7 +240,7 @@ def _native_dsh(source, target, conv, cwd, requested_id, compression):
     rows = read_records(conv.path)
     header = rows[0]
     if header.get("version") != 4:
-        raise ValueError("DSH 同软件迁移目前要求完整 v4 会话；旧世代请先用 Windows DSH 升级后重试")
+        raise ValueError("DSH 同软件迁移目前要求完整 v4 会话；旧世代请先用源系统 DSH 升级后重试")
     if (type(header.get("delegationDepth")) is not int or header["delegationDepth"] < 0
             or type(header.get("isSeeded")) is not bool):
         raise ValueError("DSH 原生 header 缺少有效 delegationDepth / isSeeded，不能构造可恢复会话")
@@ -265,7 +273,7 @@ def _native_dsh(source, target, conv, cwd, requested_id, compression):
         try:
             import zstandard as zstd
         except ImportError:
-            raise ValueError("DSH 原生导入需要 zstandard，请运行 Ubuntu首次准备.sh") from None
+            raise ValueError("DSH 原生导入需要 zstandard，请用启动器的 Python 安装 requirements-optional.txt") from None
         compressor = zstd.ZstdCompressor(write_checksum=True)
         # The first independent frame must contain exactly the header line.
         data = compressor.compress((json.dumps(header, ensure_ascii=False) + "\n").encode("utf-8"))
@@ -330,7 +338,7 @@ def _native_ide(source, target, conv, cwd, requested_id):
         if row.readable and row.id.startswith("ide:") and _norm_cwd(row.cwd) == _norm_cwd(cwd):
             workspaces.add(Path(row.path).parent.parent)
     if len(workspaces) != 1:
-        raise ValueError("请先在 Ubuntu CodeBuddy IDE 的目标项目创建一条会话并关闭软件；"
+        raise ValueError("请先在目标系统 CodeBuddy IDE 的目标项目创建一条会话并关闭软件；"
                          "需要唯一匹配的原生工作区，多个 profile 匹配时请显式配置 CodeBuddy Data 根目录")
     workspace = workspaces.pop()
     _check_destination(workspace, source)
@@ -342,7 +350,7 @@ def _native_ide(source, target, conv, cwd, requested_id):
     entry = next((copy.deepcopy(item) for item in source_index.get("conversations", [])
                   if isinstance(item, dict) and item.get("id") == path.parent.name), None)
     if entry is None:
-        raise ValueError("Windows CodeBuddy 工作区索引缺少此会话，无法完整迁移")
+        raise ValueError("源 CodeBuddy 工作区索引缺少此会话，无法完整迁移")
     entry["id"] = sid
     _metadata(entry, conv.cwd, cwd, sid, path.parent.name)
     _metadata(manifest, conv.cwd, cwd, sid, path.parent.name)
@@ -367,7 +375,7 @@ def _native_ide(source, target, conv, cwd, requested_id):
             current = json.loads(original.decode("utf-8-sig"))
             conversations = current.get("conversations")
             if not isinstance(conversations, list):
-                raise ValueError("Ubuntu CodeBuddy 工作区索引格式不支持")
+                raise ValueError("目标 CodeBuddy 工作区索引格式不支持")
             if destination.exists() or any(isinstance(item, dict) and item.get("id") == sid for item in conversations):
                 raise FileExistsError("目标 CodeBuddy IDE 会话已存在，请指定新 --session-id")
             stage = Path(tempfile.mkdtemp(prefix=".relay-", suffix=".partial", dir=str(workspace)))
@@ -400,16 +408,69 @@ def import_windows(agent, sid, cwd, session_id=None, dsh_compression="zstd"):
     if not cwd or not Path(cwd).is_absolute() or not Path(cwd).is_dir():
         raise ValueError("需要存在的 Ubuntu 项目目录（--cwd /home/…）")
     cwd = str(Path(cwd).resolve()).replace("\\", "/")
+    target = registry.get(source.source)
+    return _migrate(source, target, sid, cwd, session_id, dsh_compression,
+                    "native-windows-import", source.source, "Ubuntu")
+
+
+def _windows_cwd(cwd, project_path=None):
+    if not isinstance(cwd, str) or not PureWindowsPath(cwd).is_absolute() or any(ord(c) < 32 for c in cwd):
+        raise ValueError("需要 Windows 绝对项目路径，例如 D:\\project，不能填写 Ubuntu 挂载路径")
+    cwd = ntpath.normpath(cwd)
+    for component in PureWindowsPath(cwd).parts[1:]:
+        if re.search(r'[<>:"|?*]', component) or component.endswith((".", " ")):
+            raise ValueError("Windows 项目路径含无效文件名字符或结尾")
+    if platform.system() == "Windows":
+        accessible = Path(cwd)
+    else:
+        if not project_path or not Path(project_path).is_absolute():
+            raise ValueError("在 Ubuntu 写回 Windows 需另填 --project-path：项目在 Ubuntu 中的挂载路径")
+        accessible = Path(project_path)
+    if not accessible.is_dir():
+        raise ValueError("目标项目目录不可访问；请核对 cwd / project_path 和分区挂载")
+    return cwd
+
+
+def export_windows(agent, sid, cwd, project_path=None, session_id=None, dsh_compression="zstd"):
+    """On Ubuntu, publish a local session to an explicitly selected Windows home."""
+    from . import registry
+    from .windows import selected_profile
+    if platform.system() != "Linux":
+        raise ValueError("export-windows 在 Ubuntu / Linux 中运行；Windows 请使用 import-ubuntu")
+    if agent not in registry._ADAPTERS:
+        raise ValueError("请选择本机 agent 来源")
+    profile = selected_profile()
+    if not profile or not Path(profile).is_dir():
+        raise ValueError("请先用 windows-use 选择可访问的 Windows 用户目录")
+    local = registry.get(agent)
+    source = SimpleNamespace(source=agent, adapter=local, name=agent, read=local.read,
+                             roots=getattr(local, "roots", [getattr(local, "root", local.home)]))
+    target = registry.get("windows_" + agent).adapter
+    return _migrate(source, target, sid, _windows_cwd(cwd, project_path), session_id,
+                    dsh_compression, "native-windows-export", "windows_" + agent, "Windows")
+
+
+def import_ubuntu(agent, sid, cwd, session_id=None, dsh_compression="zstd"):
+    """On Windows, import an accessible Ubuntu home backup into local native stores."""
+    from . import registry
+    from .ubuntu import UbuntuSource
+    source = registry.get(agent if agent.startswith("ubuntu_") else "ubuntu_" + agent)
+    if not isinstance(source, UbuntuSource):
+        raise ValueError("请选择 Ubuntu 来源")
+    return _migrate(source, registry.get(source.source), sid, _windows_cwd(cwd), session_id,
+                    dsh_compression, "native-ubuntu-import", source.source, "Windows")
+
+
+def _migrate(source, target, sid, cwd, session_id, dsh_compression, mode, target_name, target_os):
     if dsh_compression not in ("zstd", "none"):
         raise ValueError("dsh_compression 必须是 zstd 或 none")
-    target = registry.get(source.source)
-    for root in getattr(target, "roots", [target.home]):
+    for root in getattr(target, "roots", [getattr(target, "root", target.home)]):
         _check_destination(root, source)
     conv = source.read(sid)
     if conv.truncated:
         raise ValueError("源会话超过读取限制，无法完整迁移")
-    notes = ["已保留原生记录；项目元数据已映射，历史正文与工具参数中的 Windows 路径不自动替换。",
-             "未复制账号、凭据、应用设置、附件或子代理旁路文件；请在 Ubuntu 软件中核对续聊。"]
+    notes = ["已保留原生记录；项目元数据已映射，历史正文与工具参数中的路径不自动替换。",
+             "未复制账号、凭据、应用设置、附件或子代理旁路文件；请在目标软件中核对续聊。"]
     if source.source == "dsh":
         path, native_id = _native_dsh(source, target, conv, cwd, session_id, dsh_compression)
     elif source.source == "codebuddy" and conv.meta.get("source_format") == "codebuddy-ide-manifest":
@@ -420,19 +481,23 @@ def import_windows(agent, sid, cwd, session_id=None, dsh_compression="zstd"):
     if source.source == "codex":
         notes.append("Codex CLI 可按 ID 恢复；Desktop 的数据库索引未自动更新。")
     if source.source == "claude_sdk":
-        notes.append("目标是 Ubuntu SDK 的 Claude 原生共享存储；由你的 SDK 应用设置 resume，创建者仍不可区分。")
+        notes.append("目标是 SDK 的 Claude 原生共享存储；由你的 SDK 应用设置 resume，创建者仍不可区分。")
     resume = ""
     if source.source in ("claude", "codex"):
         command = "claude --resume" if source.source == "claude" else "codex resume"
-        resume = "cd -- " + shlex.quote(cwd) + " && " + command + " " + shlex.quote(native_id)
+        if target_os == "Windows":
+            quote = lambda value: "'" + value.replace("'", "''") + "'"
+            resume = "Set-Location -LiteralPath " + quote(cwd) + "; if ($?) { " + command + " " + quote(native_id) + " }"
+        else:
+            resume = "cd -- " + shlex.quote(cwd) + " && " + command + " " + shlex.quote(native_id)
     if source.source == "codebuddy":
         lookup_id = next(row.id for row in target.discover() if Path(row.path).resolve() == Path(path).resolve())
     elif source.source == "dsh":
         lookup_id = str(path.parent.relative_to(Path(target.home))).replace("\\", "/")
     else:
         lookup_id = native_id
-    return {"ok": True, "mode": "native-windows-import",
+    return {"ok": True, "mode": mode, "target_os": target_os,
             "from": {"source": source.name, "id": sid, "path": conv.path, "title": conv.title},
-            "to": {"source": source.source, "id": lookup_id, "native_id": native_id,
+            "to": {"source": target_name, "id": lookup_id, "native_id": native_id,
                    "cwd": cwd, "path": str(path)}, "resume_command": resume,
             "notes": notes, "stats": conv.stats(), "truncated": False}

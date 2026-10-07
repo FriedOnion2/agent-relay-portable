@@ -191,6 +191,7 @@ DEFAULT_CONFIG = {
     "port": 8745,
     "open_browser": True,
     "windows_user_home": "",
+    "ubuntu_user_home": "",
 }
 
 
@@ -226,6 +227,11 @@ def load_config() -> dict:
         profile = (cfg.get("windows_user_home") or "").strip()
         if profile and platform.system() == "Linux" and not Path(profile).expanduser().is_absolute():
             raise ValueError("windows_user_home 必须是 Ubuntu 中的绝对挂载路径")
+        if "ubuntu_user_home" in cfg and not isinstance(cfg["ubuntu_user_home"], str):
+            raise ValueError("ubuntu_user_home 必须是字符串")
+        ubuntu = (cfg.get("ubuntu_user_home") or "").strip()
+        if ubuntu and platform.system() == "Windows" and not Path(ubuntu).expanduser().is_absolute():
+            raise ValueError("ubuntu_user_home 必须是 Windows 可访问的绝对路径")
         return cfg
     except Exception as e:
         print(f"⚠ config.json 解析失败，忽略此文件：{e}", file=sys.stderr)
@@ -240,6 +246,11 @@ def apply_config(cfg: dict | None = None) -> list[str]:
     if profile and platform.system() == "Linux":
         os.environ[PROFILE_ENV] = os.path.expanduser(profile)
         applied.append(f"Windows 用户目录（只读） ← {profile}")
+    ubuntu = (cfg.get("ubuntu_user_home") or "").strip()
+    if ubuntu and platform.system() == "Windows":
+        from relay.ubuntu import PROFILE_ENV as UBUNTU_ENV
+        os.environ[UBUNTU_ENV] = os.path.expanduser(ubuntu)
+        applied.append(f"Ubuntu 用户目录（只读） ← {ubuntu}")
     homes = cfg.get("agent_homes") or {}
     for key in SOURCES:
         envname = "RELAY_" + key.upper() + "_HOME"

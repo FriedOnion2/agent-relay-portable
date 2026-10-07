@@ -64,7 +64,8 @@ bash 启动_AgentRelay.sh
 
 Ubuntu 原来的六个来源继续显示；Windows 的六个入口全部只读，支持预览、Markdown 导出和迁出。
 页面显示读取路径，SDK 仍明确说明与 Claude Code 共享存储、创建者未知。
-程序不会自动复制 Windows 凭据、改写 Windows 会话、挂载磁盘或调整分区权限。
+浏览不会改写 Windows 会话。只有明确执行反向原生迁移时才向 Windows 存储添加新会话；
+程序不会自动复制凭据、挂载磁盘或调整分区权限。
 
 也可以只在这次启动时选择，不改配置：
 
@@ -148,13 +149,56 @@ python3 app/cli.py windows-use --clear
 保存/清除后重启服务。切回 Windows 或 macOS 时，程序忽略 `windows_user_home`，继续读取当前系统默认来源。
 每个 Agent 的原有 `agent_homes` 显式配置仍然生效；请保持它们为空以使用每个系统自己的默认目录。
 
+## 5. 反向迁回 Windows
+
+先选择 Windows 用户目录（第 3 步），确保目标分区可写，并关闭两端 Agent。
+在网页选 **Ubuntu 本机来源**中的会话，填写两个路径：
+
+- Windows 软件使用的真实项目路径，例如 `D:\project`。
+- 同一项目在 Ubuntu 中的可访问路径，例如 `/mnt/data/project`。
+
+点击 **“迁到 Windows 对应软件”**。默认保留原生 ID；若 Windows 原会话还在，程序会拒绝覆盖。
+点击“生成新 ID”可以保存独立副本。正文和工具参数中的 Ubuntu 路径仍按原样保留。
+返回结果显示 Windows 原生存储文件与恢复命令；Claude / Codex 命令使用 PowerShell 语法。
+网页“查看 Windows 会话”可回读新增记录。通用跨软件转换使用 Ubuntu 可访问的项目路径。
+
+```bash
+python3 app/cli.py export-windows codex <Ubuntu会话ID> \
+  --cwd 'D:\project' --project-path /mnt/data/project \
+  --session-id 11111111-1111-4111-8111-111111111111
+```
+
+两个路径的分区对应关系由用户明确指定，程序只验证挂载项目可访问与 Windows 路径格式，不猜盘符。
+支持相同六来源及 CodeBuddy CLI/IDE；DSH 的 v4、父会话限制仍适用。
+CodeBuddy IDE 先在 **Windows** 目标项目创建一条会话并关闭软件，以复用已有原生工作区；
+Linux 中仅读到的目标 Windows IDE 工作区须记录 Windows 的盘符路径，不能用挂载路径替代。
+Ubuntu→Windows 与 Windows→Ubuntu 都是保留原文件的搬迁，**不提供同 ID 增量合并**。
+两端各自继续后的历史需要分别保留，不会自动选择较新文件覆盖另一端。
+
+## 6. 在 Windows 中导入 Ubuntu 用户目录备份
+
+Windows 默认不能直接读取 Ubuntu ext4。可先在 Ubuntu 把需要的 Agent 原生目录复制到共享 NTFS
+中的用户目录备份，例如 `D:\UbuntuBackup\alice\.codex`、`.claude`、`.dsh`、`.workbuddy`、`.codebuddy`。
+CodeBuddy IDE 保留 `.config/CodeBuddyExtension/Data` 层级。不要混入凭据与账号设置；本工具不会过滤整个 home 备份。
+
+```powershell
+python app/cli.py ubuntu-use "D:\UbuntuBackup\alice"
+python app/cli.py list ubuntu_codex
+python app/cli.py import-ubuntu codex <Ubuntu来源完整会话ID> --cwd "D:\project"
+```
+
+重启服务后增加六个 Ubuntu 只读来源，选择会话和现有 Windows 项目目录即可点击对应软件迁移。
+`--ubuntu-user` 可临时覆盖；`ubuntu-use --clear` 清除选择。`ubuntu_user_home` 和
+`RELAY_UBUNTU_USER_HOME` 仅在 Windows 生效；Linux/macOS 忽略，避免便携配置污染本机来源。
+该模式不需要 Linux 挂载项目字段，因为 Windows 能直接验证目标 cwd。
+
 ## 排查
 
 | 现象 | 处理 |
 |---|---|
 | 未发现 Windows 用户 | 先在文件管理器打开含 `Users` 的 Windows 分区；检查挂载点和用户实际文件夹名 |
 | 重启 Ubuntu 后 Windows 入口不可用 | 先重新挂载；挂载点变化时重新执行 `windows-use`；程序保留原路径，不会悄悄切换到其他用户 |
-| Windows 分区只读 | 只读挂载足以浏览和导出；无需为了本工具改成可写 |
+| Windows 分区只读 | 浏览和导出可继续；反向写回需要可写挂载，不会自动更改挂载选项 |
 | NTFS 提示休眠 / 不允许挂载 | 在 Windows 完整关机，并按系统提示关闭快速启动后再进入 Ubuntu；不要强制删除休眠文件 |
 | BitLocker 分区打不开 | 先用系统支持的方式解锁、挂载；本工具不解密分区 |
 | 权限不足 | 检查 Ubuntu 当前用户能否读取对应文件和目录；用挂载权限解决，无需以 root 运行服务 |
@@ -165,8 +209,12 @@ python3 app/cli.py windows-use --clear
 | 对应软件导入提示 ID 已存在 | 保留现有会话；网页点击“生成新 ID”或命令行指定新 UUID 再导入 |
 | CodeBuddy IDE 没有匹配工作区 | 先在 Ubuntu 目标项目创建一条原生会话、关闭软件，再导入 |
 | DSH 旧世代 / 父会话缺失 | 先在 Windows DSH 升级到 v4；分叉会话先迁入父会话，保留父 ID |
+| 反向缺少项目路径 | cwd 填 Windows 盘符路径，project_path 填同一项目在 Ubuntu 中的挂载绝对路径 |
+| Windows 看不到 Ubuntu 磁盘 | 使用可访问的用户目录备份，或在 Ubuntu 执行 export-windows；程序不安装 ext4 驱动 |
 
 验证范围：自动测试使用合成 Windows 用户目录，覆盖六来源读取、CLI/IDE、只读保护、原文件不变、
 迁出 cwd、配置保留、挂载路径转义、切回 Windows/macOS、Ubuntu Bash 启动及停止。
 对应软件迁入另覆盖六个来源及 CodeBuddy 两种格式、原生未知字段、父链/事件、标题索引、同名保护与索引失败回滚。
+反向测试覆盖六来源与两种 CodeBuddy 格式、Ubuntu IDE 目录布局、Windows 恢复命令引号、
+分离的逻辑/挂载路径、源目标重叠拒绝、配置平台隔离及真实 Linux HTTP 往返。
 真实设备上的 NTFS 驱动、BitLocker、挂载权限与原生 Agent 续聊仍需在该双系统设备上检查。

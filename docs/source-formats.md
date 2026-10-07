@@ -12,7 +12,7 @@
 读取 `sessions/<project>/<encoded-id>/session[.vN].jsonl[.zstd]` 的最大 canonical 世代；未知最新版本不退回旧世代。
 普通与压缩日志同时存在视为歧义。工具调用按 call ID 去重；完成消息优先于流式 chunks，旧版 packed chunks 展开后处理。
 通用 IR 导出为事件历史，不重建当前运行上下文，也没有 DSH 通用 writer。
-Windows → Ubuntu 的对应软件迁入复制完整 v4 原生事件，保留运行状态事件而不经 IR 重建；
+Windows ↔ Ubuntu 的对应软件迁移复制完整 v4 原生事件，保留运行状态事件而不经 IR 重建；
 路径编码遵循官方 `format.ts` 的 UTF-16 `encodeSegment` / `projectKey`，Zstd 首帧仅含 header。
 分叉先迁父会话；旧版、损坏或子代理的单独导入会停止。
 
@@ -43,7 +43,7 @@ IDE 复用 Ubuntu 已有且 cwd 唯一匹配的工作区，追加 conversations 
 SDK 独立入口为 `claude_sdk`。默认显示共享记录，`shared_store=true, creator=unknown`，不凭 userType/agentName 猜创建者。
 因此它和 Claude Code 默认可能显示同一会话；独立 RELAY_CLAUDE_SDK_HOME 只决定读取范围，不是来源证明。
 官方默认文件按主链读取；wire session_id/stream 输出会明确拒绝当作 native transcript。
-SDK 不作为通用 IR 转换目标，可迁出；Windows → Ubuntu 对应软件迁入保留原生记录，写入 Ubuntu
+SDK 不作为通用 IR 转换目标，可迁出；Windows ↔ Ubuntu 对应软件迁移保留原生记录，写入目标系统
 SDK 配置的 Claude 共享存储。不会自动调用 SDK resume 或模型请求。
 Claude 新项目编码依据官方 session reader 的 `_sanitize_path` 与 long-path hash，已有目录优先复用。
 

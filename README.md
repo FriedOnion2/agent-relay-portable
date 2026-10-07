@@ -39,6 +39,18 @@ bash 启动_AgentRelay.sh
 迁出时填写已存在的 Ubuntu 项目目录；不会自动改写历史中的 Windows 路径。
 完整步骤和挂载排查见 [Ubuntu 双系统说明](docs/ubuntu-dual-boot.md)。
 
+**反向 Ubuntu → Windows：** 在 Ubuntu 来源选择会话，填写 Windows 项目路径和该项目在 Ubuntu
+中的挂载路径，点击 **“迁到 Windows 对应软件”**。也可运行：
+
+```bash
+python3 app/cli.py export-windows codex <Ubuntu会话ID> --cwd 'D:\project' --project-path /mnt/data/project
+```
+
+Windows 中也可用 `python app/cli.py ubuntu-use "D:\UbuntuBackup\alice"` 选择可访问的 Ubuntu
+用户目录备份，再用 `import-ubuntu codex <会话ID> --cwd "D:\project"` 导入。Windows 不会直接读取 ext4。
+双向搬迁保留源文件、拒绝覆盖同 ID，不自动合并两边继续后的历史；新 ID 可保留另一份。
+GitHub 同类项目与源码差异见 [原生会话迁移调研](docs/session-migration-alternatives.md)。
+
 需要 Python **3.8 或更新版本**。Windows 可将完整的嵌入式 Python 解压到 `runtime/python/`。
 也可通过 `RELAY_PYTHON` 指定解释器。默认网址为 `http://127.0.0.1:8745/`。
 

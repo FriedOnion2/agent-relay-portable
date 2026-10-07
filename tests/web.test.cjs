@@ -183,6 +183,66 @@ test('Windows import failure releases buttons and displays the backend reason',a
   assert.match(t.el('#toast').children[0].textContent,/原生工作区/);
 });
 
+test('Ubuntu export requires both Windows cwd and accessible mount path and captures the request',async()=>{
+  const t=setup();
+  t.app.state.sources=[{name:'codex',native_export:true}];
+  t.app.state.source='codex';
+  t.app.state.current={source:'codex',id:'local'};
+  t.el('#cwd').value='D:\\project';
+  t.app.updateActions();
+  assert.equal(t.el('#projectPath').style.display,'');
+  assert.equal(t.el('#btnImport').disabled,true);
+  t.el('#projectPath').value='/mnt/data/project';
+  t.app.updateActions();
+  const pending=t.app.doImportWindows();
+  await t.app.doImportWindows();
+  assert.equal(t.requests.length,1);
+  assert.equal(t.requests[0].url,'/api/export-windows');
+  const body=JSON.parse(t.requests[0].options.body);
+  assert.equal(body.cwd,'D:\\project');
+  assert.equal(body.project_path,'/mnt/data/project');
+  t.app.state.source='claude';
+  t.response(0,{ok:true,target_os:'Windows',to:{source:'windows_codex',id:'new',native_id:'new',path:'/mnt/windows/session'},notes:[]});
+  await new Promise(resolve=>setImmediate(resolve));
+  t.response(1,{ok:true,sources:[]});
+  await pending;
+  assert.equal(t.el('#importResult').children[1].textContent,'查看 Windows 会话');
+  assert.match(t.el('#importResult').children[0].textContent,/OpenAI Codex/);
+});
+
+test('Windows imports Ubuntu sources into local counterpart without a mount-path field',async()=>{
+  const t=setup();
+  t.app.state.source='ubuntu_codex';
+  t.app.state.sources=[{name:'ubuntu_codex',label:'Ubuntu · OpenAI Codex',can_write:false}];
+  t.app.state.current={source:'ubuntu_codex',id:'backup'};
+  t.el('#cwd').value='D:\\project';
+  t.app.buildTarget();
+  assert.equal(t.app.state.target,'codex');
+  assert.equal(t.el('#projectPath').style.display,'none');
+  const pending=t.app.doImportWindows();
+  assert.equal(t.requests[0].url,'/api/import-ubuntu');
+  assert.equal('project_path' in JSON.parse(t.requests[0].options.body),false);
+  t.response(0,{ok:false,error:'目标会话 ID 已存在'},409);
+  await pending;
+  assert.equal(t.app.state.transferring,false);
+  assert.match(t.el('#toast').children[0].textContent,/ID 已存在/);
+});
+
+test('generic conversion on Ubuntu uses the accessible project path rather than the Windows cwd',async()=>{
+  const t=setup();
+  t.app.state.source='codex';
+  t.app.state.target='claude';
+  t.app.state.sources=[{name:'codex',native_export:true}];
+  t.app.state.current={source:'codex',id:'s'};
+  t.el('#cwd').value='D:\\project';
+  t.el('#projectPath').value='/mnt/data/project';
+  t.app.updateActions();
+  const pending=t.app.doTransfer();
+  assert.equal(JSON.parse(t.requests[0].options.body).cwd,'/mnt/data/project');
+  t.response(0,{ok:false,error:'fixture error'},400);
+  await pending;
+});
+
 test('unreadable source rows show the error and disable export and migration',async()=>{
   const t=setup();
   t.app.state.current={id:'old',source:'workbuddy'};

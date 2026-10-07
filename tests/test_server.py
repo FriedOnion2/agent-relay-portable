@@ -99,6 +99,23 @@ class HttpTests(unittest.TestCase):
                              {"Content-Type":"application/json"})[0], 400)
                 importer.assert_not_called()
 
+    def test_reverse_native_routes_options_and_validates_project_path(self):
+        for endpoint in ("import-ubuntu", "export-windows"):
+            payload = {"source":"codex", "id":"s", "cwd":"D:\\project", "session_id":"new",
+                       "dsh_compression":"none", "project_path":"/mnt/data/project"}
+            with patch("relay.native_import." + endpoint.replace("-", "_"), return_value={"ok":True}) as importer:
+                self.assertEqual(self.request("POST", "/api/" + endpoint, json.dumps(payload),
+                                 {"Content-Type":"application/json"})[0], 200)
+                options = dict(session_id="new", dsh_compression="none")
+                if endpoint == "export-windows":
+                    options["project_path"] = "/mnt/data/project"
+                importer.assert_called_once_with("codex", "s", "D:\\project", **options)
+            for body in ({"source":"codex", "id":"s"}, {**payload,"project_path":False}):
+                with patch("relay.native_import." + endpoint.replace("-", "_")) as importer:
+                    self.assertEqual(self.request("POST", "/api/" + endpoint, json.dumps(body),
+                                     {"Content-Type":"application/json"})[0], 400)
+                    importer.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

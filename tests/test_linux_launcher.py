@@ -87,6 +87,19 @@ class LinuxLauncherTests(unittest.TestCase):
                     self.assertEqual(original_path.read_bytes(), original)
                     self.assertEqual(json.loads((root / "config.json").read_text())["windows_user_home"],
                                      str(base / "stale mount"))
+                    local_bytes = Path(imported["to"]["path"]).read_bytes()
+                    request = urllib.request.Request(url + "/api/export-windows", data=json.dumps(
+                        {"source":"codex", "id":imported["to"]["id"], "cwd":"D:\\project",
+                         "project_path":str(base), "session_id":"11111111-1111-4111-8111-111111111111"}).encode(),
+                        headers={"Content-Type":"application/json"})
+                    with urllib.request.urlopen(request) as res:
+                        reverse = json.load(res)
+                    self.assertEqual(reverse["to"]["source"], "windows_codex")
+                    self.assertTrue(str(Path(reverse["to"]["path"])).startswith(str(profile / ".codex")))
+                    with urllib.request.urlopen(url + "/api/session?agent=windows_codex&id=" + reverse["to"]["id"]) as res:
+                        self.assertEqual(json.load(res)["info"]["cwd"], "D:\\project")
+                    self.assertEqual(original_path.read_bytes(), original)
+                    self.assertEqual(Path(imported["to"]["path"]).read_bytes(), local_bytes)
                     proc.send_signal(signal.SIGINT)
                     proc.wait(timeout=8)
                     self.assertIn(proc.returncode, (0, 130))
