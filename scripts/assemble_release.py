@@ -62,7 +62,7 @@ $env:RELAY_PORTABLE_ROOT = $portableRoot
 exit $LASTEXITCODE
 '''
     (stage / 'Start-AgentRelay.ps1').write_text(windows, encoding='utf-8-sig')
-    (stage / '启动_AgentRelay.bat').write_bytes(b'@echo off\r\npowershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Start-AgentRelay.ps1" %*\r\nif errorlevel 1 pause\r\n')
+    (stage / '启动_AgentRelay.bat').write_bytes(b'@echo off\r\nchcp 65001 >nul\r\npowershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Start-AgentRelay.ps1" %*\r\nif errorlevel 1 pause\r\n')
     for system in ('macos', 'linux'):
         targets = ['macos-arm64', 'macos-x64'] if system == 'macos' else ['linux-x64']
         cases = []
