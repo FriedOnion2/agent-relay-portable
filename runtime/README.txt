@@ -12,7 +12,9 @@ runtime/ —— 可选的自带 Python（放了它才算真正免安装）
        runtime\python\python.exe
   4. 回到根目录双击「启动_AgentRelay.bat」
 
-  注意：嵌入式版本默认不含 pip，本工具不需要 pip，所以无所谓。
+  注意：基本功能不需要 pip。DSH 压缩日志读取及通用写入需要 zstandard；
+  嵌入式版本默认不含 pip，应提供匹配 Python / CPU 的依赖，或使用已安装
+  Python 建立独立环境并安装 requirements-optional.txt。不要混用其他机器的虚拟环境。
 
 
 【macOS】
@@ -24,7 +26,7 @@ runtime/ —— 可选的自带 Python（放了它才算真正免安装）
 
     brew install python
 
-  安装后直接启动即可，本工具会自动查找 Homebrew 的 Python。
+  安装后运行 bash Mac首次准备.command 再启动；本工具会自动查找 Homebrew 的 Python。
   不要只复制 python3 可执行文件：它依赖原安装位置的动态库和标准库，
   单独复制不能组成可移植运行时。若使用系统 Python，需确认版本至少为 3.8。
 
@@ -50,3 +52,8 @@ runtime/ —— 可选的自带 Python（放了它才算真正免安装）
     python app/bootstrap.py
 
 看到 "✓ Python x.y via 移动硬盘自带 runtime" 就说明生效了。
+
+【端口与退出】
+  默认 8745，占用时最多再尝试后续 5 个端口；查看启动输出中的实际网址。
+  不会自动关闭占用端口的其他服务。点击网页「退出服务」或在旧终端按 Ctrl+C
+  停止当前服务并释放其端口。仅关闭浏览器不会停止后台服务。
