@@ -119,6 +119,18 @@ def _print_json(obj):
     print(json.dumps(obj, ensure_ascii=False, indent=2, default=str))
 
 
+def cmd_storage(args):
+    from relay import archive, session_store
+    if args.cmd == "store-sessions":
+        result = session_store.store_sessions(args.agent, args.ids, args.all, args.storage)
+    elif args.cmd == "stored-sessions":
+        result = {"ok":True, "packages":archive.list_packages(session_store.KIND, args.agent, args.storage)}
+    else:
+        result = session_store.restore_session(args.package, args.cwd, args.session_id, args.dsh_compression)
+    _print_json(result)
+    return 0 if result["ok"] else 1
+
+
 def cmd_sources(args):
     rows = registry.sources_info()
     if args.json:
@@ -347,9 +359,25 @@ def build_parser():
         command.add_argument("--json", action="store_true")
         command.set_defaults(func=cmd_import_windows)
         native_commands.append(command)
+    store = sub.add_parser("store-sessions", help="按 Agent 保存原生会话包，复制到另一设备后恢复")
+    store.add_argument("agent", choices=READ_AGENTS)
+    store.add_argument("ids", nargs="*")
+    store.add_argument("--all", action="store_true", help="保存该来源全部可读取会话，每条独立成包")
+    store.add_argument("--storage", help="便携存储目录；默认项目 storage/")
+    store.set_defaults(func=cmd_storage)
+    stored = sub.add_parser("stored-sessions", help="列出按 Agent 保存的对话包")
+    stored.add_argument("--agent", choices=AGENTS)
+    stored.add_argument("--storage")
+    stored.set_defaults(func=cmd_storage)
+    restore = sub.add_parser("restore-session", help="校验并恢复会话包到当前设备的对应软件")
+    restore.add_argument("package")
+    restore.add_argument("--cwd", required=True)
+    restore.add_argument("--session-id")
+    restore.add_argument("--dsh-compression", choices=["zstd", "none"], default="zstd")
+    restore.set_defaults(func=cmd_storage)
     # Per-command override can be passed through the Linux launcher. Choices
     # are built before parsing, so recognize Windows source names explicitly.
-    for command in (p1, p2, p3, p4, p5, p6, p7, p10, *native_commands):
+    for command in (p1, p2, p3, p4, p5, p6, p7, p10, store, *native_commands):
         command.add_argument("--windows-user", help="临时选择 Windows 用户目录，不保存配置")
         command.add_argument("--ubuntu-user", help="临时选择 Windows 可访问的 Ubuntu 用户目录备份")
 

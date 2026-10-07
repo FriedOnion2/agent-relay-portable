@@ -263,7 +263,7 @@ class CodeBuddyTests(unittest.TestCase):
                     with self.subTest(source=source, target=target):
                         dst = registry.get(target, home=os.path.join(root, "target-"+source+target))
                         with patch.dict(registry._CACHE, {source:src, target:dst}, clear=True):
-                            result = registry.transfer(source, sid, target, session_id="migrated")
+                            result = registry.transfer(source, sid, target, cwd=root, session_id="migrated")
                         migrated = dst.read("migrated")
                         self.assertEqual(migrated.stats()["tool_result"], original.stats()["tool_result"])
                         self.assertEqual(migrated.first_user_text(), original.first_user_text())

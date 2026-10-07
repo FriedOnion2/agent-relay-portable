@@ -51,6 +51,11 @@ Windows 中也可用 `python app/cli.py ubuntu-use "D:\UbuntuBackup\alice"` 选�
 双向搬迁保留源文件、拒绝覆盖同 ID，不自动合并两边继续后的历史；新 ID 可保留另一份。
 GitHub 同类项目与源码差异见 [原生会话迁移调研](docs/session-migration-alternatives.md)。
 
+**跨设备对话存储：** 网页点击“存储此会话”，包按 Agent 保存到 `storage/conversations/`。
+复制包或整个 storage 文件夹到另一设备后，通过“对话存储”指定本机项目目录，恢复到对应软件。
+CLI 支持 `store-sessions <agent> <ID>` / `--all`、`stored-sessions`、`restore-session <包.zip> --cwd <目录>`。
+文件恢复前校验，已有 ID 不覆盖。详见 [便携存储说明](docs/portable-storage.md)。
+
 需要 Python **3.8 或更新版本**。Windows 可将完整的嵌入式 Python 解压到 `runtime/python/`。
 也可通过 `RELAY_PYTHON` 指定解释器。默认网址为 `http://127.0.0.1:8745/`。
 

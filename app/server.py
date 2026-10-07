@@ -97,6 +97,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._static(path[len("/static/"):])
             if path == "/api/sources":
                 return self._json({"ok": True, "sources": registry.sources_info()})
+            if path == "/api/stored-sessions":
+                from relay.archive import list_packages, storage_root
+                from relay.session_store import KIND
+                root = (q.get("storage") or [None])[0]
+                return self._json({"ok":True, "root":str(storage_root(root)),
+                       "packages":list_packages(KIND, (q.get("agent") or [None])[0], root)})
             if path == "/api/sessions":
                 agent = (q.get("agent") or [""])[0]
                 if not agent:
@@ -156,7 +162,7 @@ class Handler(BaseHTTPRequestHandler):
             body = json.loads(raw.decode("utf-8") or "{}")
             if not isinstance(body, dict):
                 return self._error("请求体必须是 JSON 对象")
-            for key in ("source", "id", "target", "cwd", "session_id", "title", "dsh_compression", "project_path"):
+            for key in ("source", "id", "target", "cwd", "session_id", "title", "dsh_compression", "project_path", "storage", "package"):
                 if key in body and body[key] is not None and not isinstance(body[key], str):
                     return self._error(f"{key} 必须是字符串")
             for key in ("remap_tools", "include_thinking", "include_tools"):
@@ -166,6 +172,17 @@ class Handler(BaseHTTPRequestHandler):
             return self._error(f"请求体解析失败: {e}")
 
         try:
+            if u.path == "/api/store-session":
+                from relay.session_store import store_session
+                if not body.get("source") or not body.get("id"):
+                    return self._error("缺少 Agent / 会话 ID")
+                return self._json(store_session(body["source"], body["id"], body.get("storage")))
+            if u.path == "/api/restore-session":
+                from relay.session_store import restore_session
+                if not body.get("package") or not body.get("cwd"):
+                    return self._error("缺少存储包路径 / 本机目标项目目录")
+                return self._json(restore_session(body["package"], body["cwd"], body.get("session_id") or None,
+                                                  body.get("dsh_compression") or "zstd"))
             if u.path in ("/api/import-ubuntu", "/api/export-windows"):
                 from relay.native_import import import_ubuntu, export_windows
                 if not (body.get("source") and body.get("id") and body.get("cwd")):

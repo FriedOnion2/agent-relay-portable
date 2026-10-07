@@ -116,6 +116,21 @@ class HttpTests(unittest.TestCase):
                                      {"Content-Type":"application/json"})[0], 400)
                     importer.assert_not_called()
 
+    def test_session_storage_routes_and_validates_package_fields(self):
+        headers = {"Content-Type":"application/json"}
+        payload = {"source":"codex", "id":"s", "storage":"/portable"}
+        with patch("relay.session_store.store_session", return_value={"ok":True}) as store:
+            self.assertEqual(self.request("POST", "/api/store-session", json.dumps(payload), headers)[0], 200)
+            store.assert_called_once_with("codex", "s", "/portable")
+        payload = {"package":"/portable/session.zip", "cwd":"/project", "session_id":"new"}
+        with patch("relay.session_store.restore_session", return_value={"ok":True}) as restore:
+            self.assertEqual(self.request("POST", "/api/restore-session", json.dumps(payload), headers)[0], 200)
+            restore.assert_called_once_with("/portable/session.zip", "/project", "new", "zstd")
+        for payload in ({"package":False,"cwd":"/p"}, {"package":"p.zip"}, {"storage":[]}, {}):
+            with patch("relay.session_store.restore_session") as restore:
+                self.assertEqual(self.request("POST", "/api/restore-session", json.dumps(payload), headers)[0], 400)
+                restore.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

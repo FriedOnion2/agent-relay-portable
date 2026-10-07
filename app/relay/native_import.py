@@ -239,13 +239,19 @@ def _native_jsonl(source, target, conv, cwd, requested_id):
 def _native_dsh(source, target, conv, cwd, requested_id, compression):
     rows = read_records(conv.path)
     header = rows[0]
-    if header.get("version") != 4:
-        raise ValueError("DSH 同软件迁移目前要求完整 v4 会话；旧世代请先用源系统 DSH 升级后重试")
+    version = header.get("version")
+    seeded_v0 = (version == 0 and type(header.get("seedLength")) is int and header["seedLength"] >= 0
+                 and header["seedLength"] + 1 < len(rows)
+                 and rows[header["seedLength"] + 1].get("type") == "session/end-seed")
+    if version != 4 and not seeded_v0:
+        raise ValueError("DSH 同软件迁移要求完整 v4 或已关闭的 v0 seed；其他旧世代先用源系统 DSH 升级")
     if (type(header.get("delegationDepth")) is not int or header["delegationDepth"] < 0
-            or type(header.get("isSeeded")) is not bool):
+            or (version == 4 and type(header.get("isSeeded")) is not bool)):
         raise ValueError("DSH 原生 header 缺少有效 delegationDepth / isSeeded，不能构造可恢复会话")
     allowed = {"type", "version", "id", "createdAt", "cwd", "parentSession", "isSeeded",
                "origin", "delegationDepth", "agentPreset"}
+    if seeded_v0:
+        allowed.add("seedLength")
     if set(header) - allowed or type(header.get("createdAt")) is not int or header["createdAt"] < 0:
         raise ValueError("DSH header 不符合官方 v4 原生格式")
     sid = validate_session_id(requested_id) if requested_id else header["id"]
@@ -267,7 +273,7 @@ def _native_dsh(source, target, conv, cwd, requested_id, compression):
     _check_destination(directory, source)
     if directory.exists():
         raise FileExistsError("目标 DSH 会话目录已存在")
-    filename = "session.v4.jsonl" + (".zstd" if compression == "zstd" else "")
+    filename = ("session.jsonl" if version == 0 else "session.v4.jsonl") + (".zstd" if compression == "zstd" else "")
     path = directory / filename
     if compression == "zstd":
         try:

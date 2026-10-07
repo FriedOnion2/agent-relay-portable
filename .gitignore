@@ -10,6 +10,7 @@ __pycache__/
 ._*
 .venv/
 work/
+storage/
 # Portable interpreters are installed locally, not published with source.
 runtime/*
 !runtime/README.txt

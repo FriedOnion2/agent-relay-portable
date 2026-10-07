@@ -6,6 +6,7 @@ Physical headers and each event occupy independent Zstandard frames.
 import json
 import os
 import re
+from pathlib import Path
 
 from .. import ir
 from ..paths import atomic_write, now_ms, safe_ms, uuid7, validate_session_id
@@ -135,7 +136,7 @@ def write_native(home, conv, cwd, session_id, remap_tools, include_thinking):
         raise ValueError("源会话不完整，不能导入 DSH")
     sid = validate_session_id(session_id if session_id is not None else uuid7())
     target_cwd = cwd if cwd is not None else conv.cwd or os.getcwd()
-    if not os.path.isabs(target_cwd):
+    if not Path(target_cwd).is_absolute():
         raise ValueError("DSH 目标工作目录必须是当前系统的绝对路径，请填写目标工作目录")
     try:
         import zstandard as zstd

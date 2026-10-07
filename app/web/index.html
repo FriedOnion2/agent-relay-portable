@@ -153,6 +153,7 @@
   </div>
   <span class="tagline">读取 WorkBuddy · DSH · CodeBuddy · Claude Code / Agent SDK · Codex 会话</span>
   <div class="agent-chips" id="chips"></div>
+  <button class="btn" id="btnStorage">对话存储</button>
 </header>
 
 <div class="wrap">
@@ -176,6 +177,7 @@
       <label class="opt"><input type="checkbox" id="think" checked>保留思考</label>
       <div class="spacer"></div>
       <button class="btn" id="btnMd" disabled>导出 Markdown</button>
+      <button class="btn" id="btnStore" disabled>存储此会话</button>
       <button class="btn primary" id="btnImport" style="display:none" disabled>迁到 Ubuntu 对应软件</button>
       <button class="btn primary" id="btnGo" disabled>迁移到目标</button>
     </div>
@@ -191,6 +193,22 @@
 </div>
 
 <div class="toast" id="toast"></div>
+<section id="storagePanel" style="display:none;position:fixed;inset:70px 24px 24px;z-index:80;background:var(--bg,#fff);padding:20px;overflow:auto;border:1px solid #bbb;border-radius:12px">
+  <div class="bar"><b>跨设备对话存储</b><button class="btn" id="closeStorage">关闭</button></div>
+  <p>按 Agent 保存原生 ZIP 包。把 storage 文件夹复制到另一台设备，或填写包路径后恢复。同 ID 不覆盖，恢复到对应软件。</p>
+  <div class="bar">
+    <input class="input" id="storageRoot" placeholder="存储目录（留空使用项目 storage/）" style="width:380px">
+    <button class="btn" id="refreshStorage">刷新存储列表</button>
+  </div>
+  <div class="bar">
+    <input class="input" id="packagePath" placeholder="会话包 .zip 路径" style="width:380px">
+    <input class="input" id="restoreCwd" placeholder="本机已存在的目标项目目录">
+    <input class="input" id="restoreId" placeholder="新 UUID（可选，避免同 ID 冲突）">
+    <button class="btn primary" id="restorePackage">恢复到对应软件</button>
+  </div>
+  <div id="storageResult" class="meta" style="white-space:pre-wrap;padding:12px"></div>
+  <div id="storageList"></div>
+</section>
 
 <script>
 const AGENTS = {workbuddy:'WorkBuddy', dsh:'DeepSeek Harness', codebuddy:'CodeBuddy', claude:'Claude Code', claude_sdk:'Claude Agent SDK', codex:'OpenAI Codex'};
@@ -226,6 +244,7 @@ function updateActions(){
   $('#btnImport').disabled = !native || !state.current || state.current.truncated ||
     !$('#cwd').value.trim() || (mode==='export-windows' && !$('#projectPath').value.trim()) || state.transferring;
   $('#btnMd').disabled = !state.current;
+  $('#btnStore').disabled = !state.current || state.current.truncated || state.transferring;
 }
 
 function toast(msg, bad=false, action=null){
@@ -305,6 +324,11 @@ function buildTarget(){
 }
 
 function bind(){
+  $('#btnStore').onclick = storeCurrent;
+  $('#btnStorage').onclick = ()=>{ $('#storagePanel').style.display=''; refreshStorage(); };
+  $('#closeStorage').onclick = ()=>{ $('#storagePanel').style.display='none'; };
+  $('#refreshStorage').onclick = refreshStorage;
+  $('#restorePackage').onclick = restoreStored;
   $('#target').onchange = e => {state.target = e.target.value; updateActions();};
   $('#cwd').oninput = updateActions;
   $('#projectPath').oninput = updateActions;
@@ -530,6 +554,54 @@ function renderBlock(b){
 }
 
 /* ================= 迁移 ================= */
+async function storeCurrent(){
+  const selected=state.current;
+  if(!selected || $('#btnStore').disabled || state.transferring) return;
+  state.transferring=true; updateActions();
+  try{
+    const r=await api('/api/store-session',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({source:selected.source,id:selected.id,storage:$('#storageRoot').value.trim()||null})});
+    $('#storagePanel').style.display='';
+    $('#storageResult').textContent='已存储 '+AGENTS[r.manifest.agent]+' 会话\n包路径：'+r.path+'\n复制此 ZIP 包或整个 storage 文件夹到另一台设备后恢复。';
+    await refreshStorage();
+  }catch(e){toast('存储失败：'+e.message,true);}
+  finally{state.transferring=false;updateActions();}
+}
+
+async function refreshStorage(){
+  try{
+    const r=await api('/api/stored-sessions?storage='+encodeURIComponent($('#storageRoot').value.trim()));
+    const box=$('#storageList'); box.innerHTML='';
+    for(const row of r.packages||[]){
+      const item=document.createElement('div'); item.className='meta'; item.style.padding='10px';
+      const details=document.createElement('div');
+      details.textContent=row.error ? row.path+'\n读取失败：'+row.error :
+        (AGENTS[row.agent]||row.agent)+' · '+(row.session?.title||row.session?.id||'会话')+'\n'+row.path;
+      item.appendChild(details);
+      if(!row.error){
+        const button=document.createElement('button'); button.className='btn'; button.textContent='选择恢复';
+        button.onclick=()=>{$('#packagePath').value=row.path;}; item.appendChild(button);
+      }
+      box.appendChild(item);
+    }
+    if(!(r.packages||[]).length) box.textContent='暂无已存储会话。默认目录：'+r.root;
+  }catch(e){toast('存储列表读取失败：'+e.message,true);}
+}
+
+async function restoreStored(){
+  const payload={package:$('#packagePath').value.trim(),cwd:$('#restoreCwd').value.trim(),session_id:$('#restoreId').value.trim()||null};
+  if(state.transferring) return;
+  if(!payload.package || !payload.cwd) return toast('填写会话包路径和本机目标项目目录',true);
+  state.transferring=true; $('#restorePackage').disabled=true; updateActions();
+  try{
+    const r=await api('/api/restore-session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    $('#storageResult').textContent='已恢复 '+AGENTS[r.to.source]+'\n会话 ID：'+r.to.native_id+'\n文件：'+r.to.path+
+      (r.resume_command?'\n续聊命令：'+r.resume_command:'')+'\n'+(r.notes||[]).join('\n');
+    await loadSources();
+  }catch(e){toast('恢复失败：'+e.message,true);}
+  finally{state.transferring=false;$('#restorePackage').disabled=false;updateActions();}
+}
+
 async function doImportWindows(){
   const selected = state.current;
   const btn = $('#btnImport');

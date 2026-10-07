@@ -27,7 +27,7 @@ function setup(){
     setTimeout(){return 1;}, clearTimeout(){},
     fetch(url,options){return new Promise((resolve,reject)=>requests.push({url,options,resolve,reject}));},
   });
-  vm.runInContext(script + '\n globalThis.app={state,loadSessions,openSession,doTransfer,doImportWindows,updateActions,bind,buildTarget,buildTabs,loadSources};',context);
+  vm.runInContext(script + '\n globalThis.app={state,loadSessions,openSession,doTransfer,doImportWindows,updateActions,bind,buildTarget,buildTabs,loadSources,storeCurrent,refreshStorage,restoreStored};',context);
   const response = (index,body,status=200)=>requests[index].resolve({ok:status<400,status,json:async()=>body});
   return {app:context.app, elements, requests, response, el:document.querySelector};
 }
@@ -245,6 +245,34 @@ test('generic conversion on Ubuntu uses the accessible project path rather than 
   assert.equal(JSON.parse(t.requests[0].options.body).cwd,'/mnt/data/project');
   t.response(0,{ok:false,error:'fixture error'},400);
   await pending;
+});
+
+test('storing captures the selected source and package restore captures local cwd with duplicate protection',async()=>{
+  const t=setup();
+  t.app.state.current={source:'codex',id:'s'};
+  t.app.updateActions();
+  const storing=t.app.storeCurrent();
+  await t.app.storeCurrent();
+  assert.equal(t.requests.length,1);
+  assert.equal(t.requests[0].url,'/api/store-session');
+  assert.equal(JSON.parse(t.requests[0].options.body).source,'codex');
+  t.response(0,{ok:true,path:'/storage/codex/p.zip',manifest:{agent:'codex'}});
+  await new Promise(resolve=>setImmediate(resolve));
+  t.response(1,{ok:true,packages:[],root:'/storage'});
+  await storing;
+  assert.equal(t.el('#storagePanel').style.display,'');
+  assert.match(t.el('#storageResult').textContent,/p.zip/);
+  t.el('#packagePath').value='/storage/codex/p.zip';
+  t.el('#restoreCwd').value='/home/a/project';
+  const restoring=t.app.restoreStored();
+  await t.app.restoreStored();
+  assert.equal(t.requests.length,3);
+  assert.equal(t.requests[2].url,'/api/restore-session');
+  assert.equal(JSON.parse(t.requests[2].options.body).cwd,'/home/a/project');
+  t.response(2,{ok:false,error:'checksum failure'},400);
+  await restoring;
+  assert.equal(t.el('#restorePackage').disabled,false);
+  assert.match(t.el('#toast').children[0].textContent,/checksum failure/);
 });
 
 test('unreadable source rows show the error and disable export and migration',async()=>{

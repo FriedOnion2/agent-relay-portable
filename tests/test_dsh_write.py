@@ -20,7 +20,7 @@ except ImportError:
 
 
 def conversation():
-    return ir.Conversation(source="fixture", title="导入 DSH", cwd="/tmp/中文 project😀",
+    return ir.Conversation(source="fixture", title="导入 DSH", cwd=os.path.join(os.path.abspath(os.sep), "tmp", "中文 project😀"),
         model="fixture-model", turns=[
             ir.Turn(ir.USER, [ir.Block.text_block("请读取文件")]),
             ir.Turn(ir.ASSISTANT, [ir.Block.thinking_block("检查文件"),
@@ -48,7 +48,7 @@ class DshWriteTests(unittest.TestCase):
                 row = next(target.discover())
                 imported = target.read(row.id)
                 self.assertEqual(imported.title, "导入 DSH")
-                self.assertEqual(imported.cwd, "/tmp/中文 project😀")
+                self.assertEqual(imported.cwd.replace("\\", "/"), conversation().cwd.replace("\\", "/"))
                 self.assertEqual(imported.first_user_text(), "请读取文件")
                 self.assertEqual(imported.stats()["tool_call"], 1)
                 self.assertEqual(imported.stats()["tool_result"], 1)
@@ -98,7 +98,7 @@ class DshWriteTests(unittest.TestCase):
             target = DshAdapter(home=root)
             target.write(conversation(), session_id="same-id")
             with self.assertRaises(FileExistsError):
-                target.write(conversation(), session_id="same-id", cwd="/different-project")
+                target.write(conversation(), session_id="same-id", cwd=os.path.join(root, "different-project"))
 
     @unittest.skipUnless(zstandard, "install requirements-optional.txt for DSH write tests")
     def test_sdk_shared_history_can_import_into_dsh(self):

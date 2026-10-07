@@ -79,7 +79,7 @@ class ClaudeSdkTests(unittest.TestCase):
                 with self.subTest(target=target):
                     dst = registry.get(target, home=os.path.join(root, "target-"+target))
                     with patch.dict(registry._CACHE, {"claude_sdk":sdk, target:dst}, clear=True):
-                        registry.transfer("claude_sdk", "shared", target, session_id="output")
+                        registry.transfer("claude_sdk", "shared", target, cwd=root, session_id="output")
                     result = dst.read("output")
                     self.assertEqual(result.stats()["tool_result"], 1)
                     self.assertEqual(result.first_user_text(), "question")
