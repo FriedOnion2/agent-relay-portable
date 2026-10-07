@@ -1,0 +1,8 @@
+* text=auto
+*.py text eol=lf
+*.html text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.command text eol=lf
+*.bat text eol=crlf
+AgentRelay.app/Contents/MacOS/AgentRelay text eol=lf

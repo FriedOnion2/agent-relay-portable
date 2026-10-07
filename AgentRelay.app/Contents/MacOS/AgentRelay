@@ -1,0 +1,70 @@
+#!/bin/bash
+# AgentRelay 便携版 · macOS 应用包入口
+# 双击 AgentRelay.app 走这里。脚本做的事和「启动_AgentRelay.command」一样，
+# 区别在于：它把服务放后台跑、日志写进 U 盘的 logs/，然后开浏览器，不留终端窗口。
+
+APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"          # .../AgentRelay.app/Contents
+APP_RES="$APP_DIR/Resources"
+[[ -d "$APP_RES/app" ]] && APP_SRC="$APP_RES/app" || APP_SRC="$(cd "$APP_DIR/../.." && pwd)/app"
+
+cd "$APP_SRC" || exit 1
+
+LOG_DIR="$APP_SRC/../logs"
+mkdir -p "$LOG_DIR" 2>/dev/null
+LOG="$LOG_DIR/server-$(date +%Y%m%d-%H%M%S).log"
+
+# ---------- 找 Python ----------
+CANDIDATES=(
+  "$APP_SRC/../runtime/python/bin/python3"
+  "/opt/homebrew/bin/python3"
+  "/usr/local/bin/python3"
+  "/Library/Frameworks/Python.framework/Versions/Current/bin/python3"
+  "/usr/bin/python3"
+  "/usr/bin/python"
+)
+if command -v python3 >/dev/null 2>&1; then CANDIDATES+=("$(command -v python3)"); fi
+
+PY=""
+for c in "${CANDIDATES[@]}"; do
+  [ -x "$c" ] || continue
+  if "$c" -c 'import sys' >/dev/null 2>&1; then PY="$c"; break; fi
+done
+
+die() {
+  osascript -e "display alert \"AgentRelay\" message \"$1\" buttons {\"好\"}" >/dev/null 2>&1
+  # osascript 不可用时退回通知中心
+  osascript -e "display notification \"$1\" with title \"AgentRelay\"" >/dev/null 2>&1
+  echo "$1" >>"$LOG"
+  exit 1
+}
+
+if [ -z "$PY" ]; then
+  die "这台 Mac 上没有可用的 Python（需要 3.8 以上）。
+建议运行 brew install python，或改用「启动_AgentRelay.command」查看详细提示。"
+fi
+
+if ! "$PY" -c 'import sys;raise SystemExit(0 if sys.version_info>=(3,8) else 1)' 2>/dev/null; then
+  die "Python 版本过低，需要 3.8 以上。建议 brew install python。"
+fi
+
+PORT=$("$PY" -c 'import sys;sys.path.insert(0,"'"$APP_SRC"'");import bootstrap;print(bootstrap.effective_port())' 2>/dev/null)
+PORT=${PORT:-8745}
+
+# 端口被占就往后挪，避免上次没关干净导致启动失败
+for try in 0 1 2 3 4 5; do
+  P=$((PORT + try))
+  if ! lsof -nP -iTCP:"$P" -sTCP:LISTEN >/dev/null 2>&1; then PORT=$P; break; fi
+done
+
+nohup "$PY" "$APP_SRC/cli.py" serve --port "$PORT" --no-browser >"$LOG" 2>&1 &
+SRV=$!
+
+sleep 1.5
+if ! kill -0 $SRV 2>/dev/null; then
+  die "服务启动失败，日志见：$LOG"
+fi
+
+open "http://127.0.0.1:${PORT}"
+
+osascript -e "display notification \"已打开 http://127.0.0.1:${PORT}
+停止服务请在活动监视器里结束 python 进程\" with title \"AgentRelay 已启动\"" >/dev/null 2>&1

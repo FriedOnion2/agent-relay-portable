@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentRelay · 对话记录迁移</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --panel:#ffffff; --line:#e3e6ec; --line-soft:#eef0f4;
+    --text:#1c2024; --text-2:#5b6470; --text-3:#8b95a3;
+    --accent:#2563eb; --accent-soft:#eaf1ff; --accent-line:#c7dbff;
+    --green:#0f8a4d; --green-soft:#e7f6ee;
+    --amber:#b7791f; --amber-soft:#fdf3e2;
+    --radius:10px;
+    --shadow:0 1px 2px rgba(16,24,40,.05), 0 4px 14px rgba(16,24,40,.05);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font:14px/1.6 "Segoe UI","Microsoft YaHei",-apple-system,system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  button,input,select,textarea{font-family:inherit;font-size:14px;color:inherit}
+
+  /* ---------- 顶栏 ---------- */
+  header{
+    height:56px; display:flex; align-items:center; gap:14px;
+    padding:0 18px; background:var(--panel); border-bottom:1px solid var(--line);
+    position:sticky; top:0; z-index:20;
+  }
+  .logo{display:flex;align-items:center;gap:9px;font-weight:600;font-size:15px;letter-spacing:.2px}
+  .logo svg{flex:none}
+  .tagline{color:var(--text-3);font-size:12.5px}
+  .agent-chips{display:flex;gap:6px;margin-left:auto;align-items:center}
+  .chip{
+    display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;
+    background:var(--line-soft); font-size:12px; color:var(--text-2); border:1px solid transparent;
+  }
+  .chip b{font-weight:600;color:var(--text)}
+  .chip.off{opacity:.45}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--green)}
+  .chip.off .dot{background:#c2c8d0}
+
+  /* ---------- 布局 ---------- */
+  .wrap{display:flex; height:calc(100vh - 56px); overflow:hidden}
+  aside{
+    width:340px; flex:none; background:var(--panel); border-right:1px solid var(--line);
+    display:flex; flex-direction:column;
+  }
+  main{flex:1; display:flex; flex-direction:column; min-width:0}
+
+  /* ---------- 侧栏 ---------- */
+  .tabs{display:flex; gap:4px; padding:12px 12px 8px; border-bottom:1px solid var(--line-soft)}
+  .tab{
+    flex:1; padding:7px 4px; border-radius:8px; border:1px solid transparent; background:transparent;
+    cursor:pointer; color:var(--text-2); font-size:13px; transition:.15s; text-align:center;
+  }
+  .tab:hover{background:var(--line-soft)}
+  .tab.on{background:var(--accent-soft); color:var(--accent); border-color:var(--accent-line); font-weight:600}
+  .side-tools{padding:10px 12px; border-bottom:1px solid var(--line-soft)}
+  .input{width:100%; padding:7px 10px; border:1px solid var(--line); border-radius:8px; background:#fff; outline:none}
+  .input:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft)}
+  .list{flex:1; overflow-y:auto; padding:8px}
+  .item{
+    padding:10px 11px; border-radius:var(--radius); border:1px solid transparent; cursor:pointer;
+    margin-bottom:6px; background:#fff; transition:.12s;
+  }
+  .item:hover{border-color:var(--line); background:#fbfcfe}
+  .item.on{border-color:var(--accent-line); background:var(--accent-soft)}
+  .item h4{margin:0 0 5px; font-size:13px; font-weight:600; line-height:1.45;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .item .meta{display:flex;gap:8px;font-size:11.5px;color:var(--text-3);flex-wrap:wrap}
+  .item .meta span{white-space:nowrap}
+  .empty{padding:28px 14px;text-align:center;color:var(--text-3);font-size:13px}
+
+  /* ---------- 主区 ---------- */
+  .bar{
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    padding:10px 16px; border-bottom:1px solid var(--line); background:var(--panel);
+  }
+  .bar .spacer{flex:1}
+  .btn{
+    padding:7px 13px; border-radius:8px; border:1px solid var(--line); background:#fff;
+    cursor:pointer; transition:.12s; white-space:nowrap;
+  }
+  .btn:hover:not(:disabled){border-color:#c9cfd8; background:#fafbfc}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .btn.primary{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:500}
+  .btn.primary:hover:not(:disabled){background:#1d4fd8}
+  .sel, .bar .input{padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;outline:none}
+  .sel:focus,.bar .input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  label.opt{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:var(--text-2);cursor:pointer}
+  label.opt input{margin:0}
+
+  .hero{padding:14px 18px 12px; background:var(--panel); border-bottom:1px solid var(--line-soft)}
+  .hero h2{margin:0 0 6px; font-size:16px; font-weight:600}
+  .hero .sub{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--text-3)}
+  .hero .sub code{background:var(--line-soft);padding:1px 5px;border-radius:4px;font-size:11.5px}
+  .warn{margin-top:8px;font-size:12.5px;color:var(--amber);background:var(--amber-soft);
+    border:1px solid #f3e0bd;border-radius:7px;padding:6px 9px}
+
+  .feed{flex:1; overflow-y:auto; padding:18px}
+  .turn{display:flex;gap:11px;margin-bottom:16px;max-width:1000px}
+  .avatar{
+    width:28px;height:28px;flex:none;border-radius:8px;display:grid;place-items:center;
+    font-size:13px;font-weight:600;
+  }
+  .u .avatar{background:var(--accent-soft);color:var(--accent)}
+  .a .avatar{background:var(--green-soft);color:var(--green)}
+  .bubble{flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);
+    border-radius:var(--radius);padding:11px 13px;box-shadow:var(--shadow)}
+  .bubble .who{font-size:11.5px;color:var(--text-3);margin-bottom:5px;display:flex;gap:8px}
+  .bubble .body{white-space:pre-wrap;word-break:break-word;font-size:13.5px}
+  details{margin:7px 0}
+  details summary{cursor:pointer;color:var(--text-2);font-size:12.5px;user-select:none}
+  details .think{padding:9px 11px;background:#fafbfc;border:1px dashed var(--line);border-radius:8px;
+    margin-top:6px;white-space:pre-wrap;font-size:12.5px;color:var(--text-2)}
+  .tool{margin:7px 0;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fcfdfe}
+  .tool>.hd{padding:6px 10px;background:#f7f9fc;border-bottom:1px solid var(--line-soft);
+    font-size:12px;color:var(--text-2);display:flex;gap:8px;align-items:center}
+  .tool>.hd b{color:var(--text);font-weight:600}
+  .tool pre{margin:0;padding:9px 11px;overflow-x:auto;font-size:12px;line-height:1.55;color:#2c333d}
+  code.k{font-family:"Cascadia Mono",Consolas,Menlo,monospace}
+
+  /* ---------- 反馈 ---------- */
+  .toast{
+    position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);
+    background:#111827;color:#fff;padding:11px 16px;border-radius:10px;font-size:13px;
+    box-shadow:0 8px 24px rgba(0,0,0,.22);opacity:0;transition:.22s;z-index:99;max-width:70vw;
+    display:flex;gap:10px;align-items:center;
+  }
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+  .toast.bad{background:#8f2d2d}
+  .toast button{background:rgba(255,255,255,.16);border:0;color:#fff;padding:4px 9px;border-radius:6px;cursor:pointer}
+  .spinner{
+    width:13px;height:13px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;
+    border-radius:50%;animation:sp .7s linear infinite;
+  }
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .placeholders{display:grid;place-items:center;height:100%;color:var(--text-3);font-size:13.5px;text-align:center;padding:20px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+    <path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+    AgentRelay
+  </div>
+  <span class="tagline">在 DSH · Claude · Codex 之间搬运对话记录</span>
+  <div class="agent-chips" id="chips"></div>
+</header>
+
+<div class="wrap">
+  <aside>
+    <div class="tabs" id="tabs"></div>
+    <div class="side-tools">
+      <input class="input" id="q" placeholder="搜索标题 / 目录 / id…" autocomplete="off">
+    </div>
+    <div class="list" id="list"><div class="empty">加载中…</div></div>
+  </aside>
+
+  <main>
+    <div class="bar">
+      <select class="sel" id="target"></select>
+      <input class="input" id="cwd" style="width:290px" placeholder="目标工作目录（留空沿用原会话）">
+      <label class="opt"><input type="checkbox" id="remap" checked>工具名适配</label>
+      <label class="opt"><input type="checkbox" id="think" checked>保留思考</label>
+      <div class="spacer"></div>
+      <button class="btn" id="btnMd" disabled>导出 Markdown</button>
+      <button class="btn primary" id="btnGo" disabled>迁移到目标</button>
+    </div>
+
+    <div id="content">
+      <div class="placeholders">
+        从左侧选一个会话<br>可以在 DSH / Claude Code / Codex 之间来回迁移
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const AGENTS = {dsh:'DSH / WorkBuddy', claude:'Claude Code', codex:'OpenAI Codex'};
+const state = {source:'dsh', target:'claude', sessions:[], current:null, turnLimit:40};
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function toast(msg, bad=false, action=null){
+  const t = $('#toast');
+  t.className = 'toast show' + (bad ? ' bad' : '');
+  t.innerHTML = '';
+  t.appendChild(document.createTextNode(msg));
+  if (action){
+    const b = document.createElement('button');
+    b.textContent = action.label;
+    b.onclick = action.fn;
+    t.appendChild(b);
+  }
+  clearTimeout(t._t);
+  t._t = setTimeout(()=>{ t.className = 'toast' + (bad?' bad':''); }, action ? 7000 : 3200);
+}
+
+/* ================= 初始化 ================= */
+async function init(){
+  await loadSources();
+  buildTabs();
+  buildTarget();
+  bind();
+  await loadSessions();
+}
+
+async function loadSources(){
+  const r = await fetch('/api/sources').then(x=>x.json());
+  const box = $('#chips'); box.innerHTML = '';
+  (r.sources || []).forEach(s=>{
+    const el = document.createElement('span');
+    el.className = 'chip' + (s.available ? '' : ' off');
+    el.title = s.home || '数据目录不存在';
+    el.innerHTML = `<i class="dot"></i>${esc(s.name)} <b>${s.session_count||0}</b>`;
+    box.appendChild(el);
+  });
+  if (!(r.sources||[]).some(s=>s.available && s.name===state.source)){
+    const first = (r.sources||[]).find(s=>s.available);
+    if (first) state.source = first.name;
+  }
+}
+
+function buildTabs(){
+  const box = $('#tabs'); box.innerHTML='';
+  Object.keys(AGENTS).forEach(k=>{
+    const b = document.createElement('button');
+    b.className = 'tab' + (k===state.source?' on':'');
+    b.textContent = AGENTS[k];
+    b.onclick = ()=>{ if(state.source===k) return; state.source=k; buildTabs(); loadSessions(); };
+    box.appendChild(b);
+  });
+}
+
+function buildTarget(){
+  const sel = $('#target'); sel.innerHTML='';
+  const opts = Object.keys(AGENTS).filter(k=>k!==state.source);
+  state.target = opts.includes(state.target) ? state.target : opts[0];
+  opts.forEach(k=>{
+    const o = document.createElement('option');
+    o.value = k; o.textContent = '迁移到 ' + AGENTS[k];
+    sel.appendChild(o);
+  });
+  sel.value = state.target;
+}
+
+function bind(){
+  $('#target').onchange = e => state.target = e.target.value;
+  let timer;
+  $('#q').oninput = e => { clearTimeout(timer); timer = setTimeout(loadSessions, 260); };
+  $('#btnGo').onclick = doTransfer;
+  $('#btnMd').onclick = async ()=>{
+    if(!state.current) return;
+    const r = await fetch('/api/export-md', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({source:state.source, id:state.current.id,
+        include_thinking:$('#think').checked, include_tools:true})
+    }).then(x=>x.json());
+    if(!r.ok) return toast(r.error||'导出失败', true);
+    download(`${(state.current.title||'session').slice(0,40)}.md`, r.markdown);
+    toast('Markdown 已下载');
+  };
+}
+
+/* ================= 列表 ================= */
+async function loadSessions(){
+  const box = $('#list');
+  box.innerHTML = '<div class="empty">加载中…</div>';
+  await buildTarget();
+  const q = encodeURIComponent($('#q').value.trim());
+  let r;
+  try{
+    r = await fetch(`/api/sessions?agent=${state.source}&q=${q}`).then(x=>x.json());
+  }catch(e){ box.innerHTML = `<div class="empty">请求失败：${esc(e)}</div>`; return; }
+  if(!r.ok){ box.innerHTML = `<div class="empty">${esc(r.error)}</div>`; return; }
+  state.sessions = r.sessions || [];
+  box.innerHTML = '';
+  if(!state.sessions.length){
+    box.innerHTML = '<div class="empty">没有会话<br><span style="font-size:12px">换一个 agent 试试</span></div>';
+    return;
+  }
+  state.sessions.forEach(s=>{
+    const el = document.createElement('div');
+    el.className = 'item';
+    el.dataset.id = s.id;
+    el.innerHTML = `
+      <h4>${esc(s.title || '未命名会话')}</h4>
+      <div class="meta">
+        <span title="更新时间">${esc(s.updated)}</span>
+        <span>${s.turns} 轮</span>
+        <span>${esc(s.size_str)}</span>
+      </div>`;
+    el.title = `${s.id}\n${s.cwd||''}\n${s.path}`;
+    el.onclick = ()=>{
+      document.querySelectorAll('.item.on').forEach(x=>x.classList.remove('on'));
+      el.classList.add('on');
+      openSession(s);
+    };
+    box.appendChild(el);
+  });
+}
+
+/* ================= 详情 ================= */
+async function openSession(s){
+  const main = $('#content');
+  main.innerHTML = '<div class="placeholders">读取中…</div>';
+  $('#btnGo').disabled = true; $('#btnMd').disabled = true;
+  let r;
+  try{
+    r = await fetch(`/api/session?agent=${state.source}&id=${encodeURIComponent(s.id)}`).then(x=>x.json());
+  }catch(e){ main.innerHTML = `<div class="placeholders">读取失败：${esc(e)}</div>`; return; }
+  if(!r.ok){ main.innerHTML = `<div class="placeholders">${esc(r.error)}</div>`; return; }
+
+  state.current = {id:s.id, title:r.info.title};
+  $('#cwd').placeholder = r.info.cwd ? `原目录：${r.info.cwd}` : '目标工作目录';
+  $('#btnGo').disabled = false; $('#btnMd').disabled = false;
+
+  const i = r.info, st = i.stats || {};
+  const hero = document.createElement('div');
+  hero.className = 'hero';
+  hero.innerHTML = `
+    <h2>${esc(i.title || '未命名会话')}</h2>
+    <div class="sub">
+      <span>来源 <b>${esc(i.source)}</b></span>
+      <span>${st.turns||0} 轮 · 工具 ${st.tool_call||0} · 思考 ${st.thinking||0}</span>
+      ${i.model ? `<span>模型 <code>${esc(i.model)}</code></span>` : ''}
+      ${i.created_at ? `<span>${esc(i.created_at)} → ${esc(i.updated_at||'')}</span>` : ''}
+    </div>
+    ${i.truncated ? '<div class="warn">⚠ 源文件超过 32MB，只读取了部分内容，迁移结果可能不完整</div>' : ''}
+  `;
+
+  const feed = document.createElement('div');
+  feed.className = 'feed';
+  const shown = r.turns.slice(0, state.turnLimit);
+  shown.forEach(t=>feed.appendChild(renderTurn(t)));
+  if(r.turns.length > shown.length){
+    const more = document.createElement('button');
+    more.className = 'btn';
+    more.style.margin = '0 auto';
+    more.textContent = `显示剩余 ${r.turns.length - shown.length} 轮`;
+    more.onclick = ()=>{
+      const rest = document.createDocumentFragment();
+      r.turns.slice(state.turnLimit).forEach(t=>rest.appendChild(renderTurn(t)));
+      feed.insertBefore(rest, more);
+      more.remove();
+    };
+    feed.appendChild(more);
+  }
+
+  main.innerHTML = '';
+  main.appendChild(hero);
+  main.appendChild(feed);
+}
+
+function renderTurn(t){
+  const el = document.createElement('div');
+  el.className = 'turn ' + (t.role === 'user' ? 'u' : 'a');
+  const av = document.createElement('div');
+  av.className = 'avatar';
+  av.textContent = t.role === 'user' ? 'U' : 'A';
+  const bub = document.createElement('div');
+  bub.className = 'bubble';
+
+  const who = document.createElement('div');
+  who.className = 'who';
+  who.innerHTML = `<span>${t.role === 'user' ? '用户' : '助手'}</span>${t.ts ? `<span>${esc(t.ts)}</span>`:''}${t.model?`<span>${esc(t.model)}</span>`:''}`;
+  bub.appendChild(who);
+
+  const blocks = t.blocks || [];
+  if(!blocks.length){
+    const b = document.createElement('div');
+    b.className = 'body';
+    b.textContent = t.text || '(空)';
+    bub.appendChild(b);
+  }
+  blocks.forEach(b=>bub.appendChild(renderBlock(b)));
+  el.appendChild(av); el.appendChild(bub);
+  return el;
+}
+
+function renderBlock(b){
+  if(b.kind === 'text'){
+    const d = document.createElement('div');
+    d.className = 'body';
+    d.textContent = b.text;
+    return d;
+  }
+  if(b.kind === 'thinking'){
+    const d = document.createElement('details');
+    d.innerHTML = '<summary>💭 思考过程</summary>';
+    const p = document.createElement('div');
+    p.className = 'think';
+    p.textContent = b.text;
+    d.appendChild(p);
+    return d;
+  }
+  if(b.kind === 'tool_call'){
+    const d = document.createElement('div');
+    d.className = 'tool';
+    const arg = b.arguments && b.arguments.length > 600 ? b.arguments.slice(0,600)+'\n… 已截断' : b.arguments;
+    d.innerHTML = `<div class="hd">🔧 <b>${esc(b.name)}</b><code class="k">${esc((b.call_id||'').slice(0,24))}</code></div>`;
+    const pre = document.createElement('pre');
+    pre.textContent = arg || '';
+    d.appendChild(pre);
+    return d;
+  }
+  if(b.kind === 'tool_result'){
+    const d = document.createElement('div');
+    d.className = 'tool';
+    d.innerHTML = `<div class="hd">${b.is_error?'❌':'📤'} 工具结果<code class="k">${esc((b.call_id||'').slice(0,24))}</code></div>`;
+    const pre = document.createElement('pre');
+    let out = b.output || '';
+    if(out.length > 1500) out = out.slice(0,1500) + `\n… 已截断（共 ${out.length} 字符）`;
+    pre.textContent = out;
+    d.appendChild(pre);
+    return d;
+  }
+  const d = document.createElement('div');
+  d.className = 'body';
+  d.style.color = 'var(--text-3)';
+  d.textContent = b.kind === 'image' ? '（图片）' : `（未知块 ${b.kind}）`;
+  return d;
+}
+
+/* ================= 迁移 ================= */
+async function doTransfer(){
+  const btn = $('#btnGo');
+  if(!state.current || btn.disabled) return;
+  const old = btn.innerHTML;
+  btn.innerHTML = '<span class="spinner"></span> 迁移中…';
+  btn.disabled = true;
+  const payload = {
+    source: state.source,
+    id: state.current.id,
+    target: state.target,
+    cwd: $('#cwd').value.trim() || null,
+    remap_tools: $('#remap').checked,
+    include_thinking: $('#think').checked,
+  };
+  let r;
+  try{
+    r = await fetch('/api/transfer', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+    }).then(x=>x.json());
+  }catch(e){
+    btn.innerHTML = old; btn.disabled = false;
+    return toast('请求失败：'+e, true);
+  }
+  btn.innerHTML = old; btn.disabled = false;
+  if(!r.ok) return toast(r.error || '迁移失败', true);
+  const p = r.to.path;
+  toast(`已迁移到 ${AGENTS[r.to.source]}：${p}`, false, {
+    label:'复制路径',
+    fn:()=>{ navigator.clipboard?.writeText(p).then(()=>toast('路径已复制'),()=>{}); }
+  });
+  loadSources();
+}
+
+function download(name, text){
+  const b = new Blob([text], {type:'text/markdown;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(b);
+  a.download = name;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+}
+
+init();
+</script>
+</body>
+</html>
