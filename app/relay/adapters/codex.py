@@ -17,7 +17,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 from .. import ir
 from ..clean import strip_scaffolding, looks_like_system_prompt
-from ..paths import iso, read_jsonl, safe_ms, atomic_write, uuid7, now_ms
+from ..paths import iso, read_jsonl, safe_ms, atomic_write, uuid7, now_ms, validate_session_id
 from .base import BaseAdapter, SessionInfo, ToolNameMap
 
 MAX_SCAN_BYTES = 32 * 1024 * 1024
@@ -137,7 +137,8 @@ class CodexAdapter(BaseAdapter):
 
     def _parse(self, path: str) -> ir.Conversation:
         names = self._name_index()
-        conv = ir.Conversation(source=self.name, path=path)
+        conv = ir.Conversation(source=self.name, path=path,
+                               truncated=os.path.getsize(path) > MAX_SCAN_BYTES)
         pending_assistant: Optional[ir.Turn] = None
 
         def flush():
@@ -276,7 +277,9 @@ class CodexAdapter(BaseAdapter):
         import datetime as dt
 
         target_cwd = (cwd or conv.cwd or os.getcwd()).replace("\\", "/")
-        sid = session_id or uuid7()
+        sid = validate_session_id(session_id if session_id is not None else uuid7())
+        if session_id is not None and self.find_path(sid):
+            raise FileExistsError(f"目标会话已存在: {sid}")
         now = dt.datetime.now(dt.timezone.utc)
         out_path = os.path.join(
             self.home,
@@ -383,5 +386,5 @@ class CodexAdapter(BaseAdapter):
                     }, ensure_ascii=False))
                     ordinal += 1
 
-        atomic_write(out_path, lines)
+        atomic_write(out_path, lines, overwrite=False)
         return out_path

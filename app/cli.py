@@ -148,7 +148,8 @@ def cmd_transfer(args):
 
 def cmd_serve(args):
     from server import run
-    run(host=args.host, port=args.port, open_browser=not args.no_browser)
+    run(host=args.host, port=args.port,
+        open_browser=not args.no_browser and bootstrap.effective_open_browser(_CFG))
 
 
 def cmd_doctor(args):
@@ -232,7 +233,8 @@ def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
-        args.func(args)
+        result = args.func(args)
+        return result if isinstance(result, int) else 0
     except KeyboardInterrupt:
         print("\n已取消")
         return 130

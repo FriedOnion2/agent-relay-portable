@@ -8,12 +8,14 @@ from __future__ import annotations
 
 import fnmatch
 import os
+import ntpath
+import posixpath
 import time
 from dataclasses import dataclass, asdict
 from typing import Any, Dict, Iterable, List, Optional
 
 from .. import ir
-from ..paths import human_size, local_str, read_jsonl, slug_for
+from ..paths import human_size, local_str, read_jsonl, slug_for, is_windows_path
 
 
 def _norm_cwd(cwd: str) -> str:
@@ -24,7 +26,9 @@ def _norm_cwd(cwd: str) -> str:
     """
     if not cwd:
         return ""
-    return os.path.normpath(str(cwd)).replace("\\", "/").rstrip("/").lower()
+    windows = is_windows_path(cwd) or cwd.startswith(("\\\\", "//"))
+    normalized = (ntpath if windows else posixpath).normpath(str(cwd)).replace("\\", "/")
+    return normalized.lower() if windows else normalized
 
 
 @dataclass
@@ -112,13 +116,17 @@ class BaseAdapter:
 
     def find_path(self, sid: str) -> Optional[str]:
         """通过 会话id（或文件名的模糊匹配）定位会话文件。"""
+        if not isinstance(sid, str) or not sid.strip():
+            raise ValueError("缺少会话 ID")
+        matches = []
         for s in self.discover():
             if s.id == sid:
                 return s.path
-        for s in self.discover():
             if sid in os.path.basename(s.path):
-                return s.path
-        return None
+                matches.append(s.path)
+        if len(matches) > 1:
+            raise ValueError("会话 ID 匹配多条记录，请使用完整 ID")
+        return matches[0] if matches else None
 
     def project_dir_for(self, cwd: str) -> str:
         """算出 cwd 对应的项目目录名。

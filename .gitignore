@@ -5,6 +5,7 @@ app/logs/
 __pycache__/
 *.py[cod]
 *.partial
+*.publish-lock
 .DS_Store
 ._*
 .venv/

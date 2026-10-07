@@ -25,9 +25,10 @@ CANDIDATES=(
 if command -v python3 >/dev/null 2>&1; then CANDIDATES+=("$(command -v python3)"); fi
 
 PY=""
+if [ -n "${RELAY_PYTHON:-}" ]; then CANDIDATES=("$RELAY_PYTHON" "${CANDIDATES[@]}"); fi
 for c in "${CANDIDATES[@]}"; do
   [ -x "$c" ] || continue
-  if "$c" -c 'import sys' >/dev/null 2>&1; then PY="$c"; break; fi
+  if "$c" -c 'import sys;raise SystemExit(0 if sys.version_info>=(3,8) else 1)' >/dev/null 2>&1; then PY="$c"; break; fi
 done
 
 die() {
@@ -47,7 +48,7 @@ if ! "$PY" -c 'import sys;raise SystemExit(0 if sys.version_info>=(3,8) else 1)'
   die "Python 版本过低，需要 3.8 以上。建议 brew install python。"
 fi
 
-PORT=$("$PY" -c 'import sys;sys.path.insert(0,"'"$APP_SRC"'");import bootstrap;print(bootstrap.effective_port())' 2>/dev/null)
+PORT=$("$PY" -c 'import bootstrap;print(bootstrap.effective_port())' 2>/dev/null)
 PORT=${PORT:-8745}
 
 # 端口被占就往后挪，避免上次没关干净导致启动失败
@@ -56,15 +57,13 @@ for try in 0 1 2 3 4 5; do
   if ! lsof -nP -iTCP:"$P" -sTCP:LISTEN >/dev/null 2>&1; then PORT=$P; break; fi
 done
 
-nohup "$PY" "$APP_SRC/cli.py" serve --port "$PORT" --no-browser >"$LOG" 2>&1 &
+nohup "$PY" "$APP_SRC/cli.py" serve --port "$PORT" >"$LOG" 2>&1 &
 SRV=$!
 
 sleep 1.5
 if ! kill -0 $SRV 2>/dev/null; then
   die "服务启动失败，日志见：$LOG"
 fi
-
-open "http://127.0.0.1:${PORT}"
 
 osascript -e "display notification \"已打开 http://127.0.0.1:${PORT}
 停止服务请在活动监视器里结束 python 进程\" with title \"AgentRelay 已启动\"" >/dev/null 2>&1

@@ -48,6 +48,8 @@ _STRIP_TAGS = (
     "app_development_routing",
     "expert_management",
     "system-reminder-data",
+    "app-context",
+    "environment_context",
 )
 
 _TAG_RE = re.compile(
@@ -117,9 +119,7 @@ def looks_like_system_prompt(text: str) -> bool:
     if not text:
         return False
     low = text.lower().lstrip()
-    # 超长且含工具清单等特征
-    if len(text) > 4000:
-        return True
+    # 用户的长消息仍然是正文，不能仅凭长度判为系统提示。
     return any(low.startswith(h) for h in _DEV_HINTS)
 
 

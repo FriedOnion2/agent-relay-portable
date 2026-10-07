@@ -1,0 +1,31 @@
+name: Tests
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ['3.8', '3.12', '3.14']
+        exclude:
+          - os: macos-latest
+            python: '3.8'
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m unittest discover -s tests -v
+      - run: node --test tests/web.test.cjs
+      - name: Check macOS shell scripts
+        if: runner.os != 'Windows'
+        run: |
+          bash -n 启动_AgentRelay.command
+          bash -n Mac首次准备.command
+          bash -n AgentRelay.app/Contents/MacOS/AgentRelay

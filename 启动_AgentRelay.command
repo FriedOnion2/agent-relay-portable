@@ -29,9 +29,10 @@ if command -v python3 >/dev/null 2>&1; then CANDIDATES+=("$(command -v python3)"
 if command -v python  >/dev/null 2>&1; then CANDIDATES+=("$(command -v python)"); fi
 
 PY=""
+if [ -n "${RELAY_PYTHON:-}" ]; then CANDIDATES=("$RELAY_PYTHON" "${CANDIDATES[@]}"); fi
 for c in "${CANDIDATES[@]}"; do
   [ -x "$c" ] || continue
-  if "$c" -c 'import sys' >/dev/null 2>&1; then
+  if "$c" -c 'import sys;raise SystemExit(0 if sys.version_info>=(3,8) else 1)' >/dev/null 2>&1; then
     PY="$c"
     break
   fi
@@ -70,13 +71,7 @@ fi
 # ---------- 4. 启动 ----------
 printf '\n  正在启动 Web 界面，浏览器会自动打开。\n'
 printf '  关闭这个窗口即可停止服务。\n\n'
-read -r -p "  按回车键开始…" _
-
-PORT=$("$PY" -c 'import sys;sys.path.insert(0,"app");import bootstrap;print(bootstrap.effective_port())' 2>/dev/null)
-PORT=${PORT:-8745}
-
-open "http://127.0.0.1:${PORT}" 2>/dev/null
-"$PY" app/cli.py serve --port "$PORT" --no-browser
+"$PY" app/cli.py serve
 
 printf '\n  服务已停止。\n'
 read -r -p "  按回车键关闭…" _

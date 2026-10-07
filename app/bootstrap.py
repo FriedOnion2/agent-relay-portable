@@ -80,7 +80,8 @@ def _version_of(exe: Path | str) -> tuple | None:
     """跑一次解释器问版本号，跑不通返回 None。"""
     try:
         out = subprocess.run(
-            [str(exe), "-c", "import sys;print('%d.%d' % sys.version_info[:2])"],
+            (["py", "-3"] if str(exe) == "py -3" else [str(exe)])
+            + ["-c", "import sys;print('%d.%d' % sys.version_info[:2])"],
             capture_output=True, text=True, timeout=25,
         )
         if out.returncode != 0:
@@ -98,6 +99,8 @@ def python_candidates() -> list[tuple[str, str]]:
     env_py = os.environ.get("RELAY_PYTHON")
     if env_py:
         c.append((env_py, "环境变量 RELAY_PYTHON"))
+    if sys.executable:
+        c.append((sys.executable, "当前运行的 Python"))
 
     # 1. 盘上自带的 Python（真正免安装的关键）
     rt = media_root() / "runtime"
@@ -199,7 +202,20 @@ def load_config() -> dict:
     if not p.is_file():
         return {}
     try:
-        return json.loads(p.read_text(encoding="utf-8"))
+        cfg = json.loads(p.read_text(encoding="utf-8-sig"))
+        if not isinstance(cfg, dict):
+            raise ValueError("配置必须是 JSON 对象")
+        homes = cfg.get("agent_homes", {})
+        if not isinstance(homes, dict):
+            raise ValueError("agent_homes 必须是 JSON 对象")
+        for key in ("claude", "codex", "dsh"):
+            if key in homes and not isinstance(homes[key], str):
+                raise ValueError(f"agent_homes.{key} 必须是字符串")
+        if "port" in cfg and (type(cfg["port"]) is not int or not 1 <= cfg["port"] <= 65535):
+            raise ValueError("port 必须是 1 到 65535 的整数")
+        if "open_browser" in cfg and type(cfg["open_browser"]) is not bool:
+            raise ValueError("open_browser 必须为 true 或 false")
+        return cfg
     except Exception as e:
         print(f"⚠ config.json 解析失败，忽略此文件：{e}", file=sys.stderr)
         return {}
@@ -223,7 +239,8 @@ def apply_config(cfg: dict | None = None) -> list[str]:
 def effective_port(cfg: dict | None = None) -> int:
     cfg = cfg if cfg is not None else load_config()
     try:
-        return int(cfg.get("port") or DEFAULT_CONFIG["port"])
+        port = int(cfg.get("port") or DEFAULT_CONFIG["port"])
+        return port if 1 <= port <= 65535 else DEFAULT_CONFIG["port"]
     except Exception:
         return DEFAULT_CONFIG["port"]
 
@@ -268,6 +285,7 @@ def probe_agent_homes() -> list[dict]:
 def report(verbose: bool = True) -> dict:
     py = find_python()
     cfg = load_config()
+    apply_config(cfg)
     return {
         "platform": f"{platform.system()} {platform.release()} ({platform.machine()})",
         "app_root": str(app_root()),
@@ -318,4 +336,7 @@ def print_report() -> int:
 
 
 if __name__ == "__main__":
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(print_report())

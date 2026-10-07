@@ -18,6 +18,8 @@ _CACHE: Dict[str, BaseAdapter] = {}
 
 
 def get(source: str, **kw) -> BaseAdapter:
+    if not isinstance(source, str) or not source.strip():
+        raise ValueError("缺少 agent 名称")
     key = source.lower()
     if key not in _ADAPTERS:
         raise KeyError(f"未知 agent: {source}（可选: {', '.join(_ADAPTERS)}）")

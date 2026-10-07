@@ -16,7 +16,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 from .. import ir
 from ..clean import strip_scaffolding
-from ..paths import iso, read_jsonl, safe_ms, slug_for, atomic_write, uuid7, now_ms
+from ..paths import iso, read_jsonl, safe_ms, slug_for, atomic_write, uuid7, now_ms, validate_session_id
 from .base import BaseAdapter, SessionInfo, ToolNameMap
 
 MAX_SCAN_BYTES = 32 * 1024 * 1024
@@ -123,6 +123,7 @@ class ClaudeAdapter(BaseAdapter):
             source=self.name,
             id=os.path.splitext(os.path.basename(path))[0],
             path=path,
+            truncated=os.path.getsize(path) > MAX_SCAN_BYTES,
         )
         for rec, truncated in read_jsonl(path, MAX_SCAN_BYTES):
             conv.truncated = conv.truncated or truncated
@@ -185,11 +186,18 @@ class ClaudeAdapter(BaseAdapter):
 
             if not blocks:
                 continue
-            # Claude 的 tool_result 挂在 user 轮上，但 IR 里统一归入 assistant 回合，
-            # 这样写回 DSH / Codex 时顺序才自然。
-            conv.turns.append(ir.Turn(role=role if role in (ir.USER, ir.ASSISTANT, ir.SYSTEM) else ir.USER,
-                                      blocks=blocks, ts=iso(ts), model=model,
-                                      source_type=rt))
+            # 工具结果在 Claude 中存为 user；在 IR 中属于助手动作。
+            # 混合消息按连续角色分组，保留工具结果和真实用户文字的顺序。
+            default_role = role if role in (ir.USER, ir.ASSISTANT, ir.SYSTEM) else ir.USER
+            grouped = []
+            for block in blocks:
+                block_role = ir.ASSISTANT if block.kind == ir.TOOL_RESULT else default_role
+                if grouped and grouped[-1].role == block_role:
+                    grouped[-1].blocks.append(block)
+                else:
+                    grouped.append(ir.Turn(role=block_role, blocks=[block], ts=iso(ts),
+                                           model=model, source_type=rt))
+            conv.turns.extend(grouped)
         return conv
 
     # ---------------- 写入 ----------------
@@ -198,7 +206,7 @@ class ClaudeAdapter(BaseAdapter):
               session_id: str | None = None, remap_tools: bool = True,
               include_thinking: bool = True) -> str:
         target_cwd = (cwd or conv.cwd or os.getcwd()).replace("\\", "/")
-        sid = session_id or uuid7()
+        sid = validate_session_id(session_id if session_id is not None else uuid7())
         slug = self.project_dir_for(target_cwd)
         out_path = os.path.join(self.home, slug, f"{sid}.jsonl")
 
@@ -251,7 +259,26 @@ class ClaudeAdapter(BaseAdapter):
                 continue
 
             content: List[Dict[str, Any]] = []
-            results: List[ir.Block] = []
+
+            def flush_content():
+                nonlocal parent, content
+                if not content:
+                    return
+                assistant_id = rid()
+                rec = base_record(assistant_id, parent, ts)
+                rec["type"] = "assistant"
+                rec["message"] = {
+                    "role": ir.ASSISTANT,
+                    "model": turn.model or conv.model or "unknown",
+                    "id": f"msg_{assistant_id}", "type": "message", "content": content,
+                    "stop_reason": "tool_use" if content[-1]["type"] == "tool_use" else "end_turn",
+                    "stop_sequence": None,
+                    "usage": {"input_tokens": 0, "output_tokens": 0},
+                }
+                lines.append(json.dumps(rec, ensure_ascii=False))
+                parent = assistant_id
+                content = []
+
             for b in turn.blocks:
                 if b.kind == ir.THINKING and include_thinking:
                     content.append({"type": "thinking", "thinking": b.text, "signature": ""})
@@ -269,39 +296,19 @@ class ClaudeAdapter(BaseAdapter):
                     content.append({"type": "tool_use", "id": b.call_id or f"toolu_{uid}",
                                     "name": name, "input": inp})
                 elif b.kind == ir.TOOL_RESULT:
-                    results.append(b)
+                    # 先写前面的助手块，工具结果即使独占一轮也必须写入。
+                    flush_content()
+                    rid_res = rid()
+                    rec2 = base_record(rid_res, parent, ts)
+                    rec2["message"] = {"role": ir.USER, "content": [
+                        {"type": "tool_result", "tool_use_id": b.call_id,
+                         "content": b.output or "", "is_error": bool(b.is_error)}
+                    ]}
+                    rec2["toolUseResult"] = {"stdout": b.output or "", "stderr": "",
+                                             "interrupted": False, "isImage": False}
+                    lines.append(json.dumps(rec2, ensure_ascii=False))
+                    parent = rid_res
+            flush_content()
 
-            if not content:
-                continue
-
-            assistant_id = rid()
-            rec = base_record(assistant_id, parent, ts)
-            rec["type"] = "assistant"
-            rec["message"] = {
-                "role": ir.ASSISTANT,
-                "model": turn.model or conv.model or "unknown",
-                "id": f"msg_{assistant_id}",
-                "type": "message",
-                "content": content,
-                "stop_reason": "end_turn",
-                "stop_sequence": None,
-                "usage": {"input_tokens": 0, "output_tokens": 0},
-            }
-            lines.append(json.dumps(rec, ensure_ascii=False))
-            parent = assistant_id
-
-            # tool_result 必须单独挂在一条 user 记录上
-            for r in results:
-                rid_res = rid()
-                rec2 = base_record(rid_res, parent, ts)
-                rec2["message"] = {"role": ir.USER, "content": [
-                    {"type": "tool_result", "tool_use_id": r.call_id,
-                     "content": r.output or "", "is_error": bool(r.is_error)}
-                ]}
-                rec2["toolUseResult"] = {"stdout": r.output or "", "stderr": "",
-                                         "interrupted": False, "isImage": False}
-                lines.append(json.dumps(rec2, ensure_ascii=False))
-                parent = rid_res
-
-        atomic_write(out_path, lines)
+        atomic_write(out_path, lines, overwrite=False)
         return out_path

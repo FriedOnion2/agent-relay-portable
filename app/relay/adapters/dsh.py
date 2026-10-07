@@ -16,7 +16,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 from .. import ir
 from ..clean import strip_scaffolding
-from ..paths import iso, read_jsonl, safe_ms, slug_for, atomic_write, uuid7, now_ms, native_path
+from ..paths import iso, read_jsonl, safe_ms, slug_for, atomic_write, uuid7, now_ms, native_path, validate_session_id
 from .base import BaseAdapter, SessionInfo, ToolNameMap
 
 MAX_SCAN_BYTES = 32 * 1024 * 1024
@@ -117,6 +117,7 @@ class DshAdapter(BaseAdapter):
             source=self.name,
             id=os.path.splitext(os.path.basename(path))[0],
             path=path,
+            truncated=os.path.getsize(path) > MAX_SCAN_BYTES,
         )
         pending_assistant: Optional[ir.Turn] = None   # 累积同一个 assistant 回合
         call_names: Dict[str, str] = {}              # callId -> tool name
@@ -242,7 +243,7 @@ class DshAdapter(BaseAdapter):
               session_id: str | None = None, remap_tools: bool = True,
               include_thinking: bool = True) -> str:
         target_cwd = (cwd or conv.cwd or os.getcwd()).replace("\\", "/")
-        sid = session_id or uuid7()
+        sid = validate_session_id(session_id if session_id is not None else uuid7())
         slug = self.project_dir_for(target_cwd)
         out_path = os.path.join(self.home, slug, f"{sid}.jsonl")
         win_cwd = native_path(target_cwd)
@@ -265,7 +266,7 @@ class DshAdapter(BaseAdapter):
                 "aiTitle": conv.title, "sessionId": sid, "cwd": win_cwd,
             }, ensure_ascii=False))
 
-        seq = 1
+        seq = 2 if conv.title else 1
         for turn in conv.turns:
             ts = safe_ms(turn.ts) or (base + seq)
             if turn.role == ir.USER:
@@ -323,5 +324,5 @@ class DshAdapter(BaseAdapter):
                     }, ensure_ascii=False))
                     seq += 1
 
-        atomic_write(out_path, lines)
+        atomic_write(out_path, lines, overwrite=False)
         return out_path

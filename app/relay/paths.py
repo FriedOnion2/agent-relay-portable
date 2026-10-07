@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import os
-import random
+import secrets
+import tempfile
 import re
 import datetime as dt
 
@@ -13,10 +14,10 @@ def uuid7(now_ms: int | None = None) -> str:
     """生成一个 UUIDv7（时间可排序，便于按字典序恢复原始顺序）。"""
     if now_ms is None:
         now_ms = int(dt.datetime.now(dt.timezone.utc).timestamp() * 1000)
-    rnd = random.getrandbits(74)
-    hi = (now_ms << 16) | ((rnd >> 58) & 0x0FFF) | (0x7 << 76)
-    hi = hi & ((1 << 80) - 1)
-    u = (hi << 48) | (rnd & ((1 << 48) - 1))
+    if not 0 <= now_ms < (1 << 48):
+        raise ValueError("UUIDv7 时间戳超出 48 位范围")
+    u = ((now_ms << 80) | (7 << 76) | (secrets.randbits(12) << 64)
+         | (2 << 62) | secrets.randbits(62))
     h = f"{u:032x}"
     return f"{h[0:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}"
 
@@ -96,7 +97,7 @@ def slug_for(cwd: str) -> str:
         return "unknown"
     if not is_windows_path(cwd):
         s = re.sub(r"[^\w.\-]", "-", cwd.replace("\\", "/"))
-        return s or "unknown"
+        return s if s not in ("", ".", "..") else "unknown"
     s = re.sub(r"[^A-Za-z0-9]+", "-", str(cwd)).strip("-")
     if not s:
         return "unknown"
@@ -141,32 +142,71 @@ def human_size(n: int) -> str:
     return f"{n:.1f} GB"
 
 
-def atomic_write(path: str, lines, encoding: str = "utf-8") -> None:
+def atomic_write(path: str, lines, encoding: str = "utf-8", overwrite: bool = True) -> None:
     """逐行写入，先写临时文件再替换，避免写到一半产生坏文件。"""
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    tmp = path + ".partial"
-    with open(tmp, "w", encoding=encoding, newline="\n") as f:
-        for line in lines:
-            f.write(line if line.endswith("\n") else line + "\n")
-    os.replace(tmp, path)
+    directory = os.path.dirname(os.path.abspath(path))
+    os.makedirs(directory, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=".relay-", suffix=".partial", dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding=encoding, newline="\n") as f:
+            for line in lines:
+                f.write(line if line.endswith("\n") else line + "\n")
+            f.flush()
+            os.fsync(f.fileno())
+        if overwrite:
+            os.replace(tmp, path)
+        elif os.name == "nt":
+            # Windows rename never replaces an existing target (including exFAT).
+            os.rename(tmp, path)
+        else:
+            # Hard-link publication is atomic and fails if the target exists.
+            try:
+                os.link(tmp, path)
+            except FileExistsError:
+                raise
+            except OSError:
+                # FAT/exFAT do not support hard links. Serialize Relay writers
+                # and publish the complete temporary file by renaming it.
+                lock = path + ".publish-lock"
+                with open(lock, "x"):
+                    try:
+                        if os.path.exists(path):
+                            raise FileExistsError(path)
+                        os.rename(tmp, path)
+                    finally:
+                        os.unlink(lock)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+
+
+def validate_session_id(sid: str) -> str:
+    """只允许安全的单个文件名，避免指定 ID 写到会话目录之外。"""
+    if not isinstance(sid, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}", sid):
+        raise ValueError("会话 ID 只能包含字母、数字、下划线和短横线（最多 128 字符）")
+    return sid
 
 
 def read_jsonl(path: str, max_bytes: int | None = None):
-    """惰性逐行读取 jsonl，跳过坏行。返回 (dict|None, 是否截断)。"""
+    """惰性读取 JSON 对象，跳过坏行；每条记录带文件超出预算的标记。"""
     import json
 
-    truncated = False
     read = 0
-    with open(path, "r", encoding="utf-8", errors="replace") as f:
-        for line in f:
-            read += len(line.encode("utf-8", "replace"))
-            if max_bytes and read > max_bytes:
-                truncated = True
+    with open(path, "rb") as f:
+        truncated = bool(max_bytes and os.fstat(f.fileno()).st_size > max_bytes)
+        while True:
+            line = f.readline(max_bytes - read + 1) if max_bytes else f.readline()
+            if not line:
                 break
-            line = line.strip()
+            read += len(line)
+            if max_bytes and read > max_bytes:
+                break
+            line = line.decode("utf-8-sig" if read == len(line) else "utf-8", "replace").strip()
             if not line:
                 continue
             try:
-                yield json.loads(line), truncated
-            except Exception:
+                record = json.loads(line)
+                if isinstance(record, dict):
+                    yield record, truncated
+            except (ValueError, TypeError):
                 continue

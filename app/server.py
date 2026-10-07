@@ -12,7 +12,7 @@ import sys
 import threading
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, unquote
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(BASE_DIR, "web")
@@ -27,6 +27,22 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "AgentRelay/0.1"
 
     # ---------------- 基础 ----------------
+
+    def setup(self):
+        super().setup()
+        self.connection.settimeout(15)
+
+    def _local_request(self):
+        port = self.server.server_address[1]
+        allowed = {f"127.0.0.1:{port}", f"localhost:{port}"}
+        if self.headers.get("Host", "").lower() not in allowed:
+            self._error("只允许本机访问", 403)
+            return False
+        origin = self.headers.get("Origin")
+        if origin and origin.lower() not in {"http://" + host for host in allowed}:
+            self._error("不允许跨站请求", 403)
+            return False
+        return True
 
     def log_message(self, fmt, *args):
         if "--quiet" not in sys.argv:
@@ -47,9 +63,14 @@ class Handler(BaseHTTPRequestHandler):
         self._json({"ok": False, "error": msg}, code)
 
     def _static(self, rel: str):
-        rel = rel.lstrip("/") or "index.html"
-        path = os.path.normpath(os.path.join(WEB_DIR, rel))
-        if not path.startswith(os.path.normpath(WEB_DIR)):
+        rel = unquote(rel).lstrip("/") or "index.html"
+        root = os.path.realpath(WEB_DIR)
+        path = os.path.realpath(os.path.join(root, rel))
+        try:
+            contained = os.path.commonpath([root, path]) == root
+        except ValueError:
+            contained = False
+        if not contained:
             return self._error("forbidden", 403)
         if not os.path.isfile(path):
             return self._error("not found", 404)
@@ -64,6 +85,8 @@ class Handler(BaseHTTPRequestHandler):
     # ---------------- 路由 ----------------
 
     def do_GET(self):
+        if not self._local_request():
+            return
         u = urlparse(self.path)
         q = parse_qs(u.query)
         path = u.path
@@ -108,6 +131,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._error("unknown endpoint", 404)
         except FileNotFoundError as e:
             return self._error(str(e), 404)
+        except (ValueError, KeyError) as e:
+            return self._error(str(e), 400)
         except Exception as e:
             if os.environ.get("RELAY_DEBUG"):
                 import traceback
@@ -115,13 +140,27 @@ class Handler(BaseHTTPRequestHandler):
             return self._error(str(e), 500)
 
     def do_POST(self):
+        if not self._local_request():
+            return
         u = urlparse(self.path)
+        if self.headers.get_content_type() != "application/json":
+            return self._error("请求必须使用 application/json", 415)
         try:
             n = int(self.headers.get("Content-Length") or 0)
+            if n < 0:
+                return self._error("Content-Length 不能为负数")
             if n > MAX_BODY:
                 return self._error("请求体过大", 413)
             raw = self.rfile.read(n) if n else b"{}"
             body = json.loads(raw.decode("utf-8") or "{}")
+            if not isinstance(body, dict):
+                return self._error("请求体必须是 JSON 对象")
+            for key in ("source", "id", "target", "cwd", "session_id", "title"):
+                if key in body and body[key] is not None and not isinstance(body[key], str):
+                    return self._error(f"{key} 必须是字符串")
+            for key in ("remap_tools", "include_thinking", "include_tools"):
+                if key in body and type(body[key]) is not bool:
+                    return self._error(f"{key} 必须为 true 或 false")
         except Exception as e:
             return self._error(f"请求体解析失败: {e}")
 
@@ -149,6 +188,12 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 return self._json({"ok": True, "markdown": md})
             return self._error("unknown endpoint", 404)
+        except FileExistsError as e:
+            return self._error(str(e), 409)
+        except FileNotFoundError as e:
+            return self._error(str(e), 404)
+        except (ValueError, KeyError) as e:
+            return self._error(str(e), 400)
         except Exception as e:
             if os.environ.get("RELAY_DEBUG"):
                 import traceback
@@ -157,12 +202,16 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def run(host: str = "127.0.0.1", port: int = 8745, open_browser: bool = True):
+    if host not in ("127.0.0.1", "localhost"):
+        raise ValueError("服务只支持本机地址 127.0.0.1 或 localhost")
     srv = ThreadingHTTPServer((host, port), Handler)
-    url = f"http://{host}:{port}/"
+    url = f"http://{host}:{srv.server_address[1]}/"
     print(f"AgentRelay Web 已启动: {url}")
     print("按 Ctrl+C 停止")
     if open_browser:
-        threading.Timer(0.6, lambda: webbrowser.open(url)).start()
+        timer = threading.Timer(0.6, lambda: webbrowser.open(url))
+        timer.daemon = True
+        timer.start()
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

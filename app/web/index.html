@@ -49,6 +49,7 @@
     display:flex; flex-direction:column;
   }
   main{flex:1; display:flex; flex-direction:column; min-width:0}
+  #content{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden}
 
   /* ---------- 侧栏 ---------- */
   .tabs{display:flex; gap:4px; padding:12px 12px 8px; border-bottom:1px solid var(--line-soft)}
@@ -186,10 +187,23 @@
 
 <script>
 const AGENTS = {dsh:'DSH / WorkBuddy', claude:'Claude Code', codex:'OpenAI Codex'};
-const state = {source:'dsh', target:'claude', sessions:[], current:null, turnLimit:40};
+const state = {source:'dsh', target:'claude', sessions:[], current:null, turnLimit:40,
+  listRequest:0, sessionRequest:0, transferring:false};
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+async function api(url, options){
+  const response = await fetch(url, options);
+  const result = await response.json();
+  if(!response.ok || !result.ok) throw new Error(result.error || `请求失败 (${response.status})`);
+  return result;
+}
+
+function updateActions(){
+  $('#btnGo').disabled = !state.current || state.transferring;
+  $('#btnMd').disabled = !state.current;
+}
 
 function toast(msg, bad=false, action=null){
   const t = $('#toast');
@@ -216,7 +230,7 @@ async function init(){
 }
 
 async function loadSources(){
-  const r = await fetch('/api/sources').then(x=>x.json());
+  const r = await api('/api/sources');
   const box = $('#chips'); box.innerHTML = '';
   (r.sources || []).forEach(s=>{
     const el = document.createElement('span');
@@ -225,7 +239,7 @@ async function loadSources(){
     el.innerHTML = `<i class="dot"></i>${esc(s.name)} <b>${s.session_count||0}</b>`;
     box.appendChild(el);
   });
-  if (!(r.sources||[]).some(s=>s.available && s.name===state.source)){
+  if (!state.listRequest && !(r.sources||[]).some(s=>s.available && s.name===state.source)){
     const first = (r.sources||[]).find(s=>s.available);
     if (first) state.source = first.name;
   }
@@ -261,28 +275,40 @@ function bind(){
   $('#btnGo').onclick = doTransfer;
   $('#btnMd').onclick = async ()=>{
     if(!state.current) return;
-    const r = await fetch('/api/export-md', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({source:state.source, id:state.current.id,
-        include_thinking:$('#think').checked, include_tools:true})
-    }).then(x=>x.json());
-    if(!r.ok) return toast(r.error||'导出失败', true);
-    download(`${(state.current.title||'session').slice(0,40)}.md`, r.markdown);
-    toast('Markdown 已下载');
+    const selected = state.current;
+    try{
+      const r = await api('/api/export-md', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({source:selected.source, id:selected.id,
+          include_thinking:$('#think').checked, include_tools:true})
+      });
+      download(`${(selected.title||'session').slice(0,40).replace(/[<>:"/\\|?*\x00-\x1f]/g,'_')}.md`, r.markdown);
+      toast('Markdown 已下载');
+    }catch(e){ toast('导出失败：'+e.message, true); }
   };
 }
 
 /* ================= 列表 ================= */
 async function loadSessions(){
+  const request = ++state.listRequest;
+  const source = state.source;
+  ++state.sessionRequest;
+  state.current = null;
+  updateActions();
+  $('#content').innerHTML = '<div class="placeholders">从左侧选一个会话</div>';
+  $('#cwd').value = '';
   const box = $('#list');
   box.innerHTML = '<div class="empty">加载中…</div>';
-  await buildTarget();
+  buildTarget();
   const q = encodeURIComponent($('#q').value.trim());
   let r;
   try{
-    r = await fetch(`/api/sessions?agent=${state.source}&q=${q}`).then(x=>x.json());
-  }catch(e){ box.innerHTML = `<div class="empty">请求失败：${esc(e)}</div>`; return; }
-  if(!r.ok){ box.innerHTML = `<div class="empty">${esc(r.error)}</div>`; return; }
+    r = await api(`/api/sessions?agent=${source}&q=${q}`);
+  }catch(e){
+    if(request === state.listRequest) box.innerHTML = `<div class="empty">请求失败：${esc(e.message)}</div>`;
+    return;
+  }
+  if(request !== state.listRequest || source !== state.source) return;
   state.sessions = r.sessions || [];
   box.innerHTML = '';
   if(!state.sessions.length){
@@ -312,18 +338,25 @@ async function loadSessions(){
 
 /* ================= 详情 ================= */
 async function openSession(s){
+  const request = ++state.sessionRequest;
+  const source = state.source;
+  state.current = null;
+  updateActions();
   const main = $('#content');
   main.innerHTML = '<div class="placeholders">读取中…</div>';
   $('#btnGo').disabled = true; $('#btnMd').disabled = true;
   let r;
   try{
-    r = await fetch(`/api/session?agent=${state.source}&id=${encodeURIComponent(s.id)}`).then(x=>x.json());
-  }catch(e){ main.innerHTML = `<div class="placeholders">读取失败：${esc(e)}</div>`; return; }
-  if(!r.ok){ main.innerHTML = `<div class="placeholders">${esc(r.error)}</div>`; return; }
+    r = await api(`/api/session?agent=${source}&id=${encodeURIComponent(s.id)}`);
+  }catch(e){
+    if(request === state.sessionRequest) main.innerHTML = `<div class="placeholders">读取失败：${esc(e.message)}</div>`;
+    return;
+  }
+  if(request !== state.sessionRequest || source !== state.source) return;
 
-  state.current = {id:s.id, title:r.info.title};
+  state.current = {id:s.id, title:r.info.title, source};
   $('#cwd').placeholder = r.info.cwd ? `原目录：${r.info.cwd}` : '目标工作目录';
-  $('#btnGo').disabled = false; $('#btnMd').disabled = false;
+  updateActions();
 
   const i = r.info, st = i.stats || {};
   const hero = document.createElement('div');
@@ -436,11 +469,12 @@ function renderBlock(b){
 async function doTransfer(){
   const btn = $('#btnGo');
   if(!state.current || btn.disabled) return;
+  state.transferring = true;
   const old = btn.innerHTML;
   btn.innerHTML = '<span class="spinner"></span> 迁移中…';
   btn.disabled = true;
   const payload = {
-    source: state.source,
+    source: state.current.source,
     id: state.current.id,
     target: state.target,
     cwd: $('#cwd').value.trim() || null,
@@ -449,21 +483,22 @@ async function doTransfer(){
   };
   let r;
   try{
-    r = await fetch('/api/transfer', {
+    r = await api('/api/transfer', {
       method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
-    }).then(x=>x.json());
+    });
   }catch(e){
-    btn.innerHTML = old; btn.disabled = false;
-    return toast('请求失败：'+e, true);
+    return toast('迁移失败：'+e.message, true);
+  }finally{
+    state.transferring = false;
+    btn.innerHTML = old;
+    updateActions();
   }
-  btn.innerHTML = old; btn.disabled = false;
-  if(!r.ok) return toast(r.error || '迁移失败', true);
   const p = r.to.path;
   toast(`已迁移到 ${AGENTS[r.to.source]}：${p}`, false, {
     label:'复制路径',
     fn:()=>{ navigator.clipboard?.writeText(p).then(()=>toast('路径已复制'),()=>{}); }
   });
-  loadSources();
+  loadSources().catch(e=>toast('刷新失败：'+e.message, true));
 }
 
 function download(name, text){
@@ -475,7 +510,10 @@ function download(name, text){
   setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
 }
 
-init();
+init().catch(e=>{
+  $('#list').innerHTML = `<div class="empty">加载失败：${esc(e.message)}</div>`;
+  toast('加载失败：'+e.message, true);
+});
 </script>
 </body>
 </html>

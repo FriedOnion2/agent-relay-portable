@@ -20,13 +20,9 @@ runtime/ —— 可选的自带 Python（放了它才算真正免安装）
 
     brew install python
 
-  然后把解释器软链或复制过来：
-
-    mkdir -p runtime/python/bin
-    cp $(which python3) runtime/python/bin/python3
-
-  更省事：直接用系统 Python（/usr/bin/python3），什么都不用放，
-  本工具会自动找到它。
+  安装后直接启动即可，本工具会自动查找 Homebrew 的 Python。
+  不要只复制 python3 可执行文件：它依赖原安装位置的动态库和标准库，
+  单独复制不能组成可移植运行时。若使用系统 Python，需确认版本至少为 3.8。
 
 
 【linux】
