@@ -33,7 +33,7 @@ def identity():
             match = re.search(r'"IOPlatformUUID"\s*=\s*"([^"]+)"', result.stdout)
             if match:
                 machine = match.group(1)
-    except (OSError, ValueError, subprocess.SubprocessError):
+    except (ImportError, OSError, ValueError, subprocess.SubprocessError):
         pass
     try:
         user = str(Path.home())

@@ -31,8 +31,8 @@
   }
   .logo{display:flex;align-items:center;gap:9px;font-weight:600;font-size:15px;letter-spacing:.2px;flex:none}
   .logo svg{flex:none}
-  .tagline{color:var(--text-3);font-size:12.5px}
-  .agent-chips{display:flex;gap:6px;margin-left:auto;align-items:center;min-width:0;overflow-x:auto}
+  .tagline{color:var(--text-3);font-size:12.5px;min-width:0;max-width:220px}
+  .agent-chips{display:flex;flex:1;gap:6px;margin-left:auto;align-items:center;min-width:0;overflow-x:auto}
   header > .btn,.agent-chips .chip{flex:none}
   @media(max-width:1200px){.tagline{display:none}}
   @media(max-width:560px){header{gap:6px;padding:0 8px;overflow-x:auto}.agent-chips{display:none}header > .btn{padding:7px 8px}#btnStorage{margin-left:auto}}
@@ -765,7 +765,7 @@ async function runHealth(){
 async function confirmMigration(payload,mode='convert'){
   const r=await api('/api/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...payload,mode})});
   const labels={preserved:'保留',degraded:'降级',dropped:'丢弃',unknown:'未知 / 需核对'};
-  const lines=['迁移保真度预览','目标：'+(AGENTS[r.target]||r.target),'项目：'+(r.target_cwd||'沿用来源')];
+  const lines=['迁移保真度预览','目标：'+(AGENTS[r.target]||state.sources.find(s=>s.name===r.target)?.label||r.target),'项目：'+(r.target_cwd||'沿用来源')];
   for(const [key,label] of Object.entries(labels)) for(const row of r[key]||[]) lines.push(label+'：'+row.item+'（'+row.count+'）');
   lines.push(...(r.warnings||[]));
   if((r.blockers||[]).length){toast('迁移不可执行：'+r.blockers.join('；'),true);return null;}
