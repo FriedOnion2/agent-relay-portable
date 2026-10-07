@@ -97,7 +97,9 @@ class LinuxLauncherTests(unittest.TestCase):
                     self.assertEqual(reverse["to"]["source"], "windows_codex")
                     self.assertTrue(str(Path(reverse["to"]["path"])).startswith(str(profile / ".codex")))
                     with urllib.request.urlopen(url + "/api/session?agent=windows_codex&id=" + reverse["to"]["id"]) as res:
-                        self.assertEqual(json.load(res)["info"]["cwd"], "D:\\project")
+                        self.assertEqual(json.load(res)["info"]["cwd"].replace("\\", "/"), "D:/project")
+                    native = [json.loads(line) for line in Path(reverse["to"]["path"]).read_text(encoding="utf-8").splitlines()]
+                    self.assertEqual(native[0]["payload"]["cwd"], "D:\\project")
                     self.assertEqual(original_path.read_bytes(), original)
                     self.assertEqual(Path(imported["to"]["path"]).read_bytes(), local_bytes)
                     proc.send_signal(signal.SIGINT)
