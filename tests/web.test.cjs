@@ -53,6 +53,19 @@ test('index jobs capture disabled thought option and cancellation targets the ac
   assert.equal(t.app.corpusState.busy,false);assert.equal(t.el('#cancelCorpus').disabled,true);
 });
 
+test('progress uses Chinese counts and reviewed evidence links follow the actual server port',async()=>{
+  const t=setup();const poll=t.app.pollCorpusJob();
+  t.response(0,{ok:true,id:'job',kind:'extract',status:'completed',result:{processed:3,segments:3,candidates:[{
+    id:'draft',name:'workflow',evidence_count:3,score:6,evidence:[],markdown:'[evidence](http://127.0.0.1:8745/?document=key)'}]}});
+  await poll;
+  assert.match(t.el('#corpusStatus').textContent,/提炼：已完成/);
+  assert.match(t.el('#corpusStatus').textContent,/已扫描 3 条/);
+  assert.equal(t.el('#corpusStatus').textContent.includes('"processed"'),false);
+  t.el('#draftCandidates').children[0].children[1].onclick();
+  assert.equal(t.el('#draftMarkdown').value,'[evidence](http://127.0.0.1:18945/?document=key)');
+  assert.equal(t.el('#confirmDraft').checked,false);
+});
+
 function setup({automaticPreview=true,confirmed=true}={}){
   class Element {
     constructor(){ this.children=[]; this.value=''; this.checked=true; this.disabled=false;
@@ -72,7 +85,7 @@ function setup({automaticPreview=true,confirmed=true}={}){
     createElement(){return new Element();},
     createTextNode(text){return {textContent:text};},
   };
-  const context = vm.createContext({document, encodeURIComponent, Blob, URL, navigator:{}, confirm(){return confirmed;},
+  const context = vm.createContext({document, encodeURIComponent, Blob, URL, navigator:{}, location:{origin:'http://127.0.0.1:18945'}, confirm(){return confirmed;},
     setTimeout(){return 1;}, clearTimeout(){},
     fetch(url,options){
       if(url==='/api/preview' && automaticPreview){previews.push({url,options});return Promise.resolve({ok:true,status:200,json:async()=>({ok:true,token:'verified-fixture',target:'claude',blockers:[],warnings:[]})});}
