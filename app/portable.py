@@ -8,6 +8,9 @@ import bootstrap
 
 def main():
     args = [arg for arg in sys.argv[1:] if not arg.startswith('-psn_')]
+    if args == ['--plugin-worker']:
+        from relay.plugins import worker
+        return worker()
     if sys.platform == 'darwin' and not args:
         # Finder has no terminal; retain useful diagnostics outside the bundle.
         for directory in (bootstrap.media_root() / 'logs', Path.home() / 'Library/Logs/AgentRelay'):

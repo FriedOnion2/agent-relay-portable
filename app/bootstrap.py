@@ -208,10 +208,20 @@ def write_default_config(force: bool = False) -> Path:
     return p
 
 
+def _merge_device(cfg):
+    from relay import device
+    try:
+        return device.merge(cfg)
+    except (OSError, ValueError) as exc:
+        result = device.merge(cfg, local={})
+        device.warnings.append('本机配置读取失败：' + str(exc))
+        return result
+
+
 def load_config() -> dict:
     p = config_path()
     if not p.is_file():
-        return {}
+        return _merge_device({})
     try:
         cfg = json.loads(p.read_text(encoding="utf-8-sig"))
         if not isinstance(cfg, dict):
@@ -236,24 +246,36 @@ def load_config() -> dict:
         ubuntu = (cfg.get("ubuntu_user_home") or "").strip()
         if ubuntu and platform.system() == "Windows" and not Path(ubuntu).expanduser().is_absolute():
             raise ValueError("ubuntu_user_home 必须是 Windows 可访问的绝对路径")
-        return cfg
+        return _merge_device(cfg)
     except Exception as e:
         print(f"⚠ config.json 解析失败，忽略此文件：{e}", file=sys.stderr)
-        return {}
+        from relay import device
+        result = _merge_device({})
+        device.warnings.append('共享配置读取失败：' + str(e))
+        return result
+
+
+_APPLIED_ENV = {}
 
 
 def apply_config(cfg: dict | None = None) -> list[str]:
     """把配置里的 agent 目录覆盖写进环境变量，返回生效的说明列表。"""
     cfg = cfg if cfg is not None else load_config()
+    for name, value in _APPLIED_ENV.items():
+        if os.environ.get(name) == value:
+            os.environ.pop(name, None)
+    _APPLIED_ENV.clear()
     applied = []
     profile = (cfg.get("windows_user_home") or "").strip()
     if profile and platform.system() == "Linux":
         os.environ[PROFILE_ENV] = os.path.expanduser(profile)
+        _APPLIED_ENV[PROFILE_ENV] = os.environ[PROFILE_ENV]
         applied.append(f"Windows 用户目录（只读） ← {profile}")
     ubuntu = (cfg.get("ubuntu_user_home") or "").strip()
     if ubuntu and platform.system() == "Windows":
         from relay.ubuntu import PROFILE_ENV as UBUNTU_ENV
         os.environ[UBUNTU_ENV] = os.path.expanduser(ubuntu)
+        _APPLIED_ENV[UBUNTU_ENV] = os.environ[UBUNTU_ENV]
         applied.append(f"Ubuntu 用户目录（只读） ← {ubuntu}")
     homes = cfg.get("agent_homes") or {}
     for key in SOURCES:
@@ -261,6 +283,7 @@ def apply_config(cfg: dict | None = None) -> list[str]:
         v = (homes.get(key) or "").strip()
         if v:
             os.environ[envname] = os.path.expanduser(v)
+            _APPLIED_ENV[envname] = os.environ[envname]
             applied.append(f"{key} 目录 ← {v}")
     return applied
 
@@ -286,13 +309,15 @@ def probe_agent_homes() -> list[dict]:
     from relay import registry
     out = []
     for key in registry.all_keys():
-        adapter = registry.get(key, clean=True)
         try:
+            adapter = registry.get(key, clean=True)
             rows = list(adapter.discover()) if adapter.available() else []
             count = len(rows)
             errors = list(dict.fromkeys(row.error for row in rows if row.error))
         except Exception as exc:
-            count, errors = -1, [str(exc)]
+            out.append({'key':key, 'label':key, 'root':'', 'data':'', 'found':False,
+                        'files':-1, 'errors':[str(exc)]})
+            continue
         out.append({"key":key, "label":adapter.label, "root":adapter.root if hasattr(adapter, "root") else adapter.home,
                     "data":"; ".join(getattr(adapter, "roots", [adapter.home])),
                     "found":adapter.available(), "files":count, "errors":errors[:3]})

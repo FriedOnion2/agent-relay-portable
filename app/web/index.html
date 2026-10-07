@@ -35,7 +35,7 @@
   .agent-chips{display:flex;gap:6px;margin-left:auto;align-items:center;min-width:0;overflow-x:auto}
   header > .btn,.agent-chips .chip{flex:none}
   @media(max-width:1200px){.tagline{display:none}}
-  @media(max-width:560px){header{gap:6px;padding:0 8px}.agent-chips{display:none}header > .btn{padding:7px 8px}#btnStorage{margin-left:auto}}
+  @media(max-width:560px){header{gap:6px;padding:0 8px;overflow-x:auto}.agent-chips{display:none}header > .btn{padding:7px 8px}#btnStorage{margin-left:auto}}
   .chip{
     display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;
     background:var(--line-soft); font-size:12px; color:var(--text-2); border:1px solid transparent;
@@ -160,6 +160,7 @@
   <div class="agent-chips" id="chips"></div>
   <button class="btn" id="btnStorage">对话存储</button>
   <button class="btn" id="btnSkillStorage">Skill 存储</button>
+  <button class="btn" id="btnEnvironment">环境与兼容</button>
   <button class="btn" id="btnExit" title="停止当前后台服务">退出服务</button>
 </header>
 
@@ -252,6 +253,15 @@
   <div id="skillPackages"></div>
 </section>
 
+<section id="environmentPanel" style="display:none;position:fixed;inset:70px 24px 24px;z-index:82;background:var(--bg);padding:20px;overflow:auto;border:1px solid #bbb;border-radius:12px" role="dialog" aria-label="环境与兼容">
+  <div class="bar"><b>设备配置与格式健康度</b><button class="btn" id="closeEnvironment">关闭</button></div>
+  <p>目录覆盖仅在当前设备生效。换设备后默认探测本机来源；旧路径失效时可在此重新选择。</p>
+  <div class="bar"><select class="sel" id="deviceAgent"></select><input class="input" id="deviceHome" placeholder="当前设备实际 Agent 根目录；留空则自动探测" style="width:420px"><button class="btn" id="saveDeviceHome">保存本机目录</button></div>
+  <pre id="environmentResult" style="white-space:pre-wrap"></pre>
+  <div class="bar"><button class="btn" id="runHealth">运行格式自检</button></div>
+  <p>自检仅验证临时合成样本，客户端版本与真实续聊未验证时明确显示未知；不读取真实对话、不调用模型。</p>
+  <div id="healthResult"></div>
+</section>
 <script>
 const AGENTS = {workbuddy:'WorkBuddy', dsh:'DeepSeek Harness', codebuddy:'CodeBuddy', claude:'Claude Code', claude_sdk:'Claude Agent SDK', codex:'OpenAI Codex'};
 const state = {source:'workbuddy', target:'claude', sources:[], sessions:[], current:null, turnLimit:40,
@@ -276,7 +286,8 @@ const selectionUI = {
 function updateSelections(){
   for(const [kind, group] of Object.entries(selections)){
     const [all, count, button] = selectionUI[kind];
-    const eligible = group.rows.filter(row=>row.readable!==false && !row.truncated);
+    const community = kind==='sessions' && state.sources.find(s=>s.name===state.source)?.community;
+    const eligible = community ? [] : group.rows.filter(row=>row.readable!==false && !row.truncated);
     const eligibleKeys = new Set(eligible.map(row=>kind==='sessions'?row.id:row.path));
     $(all).checked = eligible.length>0 && group.selected.size===eligible.length;
     $(all).indeterminate = group.selected.size>0 && group.selected.size<eligible.length;
@@ -361,7 +372,8 @@ function updateActions(){
   $('#btnImport').disabled = !native || !state.current || state.current.truncated ||
     !$('#cwd').value.trim() || (mode==='export-windows' && !$('#projectPath').value.trim()) || state.transferring;
   $('#btnMd').disabled = !state.current;
-  $('#btnStore').disabled = !state.current || state.current.truncated || state.transferring;
+  $('#btnStore').disabled = !state.current || state.current.truncated || state.transferring ||
+    !!state.sources.find(s=>s.name===state.source)?.community;
 }
 
 function toast(msg, bad=false, action=null){
@@ -427,13 +439,13 @@ function buildTabs(){
 
 function buildTarget(){
   const sel = $('#target'); sel.innerHTML='';
-  const opts = Object.keys(AGENTS).filter(k=>k!==state.source &&
+  const opts = [...new Set([...Object.keys(AGENTS),...state.sources.map(s=>s.name)])].filter(k=>k!==state.source &&
     (state.sources.find(s=>s.name===k)?.can_write ?? ['workbuddy','dsh','claude','codex'].includes(k)));
   const same = state.source.replace(/^(windows_|ubuntu_)/,'');
   state.target = opts.includes(same) ? same : (opts.includes(state.target) ? state.target : opts[0]);
   opts.forEach(k=>{
     const o = document.createElement('option');
-    o.value = k; o.textContent = '迁移到 ' + AGENTS[k];
+    o.value = k; o.textContent = '迁移到 ' + (AGENTS[k]||state.sources.find(s=>s.name===k)?.label||k);
     sel.appendChild(o);
   });
   sel.value = state.target;
@@ -455,6 +467,17 @@ async function exitService(){
 }
 
 function bind(){
+  $('#btnEnvironment').onclick=async()=>{
+    $('#environmentPanel').style.display='';
+    const selector=$('#deviceAgent');selector.innerHTML='';
+    for(const [key,label] of Object.entries(AGENTS)){
+      const option=document.createElement('option');option.value=key;option.textContent=label;selector.appendChild(option);
+    }
+    try{showEnvironment(await api('/api/environment'));}catch(e){toast(e.message,true);}
+  };
+  $('#closeEnvironment').onclick=()=>{$('#environmentPanel').style.display='none';};
+  $('#saveDeviceHome').onclick=saveDeviceHome;
+  $('#runHealth').onclick=runHealth;
   $('#selectAllSessions').onchange=e=>selectAll('sessions',e.target.checked);
   $('#selectAllSkills').onchange=e=>selectAll('skills',e.target.checked);
   $('#storeSessions').onclick=()=>storeBatch('sessions');
@@ -706,6 +729,48 @@ function renderBlock(b){
 }
 
 /* ================= 迁移 ================= */
+function showEnvironment(r){
+  $('#environmentResult').textContent=[r.system+' / '+r.architecture,'数据目录：'+r.data_root,
+    '本机配置：'+r.config_path,'数据目录可写：'+(r.writable?'是':'否'),
+    r.free_bytes==null?'':'剩余空间：'+(r.free_bytes/1024/1024/1024).toFixed(1)+' GiB',
+    r.runtime?'Python：'+r.runtime.python+' / '+(r.runtime.bundled?'Release 内置':'源码解释器')+'；Zstandard：'+(r.runtime.zstandard?'可用':'缺失'):'',
+    r.runtime?'运行时目录：'+r.runtime.directory:'',r.runtime?r.runtime.checksum:'',
+    r.write_error,r.note,...(r.warnings||[]),...(r.plugin_errors||[])].filter(Boolean).join('\n');
+}
+async function saveDeviceHome(){
+  if(state.transferring) return;
+  const payload={agent:$('#deviceAgent').value,home:$('#deviceHome').value.trim()};
+  state.transferring=true;updateActions();$('#saveDeviceHome').disabled=true;
+  try{
+    showEnvironment(await api('/api/device-home',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}));
+    await loadSources();buildTabs();buildTarget();await loadSessions();toast('本机目录已保存');
+  }catch(e){toast('保存失败：'+e.message,true);}
+  finally{state.transferring=false;$('#saveDeviceHome').disabled=false;updateActions();}
+}
+async function runHealth(){
+  const button=$('#runHealth');if(button.disabled) return;button.disabled=true;
+  $('#healthResult').textContent='正在验证临时样本…';
+  try{
+    const r=await api('/api/health');const box=$('#healthResult');box.innerHTML='';
+    const note=document.createElement('p');note.textContent=r.note+'\n'+r.checked_at+' / '+r.system;box.appendChild(note);
+    for(const row of r.adapters||[]){
+      const item=document.createElement('div');item.className='meta';item.style.padding='10px';
+      const status={passed:'样本通过',failed:'样本失败',unavailable:'依赖不可用','not-tested':'未验证'};
+      item.textContent=row.label+' · '+(status[row.status]||row.status)+' · 客户端版本：'+(row.client_version||'未知')+
+          ' · 通用写入：'+(row.write?'支持':'只读')+' · 真实续聊：未验证'+(row.coverage?'\n样本范围：'+row.coverage:'')+(row.error?'\n'+row.error:'');box.appendChild(item);
+    }
+  }catch(e){$('#healthResult').textContent='自检失败：'+e.message;}
+  finally{button.disabled=false;}
+}
+async function confirmMigration(payload,mode='convert'){
+  const r=await api('/api/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...payload,mode})});
+  const labels={preserved:'保留',degraded:'降级',dropped:'丢弃',unknown:'未知 / 需核对'};
+  const lines=['迁移保真度预览','目标：'+(AGENTS[r.target]||r.target),'项目：'+(r.target_cwd||'沿用来源')];
+  for(const [key,label] of Object.entries(labels)) for(const row of r[key]||[]) lines.push(label+'：'+row.item+'（'+row.count+'）');
+  lines.push(...(r.warnings||[]));
+  if((r.blockers||[]).length){toast('迁移不可执行：'+r.blockers.join('；'),true);return null;}
+  return confirm(lines.join('\n')+'\n\n确认执行此迁移？') ? r.token : null;
+}
 function buildSkillAgents(){
   const source=$('#skillAgent'),target=$('#skillTargetAgent');
   source.innerHTML=''; target.innerHTML='';
@@ -829,6 +894,8 @@ async function restoreStored(){
   if(!payload.package || !payload.cwd) return toast('填写会话包路径和本机目标项目目录',true);
   state.transferring=true; $('#restorePackage').disabled=true; updateActions();
   try{
+    const token=await confirmMigration(payload,'restore-session');if(!token) return;
+    payload.preview_token=token;
     const r=await api('/api/restore-session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     $('#storageResult').textContent='已恢复 '+AGENTS[r.to.source]+'\n会话 ID：'+r.to.native_id+'\n文件：'+r.to.path+
       (r.resume_command?'\n续聊命令：'+r.resume_command:'')+'\n'+(r.notes||[]).join('\n');
@@ -851,6 +918,8 @@ async function doImportWindows(){
   btn.innerHTML = '<span class="spinner"></span> 导入中…';
   updateActions();
   try{
+    const token=await confirmMigration(payload,mode);if(!token) return;
+    payload.preview_token=token;
     const r = await api('/api/'+mode,{
       method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)
     });
@@ -905,6 +974,8 @@ async function doTransfer(){
   };
   let r;
   try{
+    const token=await confirmMigration(payload);if(!token) return;
+    payload.preview_token=token;
     r = await api('/api/transfer', {
       method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
     });

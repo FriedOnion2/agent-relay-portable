@@ -19,6 +19,10 @@
 - **Skill 跨设备存储：** 保存完整 `SKILL.md`、脚本与资源目录，支持复选框、全选和批量保存。
 - **Windows ↔ Ubuntu 原生迁移：** 通过挂载目录或用户目录备份，在同款软件之间搬迁原生记录。
 - **启动与退出：** 自动尝试空闲端口；网页「退出服务」可停止后台进程，并等待正在执行的请求结束。
+- **设备配置：** 「环境与兼容」重选本机目录，按设备保存覆盖配置，提示旧路径失效。
+- **迁移预览：** 通用迁移、双系统原生迁移和会话包恢复先列出保留、降级、丢弃与未知，确认后检查源内容及选项变化。
+- **可信社区读取插件：** API v1，显式启用、文件 hash 检查、独立工作进程与超时；支持读取、导出和迁出。
+- **格式健康度：** 本地合成样本自检、每日三系统回归与可下载静态报告，真实客户端续聊单独标为未验证。
 
 | 来源 | 默认会话位置 | 能力 |
 |---|---|---|
@@ -36,7 +40,7 @@ SDK 与 Claude Code 共用默认存储，日志不能可靠证明创建者；SDK
 
 ## Release 下载即用
 
-当前开发预览版：**v0.2.0-dev.2** · [下载三系统总包](https://github.com/FriedOnion2/agent-relay-portable/releases/download/v0.2.0-dev.2/AgentRelay-v0.2.0-dev.2-universal.zip) · [发布说明与校验文件](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v0.2.0-dev.2)
+当前开发预览版：**v0.3.0-dev.1** · [下载三系统总包](https://github.com/FriedOnion2/agent-relay-portable/releases/download/v0.3.0-dev.1/AgentRelay-v0.3.0-dev.1-universal.zip) · [发布说明与校验文件](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v0.3.0-dev.1)
 
 普通用户下载 [GitHub Releases](https://github.com/FriedOnion2/agent-relay-portable/releases) 中的
 **`AgentRelay-<版本>-universal.zip`**，完整解压后按当前设备运行启动器。一个总包同时包含
@@ -51,7 +55,7 @@ Windows x64、Mac Apple Silicon / Intel 和 Linux x64，已内置 Python 与 `zs
 
 总包根目录共用 `config.json`（可选）与 `storage/`。把整个总包放在移动盘上，切换设备无需再下载另一系统的版本。
 启动器只把当前平台的运行库解压到本机缓存，保留移动盘上的共享数据，避免 noexec 和 Mac 符号链接差异。
-首次启动不联网下载依赖；不要删除 `runtimes/`。目标 Agent 软件仍需自行安装并配置其依赖与登录。手动填写的绝对路径换设备后需调整，目录配置留空时自动使用本机默认位置。
+首次启动不联网下载依赖；不要删除 `runtimes/`。目标 Agent 软件仍需自行安装并配置其依赖与登录。本机目录选择存入 `devices/<设备ID>.json`，换设备默认自动探测新主机；共享配置中的旧路径失效会提示重选，留空并保存可恢复自动探测。
 
 Mac 应用未经过 Apple 公证。如被系统阻止，在可信解压目录运行 `bash Mac首次运行.command`，再启动。
 本机缓存分别位于 `%LOCALAPPDATA%/AgentRelay/<版本>/`、`~/Library/Caches/AgentRelay/<版本>/`、
@@ -188,7 +192,18 @@ GitHub 同类项目与源码差异见 [原生会话迁移调研](docs/session-mi
 ## 配置与数据
 
 复制 `config.example.json` 为 `config.json` 后可配置会话根目录、端口和是否打开浏览器。
-目录覆盖优先级为：配置文件 → `RELAY_<AGENT>_HOME` → agent 环境变量 → 当前用户默认目录。
+目录覆盖优先级为：本机设备配置 → 共享配置文件 → `RELAY_<AGENT>_HOME` → agent 环境变量 → 当前用户默认目录。相对路径以便携根解析，不依赖当前工作目录。
+网页「环境与兼容」保存目录只影响当前设备；`windows-use` / `ubuntu-use` 也仅保存本机选择。设备配置损坏会报告错误，不覆盖原文件；共享配置损坏仍尝试读取有效设备配置。
+
+```sh
+python app/cli.py device-config
+python app/cli.py device-config --agent codex --home <当前设备Agent根目录>
+python app/cli.py device-config --agent codex --home ""
+python app/cli.py health --output health-output
+python app/cli.py transfer claude <ID> --to codex --dry-run
+```
+
+迁移命令和 `restore-session` 支持 `--dry-run` 与 `--preview-token`；旧直接命令保持兼容。预览不会锁住源软件，操作前关闭正在写入会话的客户端。详见 [兼容与迁移预览](docs/compatibility.md)、[插件接口](docs/adapters.md) 和 [换设备排查](docs/troubleshooting.md)。
 DSH 尊重 `DSH_HOME`，WorkBuddy 尊重 `WORKBUDDY_HOME`，CodeBuddy 尊重 `CODEBUDDY_HOME`。
 SDK 默认尊重 `CLAUDE_CONFIG_DIR`；独立覆盖为 `agent_homes.claude_sdk` / `RELAY_CLAUDE_SDK_HOME`，
 不会继承仅为 Claude Code 设置的 `RELAY_CLAUDE_HOME`。

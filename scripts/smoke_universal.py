@@ -1,5 +1,6 @@
 """Verify the actual all-platform download and host launcher with isolated data."""
 import json
+import http.client
 import os
 import platform
 import shutil
@@ -33,6 +34,8 @@ def smoke(asset):
                 archive.extractall(destination)
         root = next(path for path in destination.iterdir() if path.is_dir()).resolve()
         homes = {name: str(destination / 'fixtures' / name) for name in ('workbuddy', 'dsh', 'codebuddy', 'claude', 'claude_sdk', 'codex')}
+        for home in homes.values():
+            Path(home).mkdir(parents=True)
         config = {'agent_homes': homes, 'open_browser': False}
         (root / 'config.json').write_text(json.dumps(config), encoding='utf-8')
         conversation = ir.Conversation(source='fixture', title='Universal fixture', cwd=str(destination), turns=[
@@ -40,10 +43,12 @@ def smoke(asset):
             ir.Turn(ir.ASSISTANT, [ir.Block.text_block('ready')]),
         ])
         WorkBuddyAdapter(home=homes['workbuddy']).write(conversation, session_id='fixture')
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         def request(port, path='/', body=None):
             options = {} if body is None else {'data': json.dumps(body).encode(), 'headers': {'Content-Type':'application/json'}}
             req = urllib.request.Request('http://127.0.0.1:%d%s' % (port, path), **options)
-            with urllib.request.urlopen(req, timeout=3) as response:
+            with opener.open(req, timeout=3) as response:
+                assert response.headers.get('Server', '').startswith('AgentRelay/'), 'Unexpected service'
                 data = response.read()
                 return json.loads(data) if path.startswith('/api/') else data
         def wait(port, process=None):
@@ -54,7 +59,7 @@ def smoke(asset):
                 try:
                     assert b'selectAllSkills' in request(port)
                     return
-                except OSError:
+                except (OSError, http.client.HTTPException):
                     time.sleep(.2)
             raise AssertionError('Universal launcher did not become ready')
         with socket.socket() as occupied:
@@ -63,29 +68,55 @@ def smoke(asset):
             if port > 65530:
                 raise AssertionError('Ephemeral port too high; retry')
             if sys.platform == 'win32':
-                command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(root / 'Start-AgentRelay.ps1')]
+                powershell = Path(os.environ['SystemRoot']) / 'System32/WindowsPowerShell/v1.0/powershell.exe'
+                command = [str(powershell), '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(root / 'Start-AgentRelay.ps1')]
             else:
                 command = ['/bin/bash', str(root / ('启动_AgentRelay.command' if sys.platform == 'darwin' else '启动_AgentRelay.sh'))]
             process = subprocess.Popen(command + ['--no-browser', '--port', str(port)], cwd=destination,
                                        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-            actual = port + 1
             try:
-                wait(actual, process)
+                actual = None
+                deadline = time.monotonic() + 100
+                while actual is None and time.monotonic() < deadline:
+                    if process.poll() is not None:
+                        raise AssertionError('Launcher exited early: ' + process.stderr.read().decode('utf-8', 'replace'))
+                    for candidate in range(port + 1, min(port + 6, 65536)):
+                        try:
+                            if b'selectAllSkills' in request(candidate):
+                                actual = candidate
+                                break
+                        except (OSError, http.client.HTTPException):
+                            pass
+                    if actual is None:
+                        time.sleep(.2)
+                assert actual is not None, 'Universal launcher did not become ready'
+                environment = request(actual, '/api/environment')
+                assert environment['runtime']['bundled'] and environment['runtime']['zstandard']
+                binary = environment['runtime']['executable']
+                assert request(actual, '/api/health')['healthy']
                 stored = request(actual, '/api/store-session', {'source':'workbuddy', 'id':'fixture'})
                 assert stored['ok']
                 assert Path(stored['path']).is_relative_to(root / 'storage'), stored
-                imported = request(actual, '/api/transfer', {'source':'workbuddy', 'id':'fixture', 'target':'dsh', 'cwd':str(destination)})
+                payload = {'source':'workbuddy', 'id':'fixture', 'target':'dsh', 'cwd':str(destination)}
+                plan = request(actual, '/api/preview', payload)
+                assert plan['ok'] and not plan['blockers']
+                imported = request(actual, '/api/transfer', dict(payload, preview_token=plan['token']))
                 assert imported['ok'], imported
                 assert request(actual, '/api/shutdown', {})['ok']
                 assert process.wait(timeout=20) == 0
             finally:
                 if process.poll() is None:
                     try:
-                        request(actual, '/api/shutdown', {})
+                        if actual is not None:
+                            request(actual, '/api/shutdown', {})
                         process.wait(timeout=10)
                     except Exception:
                         process.terminate(); process.wait(timeout=10)
                 process.stderr.close()
+        # Reuse the cached runtime with fresh portable roots, independent of the
+        # launcher cache and of any Python/Node installation on the host.
+        from smoke_release import smoke as smoke_runtime
+        smoke_runtime(binary)
         if sys.platform == 'darwin':
             # The Finder entry must also retain the root config/storage instead of cache paths.
             with socket.socket() as free:

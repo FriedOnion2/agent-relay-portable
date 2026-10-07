@@ -1,6 +1,6 @@
 {
   "_说明": "全部留空即可 —— 留空时程序会自动探测。只有在会话目录不在默认位置时才需要填。",
-  "_用法": "把这个文件改名成 config.json 放在 U 盘根目录，然后按实际路径填写。",
+  "_用法": "改名成 config.json 放在便携根；本机目录优先在环境与兼容面板设置，保存在 devices/。相对目录以便携根解析；共享绝对路径失效会提示重选。",
   "agent_homes": {
     "_说明": "留空 = 用当前主机 ~/ 下的默认位置。填了就强制用你指定的路径。",
     "_例子_windows": "D:\\backups\\claude",
@@ -15,5 +15,6 @@
   "port": 8745,
   "_双系统说明": "Ubuntu 先挂载 Windows 分区，再填写 /media/用户名/分区/Users/Windows用户名；新增 Windows 只读来源，保留本机来源。Windows/macOS 忽略此项。",
   "windows_user_home": "",
-  "open_browser": true
+  "open_browser": true,
+  "ubuntu_user_home": ""
 }

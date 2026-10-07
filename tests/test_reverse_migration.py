@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 import test_native_import
 from test_relay import content
-from relay import registry, native_import, windows, ubuntu
+from relay import registry, native_import, windows, ubuntu, device
 import cli
 import bootstrap
 
@@ -138,12 +138,15 @@ class ReverseMigrationTests(unittest.TestCase):
     def test_ubuntu_selection_config_and_platform_scope(self):
         config = self.root / "config.json"
         config.write_text(json.dumps({"extra":"keep", "windows_user_home":"/mnt/w"}), encoding="utf-8")
-        with patch.object(windows.platform, "system", return_value="Windows"), patch.object(bootstrap, "config_path", return_value=config), redirect_stdout(io.StringIO()):
+        with patch.object(windows.platform, "system", return_value="Windows"), patch.object(bootstrap, "config_path", return_value=config), \
+             patch.object(device, 'project_root', return_value=self.root), redirect_stdout(io.StringIO()):
             cli.cmd_windows_use(SimpleNamespace(cmd="ubuntu-use", path=str(self.root), clear=False))
             self.assertEqual(ubuntu.selected_profile(), str(self.root))
             saved = json.loads(config.read_text(encoding="utf-8"))
             self.assertEqual(saved["extra"], "keep")
             self.assertEqual(saved["windows_user_home"], "/mnt/w")
+            self.assertNotIn('ubuntu_user_home', saved)
+            self.assertEqual(device.read()['ubuntu_user_home'], str(self.root))
             cli.cmd_windows_use(SimpleNamespace(cmd="ubuntu-use", path=None, clear=True))
             self.assertEqual(ubuntu.selected_profile(), "")
         with patch.dict(os.environ, {ubuntu.PROFILE_ENV:str(self.root)}):

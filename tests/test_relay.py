@@ -202,7 +202,7 @@ class BootstrapTests(unittest.TestCase):
                                 '{"agent_homes":{"codex":42}}', '{"open_browser":"false"}'):
                     path.write_text(invalid, encoding="utf-8")
                     with patch.object(sys, "stderr"):
-                        self.assertEqual(bootstrap.load_config(), {})
+                        self.assertEqual(bootstrap.load_config().get('agent_homes', {}), {})
 
     def test_py_launcher_is_executed_as_separate_arguments(self):
         with patch.object(bootstrap.subprocess, "run") as run:

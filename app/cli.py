@@ -33,6 +33,8 @@ bootstrap.apply_config(_CFG)
 
 from relay import registry  # noqa: E402
 from relay import ir  # noqa: E402
+from relay import plugins  # noqa: E402
+plugins.configure(_CFG.get('plugins', []))
 
 AGENTS = list(bootstrap.SOURCES)
 READ_AGENTS = AGENTS + [prefix + k for prefix in ("windows_", "ubuntu_") for k in AGENTS]
@@ -54,6 +56,12 @@ def cmd_windows_users(args):
 def cmd_import_windows(args):
     from relay import native_import
     options = dict(session_id=args.session_id, dsh_compression=args.dsh_compression)
+    if getattr(args, 'dry_run', False):
+        from relay import preview
+        _print_json(preview.native(args.agent, args.id, args.cmd, args.cwd, args.session_id,
+                                   getattr(args, 'project_path', None), args.dsh_compression))
+        return
+    options['preview_token'] = getattr(args, 'preview_token', None)
     if args.cmd == "export-windows":
         options["project_path"] = args.project_path
     result = getattr(native_import, args.cmd.replace("-", "_"))(args.agent, args.id, args.cwd, **options)
@@ -98,17 +106,10 @@ def cmd_windows_use(args):
     cfg = json.loads(config.read_text(encoding="utf-8-sig")) if config.exists() else {}
     if not isinstance(cfg, dict):
         raise ValueError("config.json 不是 JSON 对象，请先修复配置")
-    cfg[key] = path
-    import tempfile
-    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=str(config.parent),
-                                     prefix=".config-", suffix=".partial", delete=False) as f:
-        temporary = Path(f.name)
-        json.dump(cfg, f, ensure_ascii=False, indent=2)
-        f.write("\n")
-    try:
-        os.replace(str(temporary), str(config))
-    finally:
-        temporary.unlink(missing_ok=True)
+    from relay import device
+    local = device.read()
+    local[key] = path
+    device.write(local)
     os.environ[env] = path
     registry._CACHE.clear()
     print(f"已保存 {label} 用户目录：{path}" if path else f"已清除 {label} 用户目录选择")
@@ -126,7 +127,12 @@ def cmd_storage(args):
     elif args.cmd == "stored-sessions":
         result = {"ok":True, "packages":archive.list_packages(session_store.KIND, args.agent, args.storage)}
     else:
-        result = session_store.restore_session(args.package, args.cwd, args.session_id, args.dsh_compression)
+        if getattr(args, 'dry_run', False):
+            from relay import preview
+            result = preview.package(args.package, args.cwd, args.session_id, args.dsh_compression)
+        else:
+            result = session_store.restore_session(args.package, args.cwd, args.session_id, args.dsh_compression,
+                                                   getattr(args, 'preview_token', None))
     _print_json(result)
     return 0 if result["ok"] else 1
 
@@ -232,12 +238,18 @@ def cmd_export(args):
 
 
 def cmd_transfer(args):
+    if args.dry_run:
+        from relay import preview
+        _print_json(preview.conversion(args.agent, args.id, args.to, args.cwd, args.session_id,
+                                       not args.keep_tool_names, not args.no_thinking, args.title))
+        return
     res = registry.transfer(
         args.agent, args.id, args.to,
         cwd=args.cwd, session_id=args.session_id,
         remap_tools=not args.keep_tool_names,
         include_thinking=not args.no_thinking,
         new_title=args.title,
+        preview_token=args.preview_token,
     )
     if args.json:
         _print_json(res)
@@ -282,7 +294,41 @@ def cmd_doctor(args):
     return code
 
 
+def cmd_health(args):
+    from relay import health
+    result = health.report()
+    if args.output:
+        result['output'] = health.export(result, args.output)
+    _print_json(result)
+    return 0 if result['ok'] else 1
+
+
+def cmd_device(args):
+    from relay import device
+    if args.agent:
+        device.set_home(args.agent, args.home or '')
+        bootstrap.apply_config(bootstrap.load_config())
+        registry._CACHE.clear()
+    _print_json(device.environment())
+
+
+def cmd_plugins(args):
+    if args.action == 'enable':
+        if not args.name or not args.path:
+            raise ValueError('启用需填写插件名与可信 Python 文件')
+        result = plugins.enable(args.name, args.path)
+    elif args.action == 'disable':
+        if not args.name:
+            raise ValueError('请填写插件名')
+        result = plugins.disable(args.name)
+    else:
+        result = {'ok':True, 'enabled':list(plugins.entries.values()), 'errors':plugins.errors,
+                  'note':'只启用可信插件；独立进程与超时不是安全沙箱。换设备需重新启用。'}
+    _print_json(result)
+
+
 def build_parser():
+    read_agents = READ_AGENTS + list(plugins.entries)
     p = argparse.ArgumentParser(
         prog="relay",
         description="读取 WorkBuddy / DeepSeek Harness / CodeBuddy / Claude Code / Claude Agent SDK / Codex 会话",
@@ -295,14 +341,14 @@ def build_parser():
     p1.set_defaults(func=cmd_sources)
 
     p2 = sub.add_parser("list", help="列出某个 agent 的会话")
-    p2.add_argument("agent", choices=READ_AGENTS)
+    p2.add_argument("agent", choices=read_agents)
     p2.add_argument("--filter", "-f", default="", help="按标题/目录/id 过滤")
     p2.add_argument("--limit", "-n", type=int, default=500)
     p2.add_argument("--json", action="store_true")
     p2.set_defaults(func=cmd_list)
 
     p3 = sub.add_parser("show", help="查看会话内容")
-    p3.add_argument("agent", choices=READ_AGENTS)
+    p3.add_argument("agent", choices=read_agents)
     p3.add_argument("id")
     p3.add_argument("--role", choices=["user", "assistant", "system"], help="只看某个角色")
     p3.add_argument("--head", type=int, default=0, help="只显示前 N 轮，0=全部")
@@ -311,7 +357,7 @@ def build_parser():
     p3.set_defaults(func=cmd_show)
 
     p4 = sub.add_parser("export", help="导出为 markdown 交接文档")
-    p4.add_argument("agent", choices=READ_AGENTS)
+    p4.add_argument("agent", choices=read_agents)
     p4.add_argument("id")
     p4.add_argument("-o", "--output", help="输出文件，省略则打印到标准输出")
     p4.add_argument("--no-thinking", action="store_true", help="不包含思考过程")
@@ -320,7 +366,7 @@ def build_parser():
     p4.set_defaults(func=cmd_export)
 
     p5 = sub.add_parser("transfer", help="迁移会话到另一个 agent")
-    p5.add_argument("agent", choices=READ_AGENTS, help="来源 agent")
+    p5.add_argument("agent", choices=read_agents, help="来源 agent")
     p5.add_argument("id", help="源会话 id")
     p5.add_argument("--to", "-t", required=True, choices=registry.writable_keys(), help="支持写入的目标 agent")
     p5.add_argument("--cwd", help="写入到哪个工作目录（默认沿用源会话的目录）")
@@ -329,6 +375,8 @@ def build_parser():
     p5.add_argument("--keep-tool-names", action="store_true", help="不做工具名互译")
     p5.add_argument("--no-thinking", action="store_true", help="不迁移思考过程")
     p5.add_argument("--json", action="store_true")
+    p5.add_argument('--dry-run', action='store_true', help='只预览保真度，不写入文件')
+    p5.add_argument('--preview-token', help='执行已确认的预览；内容变化则拒绝')
     p5.set_defaults(func=cmd_transfer)
 
     p6 = sub.add_parser("doctor", help="环境体检（换机器后先跑这个）")
@@ -354,6 +402,8 @@ def build_parser():
     p10.add_argument("--session-id", help="可选新 ID；默认保留 Windows 原生 ID，已有目标不会覆盖")
     p10.add_argument("--dsh-compression", choices=["zstd", "none"], default="zstd")
     p10.add_argument("--json", action="store_true")
+    p10.add_argument('--dry-run', action='store_true')
+    p10.add_argument('--preview-token')
     p10.set_defaults(func=cmd_import_windows)
     p11 = sub.add_parser("ubuntu-use", help="保存 Windows 可访问的 Ubuntu 用户目录备份")
     p11.add_argument("path", nargs="?")
@@ -371,6 +421,8 @@ def build_parser():
         command.add_argument("--session-id")
         command.add_argument("--dsh-compression", choices=["zstd", "none"], default="zstd")
         command.add_argument("--json", action="store_true")
+        command.add_argument('--dry-run', action='store_true')
+        command.add_argument('--preview-token')
         command.set_defaults(func=cmd_import_windows)
         native_commands.append(command)
     store = sub.add_parser("store-sessions", help="按 Agent 保存原生会话包，复制到另一设备后恢复")
@@ -388,6 +440,8 @@ def build_parser():
     restore.add_argument("--cwd", required=True)
     restore.add_argument("--session-id")
     restore.add_argument("--dsh-compression", choices=["zstd", "none"], default="zstd")
+    restore.add_argument('--dry-run', action='store_true')
+    restore.add_argument('--preview-token')
     restore.set_defaults(func=cmd_storage)
     skills = sub.add_parser("skills", help="列出 Agent 的 SKILL.md 技能目录（可指定实际路径）")
     skills.add_argument("agent", choices=READ_AGENTS)
@@ -410,6 +464,18 @@ def build_parser():
     skill_restore.add_argument("--skills-dir", help="目标设备实际的 Skill 根目录")
     skill_restore.add_argument("--name", help="可选新目录名，保留已有 Skill")
     skill_restore.set_defaults(func=cmd_skill_storage)
+    health = sub.add_parser('health', help='临时合成样本自检，不验证真实客户端续聊')
+    health.add_argument('--output', help='导出 health.json 和静态 index.html')
+    health.set_defaults(func=cmd_health)
+    device = sub.add_parser('device-config', help='查看设备检查，设置本机 Agent 目录（不影响其他设备）')
+    device.add_argument('--agent', choices=AGENTS)
+    device.add_argument('--home', help='存在的本机目录；省略或空字符串则恢复自动探测')
+    device.set_defaults(func=cmd_device)
+    plugin = sub.add_parser('plugins', help='启用/禁用可信社区读取插件；不会自动发现执行代码')
+    plugin.add_argument('action', choices=['list','enable','disable'], nargs='?', default='list')
+    plugin.add_argument('name', nargs='?')
+    plugin.add_argument('path', nargs='?')
+    plugin.set_defaults(func=cmd_plugins)
     # Per-command override can be passed through the Linux launcher. Choices
     # are built before parsing, so recognize Windows source names explicitly.
     for command in (p1, p2, p3, p4, p5, p6, p7, p10, store, skills, skill_store, skill_restore, *native_commands):

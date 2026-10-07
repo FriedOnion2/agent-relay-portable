@@ -13,7 +13,7 @@ from types import SimpleNamespace
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 import bootstrap
 import cli
-from relay import registry, windows
+from relay import registry, windows, device
 from relay.adapters.codex import CodexAdapter
 from relay.adapters.claude import ClaudeAdapter
 from relay.adapters.workbuddy import WorkBuddyAdapter
@@ -110,14 +110,16 @@ class WindowsProfilesTests(unittest.TestCase):
         config = self.root / "config.json"
         config.write_text(json.dumps({"port": 9876, "open_browser": False,
                                      "agent_homes": {"claude": "custom"}}), encoding="utf-8")
-        with patch.object(bootstrap, "config_path", return_value=config), redirect_stdout(io.StringIO()):
+        with patch.object(bootstrap, "config_path", return_value=config), \
+             patch.object(device, 'project_root', return_value=self.root), redirect_stdout(io.StringIO()):
             cli.cmd_windows_use(SimpleNamespace(path=str(self.profile), clear=False))
             saved = json.loads(config.read_text(encoding="utf-8"))
             self.assertEqual(saved["port"], 9876)
             self.assertEqual(saved["agent_homes"], {"claude": "custom"})
-            self.assertEqual(saved["windows_user_home"], str(self.profile))
+            self.assertNotIn('windows_user_home', saved)
+            self.assertEqual(device.read()['windows_user_home'], str(self.profile))
             cli.cmd_windows_use(SimpleNamespace(path=None, clear=True))
-            self.assertEqual(json.loads(config.read_text())["windows_user_home"], "")
+            self.assertEqual(device.read()['windows_user_home'], '')
             config.write_text("broken", encoding="utf-8")
             with self.assertRaises(ValueError):
                 cli.cmd_windows_use(SimpleNamespace(path=str(self.profile), clear=False))

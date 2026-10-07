@@ -406,8 +406,35 @@ def _native_ide(source, target, conv, cwd, requested_id):
                 shutil.rmtree(stage)
 
 
-def import_windows(agent, sid, cwd, session_id=None, dsh_compression="zstd"):
+def import_windows(agent, sid, cwd, session_id=None, dsh_compression="zstd", preview_token=None):
+    source, target, cwd, target_name, target_os = context('import-windows', agent, cwd)
+    return _migrate(source, target, sid, cwd, session_id, dsh_compression,
+                    'native-windows-import', target_name, target_os, preview_token)
+
+
+def context(mode, agent, cwd, project_path=None):
     from . import registry
+    if mode == 'import-ubuntu':
+        from .ubuntu import UbuntuSource
+        source = registry.get(agent if agent.startswith('ubuntu_') else 'ubuntu_' + agent)
+        if not isinstance(source, UbuntuSource):
+            raise ValueError('请选择 Ubuntu 来源')
+        return source, registry.get(source.source), _windows_cwd(cwd), source.source, 'Windows'
+    if mode == 'export-windows':
+        from .windows import selected_profile
+        if platform.system() != 'Linux':
+            raise ValueError('export-windows 在 Ubuntu / Linux 中运行')
+        if agent not in registry._ADAPTERS:
+            raise ValueError('请选择本机 agent 来源')
+        profile = selected_profile()
+        if not profile or not Path(profile).is_dir():
+            raise ValueError('请先用 windows-use 选择可访问的 Windows 用户目录')
+        local = registry.get(agent)
+        source = SimpleNamespace(source=agent, adapter=local, name=agent, read=local.read,
+                                 roots=getattr(local, 'roots', [getattr(local, 'root', local.home)]))
+        return source, registry.get('windows_' + agent).adapter, _windows_cwd(cwd, project_path), 'windows_' + agent, 'Windows'
+    if mode != 'import-windows':
+        raise ValueError('未知原生迁移方式')
     source = registry.get(agent if agent.startswith("windows_") else "windows_" + agent)
     if not isinstance(source, WindowsSource):
         raise ValueError("请选择 Windows 来源")
@@ -415,8 +442,7 @@ def import_windows(agent, sid, cwd, session_id=None, dsh_compression="zstd"):
         raise ValueError("需要存在的 Ubuntu 项目目录（--cwd /home/…）")
     cwd = str(Path(cwd).resolve()).replace("\\", "/")
     target = registry.get(source.source)
-    return _migrate(source, target, sid, cwd, session_id, dsh_compression,
-                    "native-windows-import", source.source, "Ubuntu")
+    return source, target, cwd, source.source, 'Ubuntu'
 
 
 def _windows_cwd(cwd, project_path=None):
@@ -437,37 +463,21 @@ def _windows_cwd(cwd, project_path=None):
     return cwd
 
 
-def export_windows(agent, sid, cwd, project_path=None, session_id=None, dsh_compression="zstd"):
+def export_windows(agent, sid, cwd, project_path=None, session_id=None, dsh_compression="zstd", preview_token=None):
     """On Ubuntu, publish a local session to an explicitly selected Windows home."""
-    from . import registry
-    from .windows import selected_profile
-    if platform.system() != "Linux":
-        raise ValueError("export-windows 在 Ubuntu / Linux 中运行；Windows 请使用 import-ubuntu")
-    if agent not in registry._ADAPTERS:
-        raise ValueError("请选择本机 agent 来源")
-    profile = selected_profile()
-    if not profile or not Path(profile).is_dir():
-        raise ValueError("请先用 windows-use 选择可访问的 Windows 用户目录")
-    local = registry.get(agent)
-    source = SimpleNamespace(source=agent, adapter=local, name=agent, read=local.read,
-                             roots=getattr(local, "roots", [getattr(local, "root", local.home)]))
-    target = registry.get("windows_" + agent).adapter
-    return _migrate(source, target, sid, _windows_cwd(cwd, project_path), session_id,
-                    dsh_compression, "native-windows-export", "windows_" + agent, "Windows")
+    source, target, cwd, target_name, target_os = context('export-windows', agent, cwd, project_path)
+    return _migrate(source, target, sid, cwd, session_id,
+                    dsh_compression, 'native-windows-export', target_name, target_os, preview_token)
 
 
-def import_ubuntu(agent, sid, cwd, session_id=None, dsh_compression="zstd"):
+def import_ubuntu(agent, sid, cwd, session_id=None, dsh_compression="zstd", preview_token=None):
     """On Windows, import an accessible Ubuntu home backup into local native stores."""
-    from . import registry
-    from .ubuntu import UbuntuSource
-    source = registry.get(agent if agent.startswith("ubuntu_") else "ubuntu_" + agent)
-    if not isinstance(source, UbuntuSource):
-        raise ValueError("请选择 Ubuntu 来源")
-    return _migrate(source, registry.get(source.source), sid, _windows_cwd(cwd), session_id,
-                    dsh_compression, "native-ubuntu-import", source.source, "Windows")
+    source, target, cwd, target_name, target_os = context('import-ubuntu', agent, cwd)
+    return _migrate(source, target, sid, cwd, session_id,
+                    dsh_compression, 'native-ubuntu-import', target_name, target_os, preview_token)
 
 
-def _migrate(source, target, sid, cwd, session_id, dsh_compression, mode, target_name, target_os):
+def _migrate(source, target, sid, cwd, session_id, dsh_compression, mode, target_name, target_os, preview_token=None):
     if dsh_compression not in ("zstd", "none"):
         raise ValueError("dsh_compression 必须是 zstd 或 none")
     for root in getattr(target, "roots", [getattr(target, "root", target.home)]):
@@ -475,6 +485,9 @@ def _migrate(source, target, sid, cwd, session_id, dsh_compression, mode, target
     conv = source.read(sid)
     if conv.truncated:
         raise ValueError("源会话超过读取限制，无法完整迁移")
+    from . import preview
+    plan = preview.report(conv, target_name, dict(cwd=cwd, session_id=session_id, dsh_compression=dsh_compression), target.home, native=True)
+    preview.check_token(preview_token, plan['token'])
     notes = ["已保留原生记录；项目元数据已映射，历史正文与工具参数中的路径不自动替换。",
              "未复制账号、凭据、应用设置、附件或子代理旁路文件；请在目标软件中核对续聊。"]
     if source.source == "dsh":
@@ -506,4 +519,4 @@ def _migrate(source, target, sid, cwd, session_id, dsh_compression, mode, target
             "from": {"source": source.name, "id": sid, "path": conv.path, "title": conv.title},
             "to": {"source": target_name, "id": lookup_id, "native_id": native_id,
                    "cwd": cwd, "path": str(path)}, "resume_command": resume,
-            "notes": notes, "stats": conv.stats(), "truncated": False}
+            "notes": notes, "stats": conv.stats(), "truncated": False, "preview":plan}

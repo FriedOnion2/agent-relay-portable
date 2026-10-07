@@ -102,6 +102,7 @@ class ToolNameMap:
 
 
 class BaseAdapter:
+    api_version: int = 1
     name: str = ""
     label: str = ""
     home: Optional[str] = None          # 会话根目录
@@ -142,6 +143,10 @@ class BaseAdapter:
               session_id: str | None = None, remap_tools: bool = True,
               include_thinking: bool = True) -> str:
         raise NotImplementedError
+
+    def self_check(self):
+        from ..health import check
+        return check(self.name)
 
     # ---------------- 通用辅助 ----------------
 
@@ -214,6 +219,9 @@ class BaseAdapter:
             "available": self.available(),
             "can_read": True,
             "can_write": self.can_write,
+            "api_version": self.api_version,
+            "community": False,
+            "capabilities": ["read", "export", "native_store", "native_restore", "skill_store"] + (["write"] if self.can_write else []),
             "write_note": "" if self.can_write else "支持读取、导出及迁出；尚不支持写入此来源",
             "read_note": getattr(self, "read_note", ""),
         }
