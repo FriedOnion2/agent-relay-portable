@@ -1,0 +1,127 @@
+name: Build universal dev release
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag (e.g. v0.2.0-dev.1)
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows-x64
+          - os: ubuntu-22.04
+            target: linux-x64
+          - os: macos-14
+            target: macos-arm64
+          - os: macos-15-intel
+            target: macos-x64
+    runs-on: ${{ matrix.os }}
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - run: python -m pip install -r requirements-release.txt
+      - run: python -m unittest discover -s tests -v
+      - run: node --test tests/web.test.cjs
+      - name: Build and test standalone runtime
+        shell: bash
+        run: python scripts/build_release.py --tag "$RELEASE_TAG"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runtime-${{ matrix.target }}
+          path: dist/release/*
+          if-no-files-found: error
+          retention-days: 7
+  assemble:
+    needs: build
+    runs-on: macos-14
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: runtime-*
+          path: runtime-assets
+          merge-multiple: true
+      - name: Assemble the single cross-device download
+        run: python scripts/assemble_release.py --tag "$RELEASE_TAG" --assets runtime-assets --output dist/universal
+      - name: Check universal launchers
+        run: |
+          bash -n dist/universal/AgentRelay-*/启动_AgentRelay.command
+          bash -n dist/universal/AgentRelay-*/启动_AgentRelay.sh
+          bash -n dist/universal/AgentRelay-*/AgentRelay.app/Contents/MacOS/AgentRelay
+      - name: Validate universal Mac launcher and shared storage
+        run: python scripts/smoke_universal.py dist/universal/AgentRelay-*-universal.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: universal-release
+          path: |
+            dist/universal/*.zip
+            dist/universal/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 7
+  validate-universal:
+    needs: assemble
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-22.04, macos-14, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: universal-release
+          path: universal-assets
+      - name: Verify the complete download on this device
+        shell: bash
+        run: python scripts/smoke_universal.py universal-assets/*.zip
+  publish:
+    needs: validate-universal
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: universal-release
+          path: universal-assets
+      - name: Publish dev prerelease only after every platform passes
+        run: |
+          gh release create "$RELEASE_TAG" universal-assets/*.zip universal-assets/SHA256SUMS.txt --verify-tag --prerelease --title "AgentRelay $RELEASE_TAG · 跨设备总包" --notes-file .github/release-notes-dev.md

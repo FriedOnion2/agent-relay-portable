@@ -8,6 +8,8 @@ import tempfile
 import zipfile
 from pathlib import Path, PurePosixPath
 
+from .runtime import project_root
+
 MAX_FILE = 32 * 1024 * 1024
 MAX_TOTAL = 256 * 1024 * 1024
 MAX_FILES = 4096
@@ -16,7 +18,7 @@ MAX_MANIFEST = 2 * 1024 * 1024
 
 def storage_root(root=None):
     value = root or os.environ.get("RELAY_STORAGE_HOME")
-    return Path(value).expanduser().resolve() if value else Path(__file__).resolve().parents[2] / "storage"
+    return Path(value).expanduser().resolve() if value else project_root() / "storage"
 
 
 def safe_name(name):

@@ -28,7 +28,30 @@ CodeBuddy CLI 与 IDE 在同一个独立来源下显示；DSH 与 WorkBuddy 不�
 SDK 与 Claude Code 共用默认存储，日志不能可靠证明创建者；SDK 入口明确标记“Claude 共享记录”，
 两个列表可能显示同一会话。SDK 不会把 CLI 历史自动改成 SDK 专属来源。
 
-## 快速启动
+## Release 下载即用
+
+普通用户下载 [GitHub Releases](https://github.com/FriedOnion2/agent-relay-portable/releases) 中的
+**`AgentRelay-<版本>-universal.zip`**，完整解压后按当前设备运行启动器。一个总包同时包含
+Windows x64、Mac Apple Silicon / Intel 和 Linux x64，已内置 Python 与 `zstandard`，无需另装 Python 或 Node.js。
+不要选择 GitHub 自动生成的 Source code 压缩包，那是开发源码。
+
+| 当前设备 | Release 启动入口 | 支持范围 |
+|---|---|---|
+| Windows | `启动_AgentRelay.bat` | Windows 10/11 x64 |
+| Mac | `AgentRelay.app` 或 `bash 启动_AgentRelay.command` | Apple Silicon：macOS 14+；Intel：macOS 15+ |
+| Linux | `bash 启动_AgentRelay.sh` | Ubuntu 22.04+ / glibc 2.35+ x64 |
+
+总包根目录共用 `config.json`（可选）与 `storage/`。把整个总包放在移动盘上，切换设备无需再下载另一系统的版本。
+启动器只把当前平台的运行库解压到本机缓存，保留移动盘上的共享数据，避免 noexec 和 Mac 符号链接差异。
+首次启动不联网下载依赖；不要删除 `runtimes/`。手动填写的绝对路径换设备后需调整，目录配置留空时自动使用本机默认位置。
+
+Mac 应用未经过 Apple 公证。如被系统阻止，在可信解压目录运行 `bash Mac首次运行.command`，再启动。
+本机缓存分别位于 `%LOCALAPPDATA%/AgentRelay/<版本>/`、`~/Library/Caches/AgentRelay/<版本>/`、
+`~/.cache/agentrelay/<版本>/`（Linux 尊重 `XDG_CACHE_HOME`）。如运行库解压中断，删除该版本缓存后重试。
+Release 包只包含运行文件、启动入口、配置示例和「开始使用.txt」，不附带测试、开发资料、格式调研或个人数据。
+开发预览版在 GitHub 标为 Pre-release；`SHA256SUMS.txt` 可用于验证下载的总包。
+
+## 源码启动
 
 需要 **Python 3.8 或更新版本**。应用运行不需要 Node.js；Node.js 仅用于网页测试。
 将仓库下载或克隆后，在项目目录执行以下操作。移动盘上应保留完整项目目录。
@@ -185,14 +208,15 @@ python -m unittest discover -s tests -v
 node --test tests/web.test.cjs
 ```
 
-截至 2026-10-07，本机回归为 **101 项 Python 测试（Mac 上 4 项跳过）与 22 项网页测试**。
+截至 2026-10-07，本机回归为 **104 项 Python 测试（Mac 上 4 项跳过）与 22 项网页测试**。
 GitHub Actions 在 Windows、Ubuntu 和 macOS 上验证 Python 3.8、3.12、3.14，共 8 组；
 macOS 不包含 Python 3.8。批量存储已用浏览器和临时样例实测，分别生成两条对话包与两个 Skill 包。
 自动测试覆盖格式转换、存储包往返、完整性与冲突保护、端口占用、退出等待、异步列表及批量部分失败。
 测试使用临时合成数据，不修改用户真实会话，也不执行 Skill 脚本。
 
 可选实机验证：`python3 tests/macos_launch_smoke.py` 启动实际 `.app`，只读探测本机来源，
-验证 HTTP 和退出接口后停止本次服务。DSH 原生 smoke 脚本与验证范围见 [开发与排查手册](开发过程与排查手册.md)。
+验证 HTTP 和退出接口后停止本次服务。DSH 官方原生验证可使用 `tests/dsh_native_smoke.mjs` / `tests/dsh_catalog_smoke.mjs`；运行参数见脚本头部。
+Release 构建还在四类设备上验证内置依赖、DSH 导入、共享存储根目录、端口重试、HTTP 与退出，再发布同一个总包。
 跨平台 CI 验证的是项目行为，厂商原生续聊、设备权限和挂载仍需在目标环境确认。
 
 ## 当前限制
@@ -220,4 +244,3 @@ macOS 不包含 Python 3.8。批量存储已用浏览器和临时样例实测，
 - [Ubuntu 双系统说明](docs/ubuntu-dual-boot.md)：挂载、双向原生迁移与故障排查。
 - [来源格式说明](docs/source-formats.md)：来源格式和官方资料依据。
 - [原生会话迁移调研](docs/session-migration-alternatives.md)：同类项目及实现差异。
-- [开发与排查手册](开发过程与排查手册.md)：代码地图、验证记录和问题处理。

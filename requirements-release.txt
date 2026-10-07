@@ -1,0 +1,3 @@
+# Build tools only; they are not required on users' devices.
+pyinstaller==6.22.3
+zstandard==0.25.0

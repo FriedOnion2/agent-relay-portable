@@ -21,6 +21,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from relay.runtime import project_root
 from relay.locations import SOURCES
 from relay.windows import PROFILE_ENV, selected_profile
 
@@ -36,7 +37,7 @@ def app_root() -> Path:
 
 def media_root() -> Path:
     """移动硬盘根目录（app/ 的上一级）。"""
-    return app_root().parent
+    return project_root()
 
 
 def log_dir() -> Path:
@@ -164,6 +165,9 @@ def python_candidates() -> list[tuple[str, str]]:
 
 def find_python() -> dict:
     """挑第一个版本达标的解释器。"""
+    if getattr(sys, "frozen", False):
+        return {"ok": True, "cmd": sys.executable, "origin": "Release 内置 Python",
+                "version": "%d.%d" % sys.version_info[:2], "tried": []}
     tried = []
     for cmd, origin in python_candidates():
         ver = _version_of(cmd)
