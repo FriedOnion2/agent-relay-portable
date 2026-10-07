@@ -145,19 +145,22 @@ class DshAdapter(ReadOnlyAdapter):
 
     def discover(self):
         for path, error in self._candidates():
-            st = self._stat(path)
-            sid = os.path.relpath(os.path.dirname(path), self.home).replace("\\", "/")
-            conv = None
-            if not error:
-                try:
-                    conv = self._parse(path)
-                except (ValueError, OSError, TypeError, KeyError, AttributeError) as exc:
-                    error = str(exc)
-            yield SessionInfo(self.name, sid, (conv.title if conv else "DSH 会话") or "未命名会话",
-                              conv.cwd if conv else "", (conv.model or "") if conv else "",
-                              safe_ms(conv.created_at) if conv else None,
-                              safe_ms(conv.updated_at) if conv else st["updated_ms"], st["size"],
-                              len(conv.turns) if conv else 0, path, not bool(error), error)
+            yield self._peek(path, error) if error else self._cached_summary(path, lambda:self._peek(path))
+
+    def _peek(self, path, error=""):
+        st = self._stat(path)
+        sid = os.path.relpath(os.path.dirname(path), self.home).replace("\\", "/")
+        conv = None
+        if not error:
+            try:
+                conv = self._parse(path)
+            except (ValueError, OSError, TypeError, KeyError, AttributeError) as exc:
+                error = str(exc)
+        return SessionInfo(self.name, sid, (conv.title if conv else "DSH 会话") or "未命名会话",
+                           conv.cwd if conv else "", (conv.model or "") if conv else "",
+                           safe_ms(conv.created_at) if conv else None,
+                           safe_ms(conv.updated_at) if conv else st["updated_ms"], st["size"],
+                           len(conv.turns) if conv else 0, path, not bool(error), error)
 
     def read(self, sid):
         for path, error in self._candidates():

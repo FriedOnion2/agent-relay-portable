@@ -93,6 +93,23 @@ class IndependentSourcesTests(unittest.TestCase):
 
 
 class DshTests(unittest.TestCase):
+    def test_cached_summaries_refresh_when_log_or_generation_changes(self):
+        with tempfile.TemporaryDirectory() as root:
+            path=write_log(root, log())
+            a=DshAdapter(home=root)
+            with patch.object(a, "_parse", wraps=a._parse) as parse:
+                self.assertEqual(next(a.discover()).title, "fixture title")
+                self.assertEqual(next(a.discover()).title, "fixture title")
+                self.assertEqual(parse.call_count, 1)
+                records=log(); records[-1]["data"]["title"]="updated fixture title"
+                write_log(root, records)
+                self.assertEqual(next(a.discover()).title, "updated fixture title")
+                self.assertEqual(parse.call_count, 2)
+                Path(str(path)+".zstd").write_bytes(b"invalid")
+                self.assertFalse(next(a.discover()).readable)
+                write_log(root, log(5), 5)
+                self.assertIn("v5", next(a.discover()).error)
+
     def test_v0_to_v4_tool_results_no_duplicate_calls_or_streams(self):
         for version in range(5):
             with self.subTest(version=version), tempfile.TemporaryDirectory() as root:

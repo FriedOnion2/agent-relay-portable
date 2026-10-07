@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import re
+import json
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -67,6 +68,8 @@ class Block:
             return prefix + _trim(self.output, 300)
         if self.kind == IMAGE:
             return f"[图片 {self.media_type or 'image'}]"
+        if self.kind == RAW:
+            return "[原始内容块] " + _trim(json.dumps(self.meta, ensure_ascii=False), 600)
         return ""
 
 
@@ -90,7 +93,7 @@ class Turn:
 
 @dataclass
 class Conversation:
-    source: str = ""            # workbuddy | dsh | codebuddy | claude | codex
+    source: str = ""            # workbuddy | dsh | codebuddy | claude | claude_sdk | codex
     id: str = ""
     title: str = ""
     cwd: str = ""

@@ -151,13 +151,14 @@
     <path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
     AgentRelay
   </div>
-  <span class="tagline">独立识别 WorkBuddy · DSH · CodeBuddy · Claude · Codex 会话</span>
+  <span class="tagline">读取 WorkBuddy · DSH · CodeBuddy · Claude Code / Agent SDK · Codex 会话</span>
   <div class="agent-chips" id="chips"></div>
 </header>
 
 <div class="wrap">
   <aside>
     <div class="tabs" id="tabs"></div>
+    <div id="sourceNote" class="meta" style="padding:8px 12px;display:none"></div>
     <div class="side-tools">
       <input class="input" id="q" placeholder="搜索标题 / 目录 / id…" autocomplete="off">
     </div>
@@ -186,7 +187,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const AGENTS = {workbuddy:'WorkBuddy', dsh:'DeepSeek Harness', codebuddy:'CodeBuddy', claude:'Claude Code', codex:'OpenAI Codex'};
+const AGENTS = {workbuddy:'WorkBuddy', dsh:'DeepSeek Harness', codebuddy:'CodeBuddy', claude:'Claude Code', claude_sdk:'Claude Agent SDK', codex:'OpenAI Codex'};
 const state = {source:'workbuddy', target:'claude', sources:[], sessions:[], current:null, turnLimit:40,
   listRequest:0, sessionRequest:0, transferring:false};
 
@@ -201,7 +202,7 @@ async function api(url, options){
 }
 
 function updateActions(){
-  $('#btnGo').disabled = !state.current || !state.target || state.transferring;
+  $('#btnGo').disabled = !state.current || state.current.truncated || !state.target || state.transferring;
   $('#btnMd').disabled = !state.current;
 }
 
@@ -236,7 +237,7 @@ async function loadSources(){
   (r.sources || []).forEach(s=>{
     const el = document.createElement('span');
     el.className = 'chip' + (s.available ? '' : ' off');
-    el.title = [s.homes ? s.homes.join('\n') : s.home, s.write_note, s.error].filter(Boolean).join('\n');
+    el.title = [s.homes ? s.homes.join('\n') : s.home, s.read_note, s.write_note, s.error].filter(Boolean).join('\n');
     el.innerHTML = `<i class="dot"></i>${esc(s.label||s.name)}${s.can_write===false?'（只读）':''} <b>${s.session_count||0}</b>`;
     box.appendChild(el);
   });
@@ -248,6 +249,10 @@ async function loadSources(){
 
 function buildTabs(){
   const box = $('#tabs'); box.innerHTML='';
+  const note = state.sources.find(s=>s.name===state.source)?.read_note ||
+    (state.source==='claude_sdk'?'SDK 与 Claude Code 共用会话存储；此入口显示共享记录，无法仅凭日志确认创建者。':'');
+  $('#sourceNote').textContent = note;
+  $('#sourceNote').style.display = note ? '' : 'none';
   Object.keys(AGENTS).forEach(k=>{
     const b = document.createElement('button');
     b.className = 'tab' + (k===state.source?' on':'');
@@ -327,6 +332,7 @@ async function loadSessions(){
       <div class="meta">
         <span title="更新时间">${esc(s.updated)}</span>
         <span>${s.readable===false?'读取受限':s.turns+' 轮'}</span>
+        ${s.shared_store?'<span>Claude 共享记录</span>':''}
         <span>${esc(s.size_str)}</span>
       </div>`;
     el.title = `${s.id}\n${s.cwd||''}\n${s.path}\n${s.error||''}`;
@@ -361,7 +367,7 @@ async function openSession(s){
   }
   if(request !== state.sessionRequest || source !== state.source) return;
 
-  state.current = {id:s.id, title:r.info.title, source};
+  state.current = {id:s.id, title:r.info.title, truncated:!!r.info.truncated, source};
   $('#cwd').placeholder = r.info.cwd ? `原目录：${r.info.cwd}` : '目标工作目录';
   updateActions();
 
@@ -376,7 +382,7 @@ async function openSession(s){
       ${i.model ? `<span>模型 <code>${esc(i.model)}</code></span>` : ''}
       ${i.created_at ? `<span>${esc(i.created_at)} → ${esc(i.updated_at||'')}</span>` : ''}
     </div>
-    ${i.truncated ? '<div class="warn">⚠ 源文件超过 32MB，只读取了部分内容，迁移结果可能不完整</div>' : ''}
+    ${i.truncated ? '<div class="warn">源文件超过读取限制，仅支持导出已读取的部分内容，迁移已禁用。</div>' : ''}
     ${(i.notes||[]).map(n=>`<div class="warn">${esc(n)}</div>`).join('')}
   `;
 
@@ -463,6 +469,15 @@ function renderBlock(b){
     let out = b.output || '';
     if(out.length > 1500) out = out.slice(0,1500) + `\n… 已截断（共 ${out.length} 字符）`;
     pre.textContent = out;
+    d.appendChild(pre);
+    return d;
+  }
+  if(b.kind === 'raw'){
+    const d = document.createElement('details');
+    d.innerHTML = '<summary>原始内容块（保留未转换字段）</summary>';
+    const pre = document.createElement('pre');
+    const raw = JSON.stringify(b.meta || {}, null, 2);
+    pre.textContent = raw.length > 12000 ? raw.slice(0,12000)+'\n… 预览已截断，导出可查看完整内容' : raw;
     d.appendChild(pre);
     return d;
   }

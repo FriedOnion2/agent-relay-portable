@@ -187,8 +187,8 @@ def validate_session_id(sid: str) -> str:
     return sid
 
 
-def read_jsonl(path: str, max_bytes: int | None = None):
-    """惰性读取 JSON 对象，跳过坏行；每条记录带文件超出预算的标记。"""
+def read_jsonl(path: str, max_bytes: int | None = None, strict: bool = False):
+    """Read bounded objects; strict native readers reject corrupt/incomplete rows."""
     import json
 
     read = 0
@@ -201,12 +201,19 @@ def read_jsonl(path: str, max_bytes: int | None = None):
             read += len(line)
             if max_bytes and read > max_bytes:
                 break
-            line = line.decode("utf-8-sig" if read == len(line) else "utf-8", "replace").strip()
+            try:
+                line = line.decode("utf-8-sig" if read == len(line) else "utf-8", "strict" if strict else "replace").strip()
+            except UnicodeError as exc:
+                raise ValueError("JSONL 编码损坏，无法完整读取") from exc
             if not line:
                 continue
             try:
                 record = json.loads(line)
                 if isinstance(record, dict):
                     yield record, truncated
+                elif strict:
+                    raise ValueError("JSONL 每行必须是 JSON 对象")
             except (ValueError, TypeError):
+                if strict:
+                    raise ValueError("JSONL 损坏或末行未写完，请等写入完成或使用完整备份") from None
                 continue

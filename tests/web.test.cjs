@@ -98,17 +98,30 @@ test('export failure is shown to the user and does not reject the event handler'
   assert.match(t.el('#toast').children[0].textContent,/offline/);
 });
 
-test('five distinct tabs and only supported writable targets are offered',()=>{
+test('six source tabs and only supported writable targets are offered',()=>{
   const t=setup();
   t.app.buildTabs();
   assert.deepEqual(t.el('#tabs').children.map(x=>x.textContent),
-    ['WorkBuddy','DeepSeek Harness','CodeBuddy','Claude Code','OpenAI Codex']);
+    ['WorkBuddy','DeepSeek Harness','CodeBuddy','Claude Code','Claude Agent SDK','OpenAI Codex']);
   t.app.state.source='dsh';
   t.app.buildTarget();
   assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','claude','codex']);
   t.app.state.sources=[{name:'codex',can_write:false}];
   t.app.buildTarget();
   assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','claude']);
+});
+
+test('SDK selection shows shared-storage attribution and offers only writable targets',()=>{
+  const t=setup();
+  t.app.state.source='claude_sdk';
+  t.app.buildTabs();
+  t.app.buildTarget();
+  assert.match(t.el('#sourceNote').textContent,/共用会话存储/);
+  assert.equal(t.el('#sourceNote').style.display,'');
+  assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','claude','codex']);
+  t.app.state.source='claude';
+  t.app.buildTabs();
+  assert.equal(t.el('#sourceNote').style.display,'none');
 });
 
 test('unreadable source rows show the error and disable export and migration',async()=>{
@@ -120,4 +133,15 @@ test('unreadable source rows show the error and disable export and migration',as
   assert.equal(t.el('#btnGo').disabled,true);
   assert.equal(t.el('#btnMd').disabled,true);
   assert.match(t.el('#content').innerHTML,/install zstandard/);
+});
+
+test('a truncated conversation can be exported but cannot be migrated',async()=>{
+  const t=setup();
+  const opening=t.app.openSession({id:'large'});
+  t.response(0,{ok:true,info:{title:'large',truncated:true,stats:{}},turns:[]});
+  await opening;
+  assert.equal(t.el('#btnGo').disabled,true);
+  assert.equal(t.el('#btnMd').disabled,false);
+  await t.app.doTransfer();
+  assert.equal(t.requests.length,1);
 });

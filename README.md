@@ -1,6 +1,6 @@
 # AgentRelay Portable
 
-本地会话迁移工具，独立识别 **WorkBuddy、DeepSeek Harness（DSH）、CodeBuddy、Claude Code、OpenAI Codex**，
+本地会话迁移工具，提供 **WorkBuddy、DeepSeek Harness（DSH）、CodeBuddy、Claude Code、Claude Agent SDK、OpenAI Codex** 六个来源入口，
 可预览、导出 Markdown 或迁移到支持写入的目标。基本功能只使用 Python 标准库；读取 DSH 压缩日志需要可选的 `zstandard`。
 
 | 来源 | 默认会话位置 | 能力 |
@@ -10,9 +10,12 @@
 | CodeBuddy CLI | `~/.codebuddy/projects` | 读取、导出、迁出 |
 | CodeBuddy CN IDE / Extension | 系统的 `CodeBuddyExtension/Data/**/history` | 读取 manifest 与消息文件、导出、迁出 |
 | Claude Code | `~/.claude/projects` | 读取、导出、写入 |
+| Claude Agent SDK | `~/.claude/projects`（与 Claude Code 共享） | 读取、导出、迁出 |
 | OpenAI Codex | `~/.codex/sessions` | 读取、导出、写入 |
 
 CodeBuddy CLI 与 IDE 在同一个独立来源下显示；DSH 与 WorkBuddy 不再共用名称、配置或目录。
+SDK 与 Claude Code 共用默认存储，日志不能可靠证明创建者；SDK 入口明确标记“Claude 共享记录”，
+两个列表可能显示同一会话。SDK 不会把 CLI 历史自动改成 SDK 专属来源。
 
 ## 快速启动
 
@@ -34,6 +37,7 @@ python -m pip install -r requirements-optional.txt
 ```sh
 python app/cli.py doctor
 python app/cli.py list codex
+python app/cli.py list claude_sdk
 python app/cli.py transfer codex <session-id> --to claude
 python app/cli.py export codex <session-id> -o handoff.md
 ```
@@ -45,6 +49,8 @@ python app/cli.py export codex <session-id> -o handoff.md
 复制 `config.example.json` 为 `config.json` 后可配置会话根目录、端口和是否打开浏览器。
 目录覆盖优先级为：配置文件 → `RELAY_<AGENT>_HOME` → agent 环境变量 → 当前用户默认目录。
 DSH 尊重 `DSH_HOME`，WorkBuddy 尊重 `WORKBUDDY_HOME`，CodeBuddy 尊重 `CODEBUDDY_HOME`。
+SDK 默认尊重 `CLAUDE_CONFIG_DIR`；独立覆盖为 `agent_homes.claude_sdk` / `RELAY_CLAUDE_SDK_HOME`，
+不会继承仅为 Claude Code 设置的 `RELAY_CLAUDE_HOME`。
 目录应填写工具根目录，不要填写其 `projects` / `sessions` 子目录。
 
 **旧配置升级：** 如果原 `agent_homes.dsh` 或 `RELAY_DSH_HOME` 指向 `.workbuddy`，请把该值移到
@@ -67,7 +73,8 @@ node --test tests/web.test.cjs
 ```
 
 Python 测试覆盖三个可写目标之间的六个迁移方向、独立来源路径、DSH 世代/压缩/工具结果、
-CodeBuddy CLI/IDE 消息顺序与缺失文件、只读目标拦截，以及原有文本、HTTP 和配置回归。
+CodeBuddy CLI/IDE 消息顺序与缺失文件、SDK 共享目录、Claude 主链/压缩边界、RAW 保留、截断拦截，
+以及原有文本、HTTP 和配置回归。Claude / SDK / DSH 会话摘要缓存会在文件变化时失效。
 Node.js 仅用于网页回归测试，运行应用不需要 Node.js。
 所有测试均使用临时合成数据，不修改真实会话目录。
 
@@ -76,9 +83,11 @@ macOS 的 Python 3.8 因 runner 架构限制不在矩阵中。
 
 ## 当前限制
 
-- WorkBuddy / Claude / Codex 最多读取 32 MiB，超出时显示截断提示；DSH 普通/解压数据与 CodeBuddy IDE 总读取量超过限制会拒绝读取。
+- WorkBuddy / Claude / SDK / Codex / CodeBuddy CLI 最多读取 32 MiB，超出时可导出带标记的部分内容，迁移会停止；DSH 普通/解压数据与 CodeBuddy IDE 总读取量超过限制会拒绝读取。
+- Claude / SDK 默认读取当前 parentUuid 主链，不合并旧分支与子代理；压缩前的旧原文仍在原文件中，但不作为当前上下文重复迁移。
 - DSH 导出保留事件历史，不重放 surface replacement、compaction、seed 或 native resume 状态。
-- DSH、CodeBuddy 暂不支持原生写回，网页及 CLI 只提供 WorkBuddy、Claude、Codex 作为迁移目标。
+- DSH、CodeBuddy、SDK 暂不支持原生写回，网页及 CLI 只提供 WorkBuddy、Claude、Codex 作为迁移目标。
+- SDK 自行保存的 stream-json 输出不是 native transcript；关闭 persistence 或仅使用外部 SessionStore 的应用可能没有默认本地历史。
 - CodeBuddy CLI/IDE 格式来自第三方消费者观测，未获得厂商原生续聊协议验证；格式依据见 [来源格式说明](docs/source-formats.md)。
 - 图片、加密思考及厂商特有元数据不能保证完整保留。
 - 工具名转换不会安装目标工具，也不会转换各家工具的参数协议。

@@ -54,6 +54,8 @@ def cmd_sources(args):
         print(f"{r['name']:<10} {avail:<8} {cnt:>6}  {r.get('home') or ''}")
         if r.get("error"):
             print(f"{'':<26}↳ {r['error']}")
+        if r.get("read_note"):
+            print(f"{'':<26}↳ {r['read_note']}")
 
 
 def cmd_list(args):
@@ -89,6 +91,8 @@ def cmd_show(args):
     print(f"文件: {conv.path}")
     if conv.truncated:
         print("⚠ 源文件过大，仅读取了部分内容")
+    for note in conv.meta.get("notes", []):
+        print(f"读取说明: {note}")
     print("=" * 78)
     shown = 0
     for t in conv.turns:
@@ -155,7 +159,7 @@ def cmd_serve(args):
 
 
 def cmd_doctor(args):
-    """换机器后先跑这个：看 Python 找没找到、五个 agent 的目录在哪。"""
+    """换机器后先跑这个：看 Python 找没找到、各个来源的目录在哪。"""
     code = bootstrap.print_report()
     print()
     if code == 0:
@@ -173,12 +177,12 @@ def cmd_doctor(args):
 def build_parser():
     p = argparse.ArgumentParser(
         prog="relay",
-        description="独立读取 WorkBuddy / DeepSeek Harness / CodeBuddy / Claude Code / Codex 会话",
+        description="读取 WorkBuddy / DeepSeek Harness / CodeBuddy / Claude Code / Claude Agent SDK / Codex 会话",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    p1 = sub.add_parser("sources", help="查看五个 agent 是否可用及会话数量")
+    p1 = sub.add_parser("sources", help="查看六个来源是否可用及会话数量")
     p1.add_argument("--json", action="store_true")
     p1.set_defaults(func=cmd_sources)
 

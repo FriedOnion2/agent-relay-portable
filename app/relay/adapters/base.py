@@ -11,7 +11,8 @@ import os
 import ntpath
 import posixpath
 import time
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, replace
+from collections import OrderedDict
 from typing import Any, Dict, Iterable, List, Optional
 
 from .. import ir
@@ -47,6 +48,7 @@ class SessionInfo:
     path: str
     readable: bool = True
     error: str = ""
+    shared_store: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
@@ -103,6 +105,25 @@ class BaseAdapter:
     def available(self) -> bool:
         """本机的这个 agent 是否有数据目录。"""
         return bool(self.home and os.path.isdir(self.home))
+
+    def _cached_summary(self, path, load):
+        """Cache small list rows only; changed files and failed reads are retried."""
+        st = os.stat(path)
+        stamp = (st.st_size, st.st_mtime_ns, st.st_ctime_ns)
+        cache = getattr(self, "_summary_cache", None)
+        if cache is None:
+            cache = self._summary_cache = OrderedDict()
+        cached = cache.get(path)
+        if cached and cached[0] == stamp:
+            cache.move_to_end(path)
+            return replace(cached[1])
+        row = load()
+        cache.pop(path, None)
+        if row is not None and row.readable:
+            cache[path] = (stamp, replace(row))
+            while len(cache) > 512:
+                cache.popitem(last=False)
+        return row
 
     def discover(self) -> Iterable[SessionInfo]:
         raise NotImplementedError
@@ -187,6 +208,7 @@ class BaseAdapter:
             "can_read": True,
             "can_write": self.can_write,
             "write_note": "" if self.can_write else "支持读取、导出及迁出；尚不支持写入此来源",
+            "read_note": getattr(self, "read_note", ""),
         }
 
     @staticmethod

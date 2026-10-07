@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import List
 
 from .. import ir
@@ -28,6 +29,8 @@ def render(conv: ir.Conversation, include_thinking: bool = True,
     lines.append(f"- **来源**：{conv.source}")
     for note in conv.meta.get("notes", []):
         lines.append(f"- **读取说明**：{note}")
+    if conv.truncated:
+        lines.append("- **读取说明**：源文件超过读取限制，本文件只包含已读取的部分内容。")
     if conv.created_at:
         lines.append(f"- **创建时间**：{conv.created_at}")
     if conv.updated_at:
@@ -81,6 +84,9 @@ def render(conv: ir.Conversation, include_thinking: bool = True,
             elif b.kind == ir.IMAGE:
                 lines.append("_（图片，已省略）_")
                 lines.append("")
+            elif b.kind == ir.RAW:
+                lines.extend(["**原始内容块（保留未转换字段）**", "", "```json",
+                              _clip(json.dumps(b.meta, ensure_ascii=False, indent=2), max_text), "```", ""])
         lines.append("")
     return "\n".join(lines)
 

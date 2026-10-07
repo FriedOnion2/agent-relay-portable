@@ -10,6 +10,7 @@ SOURCES = {
     "dsh": ("DeepSeek Harness", "sessions"),
     "codebuddy": ("CodeBuddy", ""),
     "claude": ("Claude Code", "projects"),
+    "claude_sdk": ("Claude Agent SDK", "projects"),
     "codex": ("OpenAI Codex", "sessions"),
 }
 
@@ -25,13 +26,14 @@ def default_home(source: str) -> str:
             return str(home / "Library" / "Application Support" / "CodeBuddyExtension" / "Data")
         return str(home / ".config" / "CodeBuddyExtension" / "Data")
     return str(home / {"dsh":".dsh", "workbuddy":".workbuddy",
-                       "codebuddy":".codebuddy", "claude":".claude", "codex":".codex"}[source])
+                       "codebuddy":".codebuddy", "claude":".claude", "claude_sdk":".claude", "codex":".codex"}[source])
 
 
 def resolve_home(source: str, explicit: str | None = None) -> str:
     agent_env = {"dsh":"DSH_HOME", "workbuddy":"WORKBUDDY_HOME",
-                 "codebuddy":"CODEBUDDY_HOME", "claude":"CLAUDE_CONFIG_DIR",
+                 "codebuddy":"CODEBUDDY_HOME", "claude":"CLAUDE_CONFIG_DIR", "claude_sdk":"CLAUDE_CONFIG_DIR",
                  "codex":"CODEX_HOME"}[source]
     value = next((v.strip() for v in (explicit, os.environ.get("RELAY_" + source.upper() + "_HOME"),
-                  os.environ.get(agent_env)) if v and v.strip()), default_home(source))
+                  os.environ.get(agent_env)) if v and v.strip()), None)
+    value = value or default_home(source)
     return os.path.abspath(os.path.expanduser(value))

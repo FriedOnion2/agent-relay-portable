@@ -25,3 +25,19 @@ CodeBuddy 分别处理 CLI 与 IDE，ID 带格式和路径前缀以避免重名�
 
 WorkBuddy 与 CodeBuddy CLI 的部分记录结构相同，产品身份由独立配置和根目录确定，不能从同一备份里仅凭相同 JSON 字段推断来源。
 CodeBuddy 暂只读，不猜测 native writer。现有 WorkBuddy writer 的回读测试不能替代厂商实际续聊验证。
+
+## Claude Agent SDK
+
+- [官方 session-storage](https://code.claude.com/docs/en/agent-sdk/session-storage) 与 [sessions](https://code.claude.com/docs/en/agent-sdk/sessions)：默认与 Claude Code 共用 `~/.claude/projects`，尊重 `CLAUDE_CONFIG_DIR`。
+- [Python SDK 原生 session reader](https://github.com/anthropics/claude-agent-sdk-python/blob/main/src/claude_agent_sdk/_internal/sessions.py)：list/get API 读取共享存储；可见消息沿 parentUuid 链构建，不回溯 logicalParentUuid，排除 sidechain/meta/team 消息。
+- [官方合成 fixture](https://github.com/anthropics/claude-agent-sdk-python/blob/main/tests/test_sessions.py)：明确对应 CLI on-disk JSONL，包含 user/assistant/tool_use/tool_result。
+- [Python SDK subprocess](https://github.com/anthropics/claude-agent-sdk-python/blob/main/src/claude_agent_sdk/_internal/transport/subprocess_cli.py)：驱动 CLI，进程设置 `CLAUDE_CODE_ENTRYPOINT=sdk-py`，没有据此保证日志会持久保存创建者字段。
+- [TS SDK reference](https://code.claude.com/docs/en/agent-sdk/typescript)：persistSession=false 不保存可恢复历史；SDK stream 消息与 native transcript 是不同层次。
+
+SDK 独立入口为 `claude_sdk`。默认显示共享记录，`shared_store=true, creator=unknown`，不凭 userType/agentName 猜创建者。
+因此它和 Claude Code 默认可能显示同一会话；独立 RELAY_CLAUDE_SDK_HOME 只决定读取范围，不是来源证明。
+官方默认文件按主链读取；wire session_id/stream 输出会明确拒绝当作 native transcript。
+SDK 暂只读，可迁出到已支持目标，不直接启动 SDK resume 或模型请求。
+
+Claude / SDK 的链算法依照官方 reader 语义独立实现；缺父节点或循环会拒绝迁移。
+未知内容块保存至 IR RAW，导出原始 JSON；迁移时降级为标注文本，不承诺厂商功能能在目标运行。

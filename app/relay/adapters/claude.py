@@ -22,6 +22,53 @@ from .base import BaseAdapter, SessionInfo, ToolNameMap
 MAX_SCAN_BYTES = 32 * 1024 * 1024
 
 
+def active_chain(records):
+    """Select visible main-chain messages, following parentUuid (not logicalParentUuid)."""
+    kinds = {"user", "assistant", "progress", "system", "attachment"}
+    entries = [r for r in records if r.get("type") in kinds and isinstance(r.get("uuid"), str)]
+    if not entries or not any("parentUuid" in r for r in entries):
+        return records, []
+    indexed = {r["uuid"]:r for r in entries}
+    positions = {r["uuid"]:i for i, r in enumerate(entries)}
+    parents = {r.get("parentUuid") for r in entries if r.get("parentUuid")}
+    leaves = []
+    for terminal in entries:
+        if terminal["uuid"] in parents:
+            continue
+        current, visited = terminal, set()
+        while current and current["uuid"] not in visited:
+            visited.add(current["uuid"])
+            if current.get("type") in ("user", "assistant"):
+                leaves.append(current)
+                break
+            current = indexed.get(current.get("parentUuid"))
+    visible = lambda r: not any(r.get(k) for k in ("isSidechain", "isMeta", "teamName"))
+    main_leaves = [r for r in leaves if visible(r)]
+    if not main_leaves:
+        # A cycle is corrupt, not an empty conversation.
+        if not leaves and any(r.get("type") in ("user", "assistant") for r in entries):
+            raise ValueError("Claude parentUuid 链存在循环，无法确定有效会话")
+        return [r for r in records if r.get("type") in ("summary", "custom-title")], []
+    current = max(main_leaves, key=lambda r:positions[r["uuid"]])
+    chain, visited = [], set()
+    while current:
+        uid = current["uuid"]
+        if uid in visited:
+            raise ValueError("Claude parentUuid 链存在循环")
+        visited.add(uid)
+        chain.append(current)
+        parent = current.get("parentUuid")
+        if parent and parent not in indexed:
+            raise ValueError("Claude parentUuid 链有缺失记录，无法完整迁移")
+        current = indexed.get(parent)
+    chain.reverse()
+    result = [r for r in records if r.get("type") in ("summary", "custom-title")]
+    result.extend(r for r in chain if visible(r))
+    omitted = len(entries) - len(chain)
+    notes = [f"按 Claude 当前 parentUuid 主链读取；省略 {omitted} 条其他分支或旧上下文记录。"] if omitted else []
+    return result, notes
+
+
 def _iter_content(msg: Dict[str, Any]) -> List[Dict[str, Any]]:
     c = msg.get("content")
     if isinstance(c, str):
@@ -68,46 +115,30 @@ class ClaudeAdapter(BaseAdapter):
 
     def discover(self) -> Iterable[SessionInfo]:
         for path in self._iter_files(self.home, "*.jsonl"):
-            info = self._peek(path)
+            try:
+                info = self._cached_summary(path, lambda:self._peek(path))
+            except ValueError as exc:
+                st = self._stat(path)
+                info = SessionInfo(self.name, os.path.splitext(os.path.basename(path))[0],
+                                   "Claude 读取受限", "", "", None, st["updated_ms"], st["size"], 0,
+                                   path, False, str(exc))
             if info:
                 yield info
 
     def _peek(self, path: str) -> Optional[SessionInfo]:
         st = self._stat(path)
-        sid = os.path.splitext(os.path.basename(path))[0]
-        title = ""
-        model = ""
-        cwd = ""
-        created_ms = None
-        updated_ms = None
-        turns = 0
-        first_user = ""
-        for rec, _trunc in read_jsonl(path, MAX_SCAN_BYTES):
-            rt = rec.get("type")
-            ts = safe_ms(rec.get("timestamp"))
-            if rt == "summary" and not title:
-                title = rec.get("summary") or ""
-            elif rt in ("user", "assistant"):
-                msg = rec.get("message") or {}
-                if not cwd:
-                    cwd = rec.get("cwd") or ""
-                if not model:
-                    model = msg.get("model") or ""
-                if rt == "user" and msg.get("role") == ir.USER and not first_user:
-                    for b in _iter_content(msg):
-                        if b.get("type") == "text":
-                            t = b.get("text") or ""
-                            first_user = ir.summarize_line(strip_scaffolding(t) if self.clean else t, 60)
-                            break
-                turns += 1
-            if ts is not None:
-                created_ms = ts if created_ms is None else min(created_ms, ts)
-                updated_ms = ts if updated_ms is None else max(updated_ms, ts)
+        conv = self._parse(path)
+        if conv.truncated and not conv.turns:
+            return SessionInfo(self.name, conv.id, "Claude 读取受限", conv.cwd, conv.model or "",
+                               None, st["updated_ms"], st["size"], 0, path, False,
+                               "首条消息超过读取限制，无法完整读取")
+        if not conv.turns and not conv.title:
+            return None
         return SessionInfo(
-            source=self.name, id=sid, title=title or first_user or "未命名会话",
-            cwd=cwd.replace("\\", "/"), model=model,
-            created_ms=created_ms, updated_ms=updated_ms or st["updated_ms"],
-            size=st["size"], turns=turns, path=path,
+            source=self.name, id=conv.id, title=conv.title or conv.first_user_text(60) or "未命名会话",
+            cwd=conv.cwd, model=conv.model or "", created_ms=safe_ms(conv.created_at),
+            updated_ms=safe_ms(conv.updated_at) or st["updated_ms"], size=st["size"],
+            turns=len(conv.turns), path=path,
         )
 
     # ---------------- 读取 ----------------
@@ -125,20 +156,32 @@ class ClaudeAdapter(BaseAdapter):
             path=path,
             truncated=os.path.getsize(path) > MAX_SCAN_BYTES,
         )
-        for rec, truncated in read_jsonl(path, MAX_SCAN_BYTES):
-            conv.truncated = conv.truncated or truncated
+        loaded = list(read_jsonl(path, MAX_SCAN_BYTES, strict=True))
+        if any(r.get("session_id") and "sessionId" not in r for r, _ in loaded):
+            raise ValueError("这是 SDK/CLI stream 输出，不是可恢复的 Claude 原生 transcript")
+        timestamps = [safe_ms(r.get("timestamp")) for r, _ in loaded]
+        timestamps = [ts for ts in timestamps if ts is not None]
+        if timestamps:
+            conv.created_at = iso(min(timestamps))
+            conv.updated_at = iso(max(timestamps))
+        selected, notes = active_chain([rec for rec, _ in loaded])
+        if notes:
+            conv.meta["notes"] = notes
+        conv.meta["read_mode"] = "active-parent-chain"
+        for rec in selected:
             rt = rec.get("type")
             ts = safe_ms(rec.get("timestamp"))
             if not conv.cwd and rec.get("cwd"):
                 conv.cwd = rec["cwd"].replace("\\", "/")
-            if not conv.created_at and ts:
-                conv.created_at = iso(ts)
-            if ts:
-                conv.updated_at = iso(ts)
             if rt == "summary" and not conv.title:
                 conv.title = rec.get("summary") or ""
                 continue
+            if rt == "custom-title":
+                conv.title = rec.get("customTitle") or conv.title
+                continue
             if rt not in ("user", "assistant"):
+                continue
+            if any(rec.get(k) for k in ("isSidechain", "isMeta", "teamName")):
                 continue
 
             msg = rec.get("message") or {}
@@ -183,6 +226,8 @@ class ClaudeAdapter(BaseAdapter):
                     blocks.append(ir.Block(kind=ir.IMAGE,
                                            media_type=src.get("media_type", "image/png") if isinstance(src, dict) else "image/png",
                                            text=data or "", meta={"source": src}))
+                else:
+                    blocks.append(ir.Block(kind=ir.RAW, meta={"source_block":b}))
 
             if not blocks:
                 continue
@@ -196,7 +241,8 @@ class ClaudeAdapter(BaseAdapter):
                     grouped[-1].blocks.append(block)
                 else:
                     grouped.append(ir.Turn(role=block_role, blocks=[block], ts=iso(ts),
-                                           model=model, source_type=rt))
+                                           model=model, source_type=rt,
+                                           meta={k:rec[k] for k in ("uuid", "parentUuid", "isCompactSummary") if k in rec}))
             conv.turns.extend(grouped)
         return conv
 

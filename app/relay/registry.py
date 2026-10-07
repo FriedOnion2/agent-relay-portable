@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import os
+import json
+from dataclasses import replace
 from typing import Any, Dict, List, Optional
 
 from . import ir
 from .adapters.claude import ClaudeAdapter
+from .adapters.claude_sdk import ClaudeSdkAdapter
 from .adapters.codex import CodexAdapter
 from .adapters.dsh import DshAdapter
 from .adapters.workbuddy import WorkBuddyAdapter
@@ -15,7 +18,8 @@ from .adapters.markdown import render as render_markdown
 from .adapters.base import BaseAdapter
 
 _ADAPTERS = {"workbuddy": WorkBuddyAdapter, "dsh": DshAdapter,
-             "codebuddy": CodeBuddyAdapter, "claude": ClaudeAdapter, "codex": CodexAdapter}
+             "codebuddy": CodeBuddyAdapter, "claude": ClaudeAdapter,
+             "claude_sdk": ClaudeSdkAdapter, "codex": CodexAdapter}
 
 _CACHE: Dict[str, BaseAdapter] = {}
 
@@ -89,6 +93,12 @@ def transfer(source: str, sid: str, target: str, cwd: str | None = None,
     if not dst.can_write:
         raise ValueError(f"{dst.label} 尚不支持作为迁移目标")
     conv = src.read(sid)
+    if conv.truncated:
+        raise ValueError("源会话超过读取限制，迁移已停止；可导出已读取的部分内容")
+    # Keep unsupported blocks inspectable when a native writer cannot represent them.
+    conv = replace(conv, turns=[replace(turn, blocks=[
+        ir.Block.text_block("[原始内容块]\n" + json.dumps(b.meta, ensure_ascii=False))
+        if b.kind == ir.RAW else b for b in turn.blocks]) for turn in conv.turns])
     if new_title:
         conv.title = new_title
     path = dst.write(conv, cwd=cwd, session_id=session_id,

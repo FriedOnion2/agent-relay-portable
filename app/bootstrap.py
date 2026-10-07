@@ -6,7 +6,7 @@
 
 负责三件事：
   1. 在陌生机器上找到能用的 Python 解释器
-  2. 找出当前主机上五个 agent 的会话目录（在主机上，不在 U 盘上）
+  2. 找出当前主机上各个来源的会话目录（在主机上，不在 U 盘上）
   3. 读取 U 盘上的 config.json，用里面的显式配置覆盖自动探测结果
 
 同时支持： python bootstrap.py   直接打印环境体检报告
@@ -181,6 +181,7 @@ DEFAULT_CONFIG = {
     "_说明": "全部留空即可 —— 留空时程序会自动探测。只有在会话目录不在默认位置时填。",
     "agent_homes": {
         "claude": "",
+        "claude_sdk": "",
         "codex": "",
         "dsh": "",
         "workbuddy": "",
@@ -324,6 +325,8 @@ def print_report() -> int:
             print(f"      {a['data']}")
         for error in a.get("errors", []):
             print(f"      ↳ {error}")
+        if a["key"] == "claude_sdk":
+            print("      ↳ SDK 与 Claude Code 共用存储；此处统计包含共享会话，不代表 SDK 专属数量。")
     print()
     print(line)
     return 0 if py["ok"] else 2

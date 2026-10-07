@@ -9,7 +9,8 @@
     "codex": "",
     "dsh": "",
     "workbuddy": "",
-    "codebuddy": ""
+    "codebuddy": "",
+    "claude_sdk": ""
   },
   "port": 8745,
   "open_browser": true
