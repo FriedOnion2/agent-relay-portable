@@ -327,6 +327,29 @@ def cmd_plugins(args):
     _print_json(result)
 
 
+def cmd_corpus(args):
+    from relay.corpus import Corpus
+    from relay.extraction import extract, export_draft
+    store = Corpus()
+    if args.cmd == 'index':
+        result = store.update(sources=args.source, include_thinking=args.include_thinking, packages=not args.no_packages)
+    elif args.cmd == 'search':
+        result = store.search(args.query, source=args.source, project=args.project, tool=args.tool,
+                              after=args.after, before=args.before, include_thinking=args.include_thinking,
+                              limit=args.limit, offset=args.offset)
+    elif args.cmd == 'indexed-session':
+        result = dict(ok=True, **store.document(args.key, args.include_thinking))
+    elif args.cmd == 'extract-skills':
+        result = extract(store)
+    else:
+        path = Path(args.markdown)
+        if path.stat().st_size > 1024 * 1024:
+            raise ValueError('草稿超过 1 MiB')
+        result = export_draft(path.read_text(encoding='utf-8-sig'), args.directory, args.confirm)
+    _print_json(result)
+    return 0 if result.get('ok',True) else 1
+
+
 def build_parser():
     read_agents = READ_AGENTS + list(plugins.entries)
     p = argparse.ArgumentParser(
@@ -335,6 +358,30 @@ def build_parser():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     sub = p.add_subparsers(dest="cmd", required=True)
+    index = sub.add_parser('index', help='更新便携全文索引；默认不保存思考内容')
+    index.add_argument('--source', action='append', choices=read_agents)
+    index.add_argument('--include-thinking', action='store_true')
+    index.add_argument('--no-packages', action='store_true')
+    index.set_defaults(func=cmd_corpus)
+    search = sub.add_parser('search', help='离线跨来源搜索便携索引，支持中文短词')
+    search.add_argument('query', nargs='?', default='')
+    for field in ('source','project','tool','after','before'):
+        search.add_argument('--' + field, default='')
+    search.add_argument('--include-thinking', action='store_true')
+    search.add_argument('--limit',type=int,default=50)
+    search.add_argument('--offset',type=int,default=0)
+    search.set_defaults(func=cmd_corpus)
+    document = sub.add_parser('indexed-session', help='打开缓存会话，不读取旧设备路径')
+    document.add_argument('key')
+    document.add_argument('--include-thinking',action='store_true')
+    document.set_defaults(func=cmd_corpus)
+    extract = sub.add_parser('extract-skills', help='从完整索引会话提炼待审核 Skill 草稿；不调用模型')
+    extract.set_defaults(func=cmd_corpus)
+    draft = sub.add_parser('export-draft', help='显式确认后导出已编辑草稿，同名不覆盖')
+    draft.add_argument('markdown', help='已审核的 Markdown 文件')
+    draft.add_argument('--directory',required=True,help='本机存在的导出父目录')
+    draft.add_argument('--confirm',action='store_true',help='确认已审核草稿并写入')
+    draft.set_defaults(func=cmd_corpus)
 
     p1 = sub.add_parser("sources", help="查看来源是否可用及会话数量")
     p1.add_argument("--json", action="store_true")

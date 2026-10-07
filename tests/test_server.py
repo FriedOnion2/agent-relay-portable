@@ -39,6 +39,44 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn(b"AgentRelay", body)
 
+    def test_corpus_reads_are_readonly_and_export_requires_confirmation(self):
+        from relay import corpus
+        with tempfile.TemporaryDirectory() as folder, patch.object(corpus,'project_root',return_value=Path(folder)):
+            headers={'Content-Type':'application/json'}
+            for endpoint in ('/api/corpus','/api/search?q=%E5%8F%91'):
+                status,raw=self.request('GET',endpoint)
+                self.assertEqual(status,200)
+            self.assertFalse((Path(folder)/'index').exists())
+            for payload in ({'sources':'workbuddy'},{'sources':['invalid']},{'include_thinking':'yes'},{'packages':1}):
+                self.assertEqual(self.request('POST','/api/index',json.dumps(payload),headers)[0],400)
+            md='---\nname: checked-draft\ndescription: "Synthetic workflow"\n---\nReviewed body\n'
+            payload={'markdown':md,'directory':folder}
+            self.assertEqual(self.request('POST','/api/export-draft',json.dumps(payload),headers)[0],400)
+            self.assertFalse((Path(folder)/'checked-draft').exists())
+            payload['confirmed']=True
+            self.assertEqual(self.request('POST','/api/export-draft',json.dumps(payload),headers)[0],200)
+            self.assertEqual(self.request('POST','/api/export-draft',json.dumps(payload),headers)[0],409)
+            self.assertEqual(self.request('GET','/api/search?limit=-1')[0],400)
+            self.assertFalse((Path(folder)/'index').exists())
+
+    def test_corpus_job_progress_cancel_and_stale_job_rejection(self):
+        from relay import corpus
+        entered=threading.Event()
+        def work(self,**kwargs):
+            kwargs['progress']({'processed':1});entered.set()
+            kwargs['cancel'].wait(3)
+            return {'ok':True,'canceled':kwargs['cancel'].is_set()}
+        headers={'Content-Type':'application/json'}
+        with patch.object(corpus.Corpus,'update',work):
+            status,raw=self.request('POST','/api/index','{}',headers)
+            self.assertEqual(status,200);key=json.loads(raw)['id'];self.assertTrue(entered.wait(2))
+            self.assertEqual(self.request('POST','/api/extract','{}',headers)[0],400)
+            self.assertEqual(self.request('POST','/api/job-cancel','{"id":"stale"}',headers)[0],400)
+            status,raw=self.request('GET','/api/job');self.assertEqual(json.loads(raw)['progress']['processed'],1)
+            self.assertEqual(self.request('POST','/api/device-home','{"agent":"codex","home":""}',headers)[0],400)
+            self.assertEqual(self.request('POST','/api/job-cancel',json.dumps({'id':key}),headers)[0],200)
+            self.srv.jobs.thread.join(3);self.assertFalse(self.srv.jobs.thread.is_alive())
+
     def test_real_preview_is_readonly_and_changed_source_cannot_be_written(self):
         from relay import ir, device
         from relay.adapters.workbuddy import WorkBuddyAdapter

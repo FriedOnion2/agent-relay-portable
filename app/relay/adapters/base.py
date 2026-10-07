@@ -237,7 +237,11 @@ class BaseAdapter:
     def _iter_files(root: str, pattern: str):
         if not os.path.isdir(root):
             return
-        for dirpath, _dirnames, filenames in os.walk(root):
+        def failed(exc):
+            raise exc
+        # An unreadable subtree is not an empty/deleted store. Indexing callers
+        # must retain cached records when enumeration cannot complete.
+        for dirpath, _dirnames, filenames in os.walk(root, onerror=failed):
             _dirnames[:] = [name for name in _dirnames if not (name.startswith(".relay-") and name.endswith(".partial"))]
             for fn in filenames:
                 if fnmatch.fnmatch(fn, pattern):

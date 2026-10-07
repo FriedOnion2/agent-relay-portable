@@ -23,6 +23,8 @@
 - **迁移预览：** 通用迁移、双系统原生迁移和会话包恢复先列出保留、降级、丢弃与未知，确认后检查源内容及选项变化。
 - **可信社区读取插件：** API v1，显式启用、文件 hash 检查、独立工作进程与超时；支持读取、导出和迁出。
 - **格式健康度：** 本地合成样本自检、每日三系统回归与可下载静态报告，真实客户端续聊单独标为未验证。
+- **本地全文搜索：** 「搜索与提炼」建立便携 SQLite/FTS5 索引，中文短词、中英混合、来源/项目/时间/工具筛选，缓存可离线查看。思考默认不索引。
+- **历史提炼 Skill：** 从至少三条独立完整会话提炼参数化草稿，附证据和结果状态；选中编辑审核后导出，不自动安装或执行，同名不覆盖。见 [搜索与草稿说明](docs/search-and-skills.md)。
 
 | 来源 | 默认会话位置 | 能力 |
 |---|---|---|
@@ -40,7 +42,7 @@ SDK 与 Claude Code 共用默认存储，日志不能可靠证明创建者；SDK
 
 ## Release 下载即用
 
-当前开发预览版：**v0.3.0-dev.1** · [下载三系统总包](https://github.com/FriedOnion2/agent-relay-portable/releases/download/v0.3.0-dev.1/AgentRelay-v0.3.0-dev.1-universal.zip) · [发布说明与校验文件](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v0.3.0-dev.1)
+当前开发预览版：**v0.4.0-dev.1** · [下载三系统总包](https://github.com/FriedOnion2/agent-relay-portable/releases/download/v0.4.0-dev.1/AgentRelay-v0.4.0-dev.1-universal.zip) · [发布说明与校验文件](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v0.4.0-dev.1)
 
 普通用户下载 [GitHub Releases](https://github.com/FriedOnion2/agent-relay-portable/releases) 中的
 **`AgentRelay-<版本>-universal.zip`**，完整解压后按当前设备运行启动器。一个总包同时包含
@@ -53,7 +55,7 @@ Windows x64、Mac Apple Silicon / Intel 和 Linux x64，已内置 Python 与 `zs
 | Mac | `AgentRelay.app` 或 `bash 启动_AgentRelay.command` | Apple Silicon：macOS 14+；Intel：macOS 15+ |
 | Linux | `bash 启动_AgentRelay.sh` | Ubuntu 22.04+ / glibc 2.35+ x64 |
 
-总包根目录共用 `config.json`（可选）与 `storage/`。把整个总包放在移动盘上，切换设备无需再下载另一系统的版本。
+总包根目录共用 `config.json`（可选）、`storage/` 与 `index/`。退出服务后把整个总包放在移动盘上，切换设备无需再下载另一系统的版本；导出草稿若在总包之外，另行复制。
 启动器只把当前平台的运行库解压到本机缓存，保留移动盘上的共享数据，避免 noexec 和 Mac 符号链接差异。
 首次启动不联网下载依赖；不要删除 `runtimes/`。目标 Agent 软件仍需自行安装并配置其依赖与登录。本机目录选择存入 `devices/<设备ID>.json`，换设备默认自动探测新主机；共享配置中的旧路径失效会提示重选，留空并保存可恢复自动探测。
 
@@ -231,7 +233,7 @@ python -m unittest discover -s tests -v
 node --test tests/web.test.cjs
 ```
 
-截至 2026-10-07，本机回归为 **104 项 Python 测试（Mac 上 4 项跳过）与 22 项网页测试**。
+截至 2026-10-08，第二阶段本机回归为 **140 项 Python 测试（Windows 上 4 项环境相关跳过）与 27 项网页测试**。
 GitHub Actions 在 Windows、Ubuntu 和 macOS 上验证 Python 3.8、3.12、3.14，共 8 组；
 macOS 不包含 Python 3.8。批量存储已用浏览器和临时样例实测，分别生成两条对话包与两个 Skill 包。
 自动测试覆盖格式转换、存储包往返、完整性与冲突保护、端口占用、退出等待、异步列表及批量部分失败。
@@ -286,6 +288,8 @@ The service listens only on the local machine. It does not upload conversations 
 - Archive complete Skill directories, including `SKILL.md`, scripts, and resources; select multiple items or the entire current list.
 - Transfer native records between the same assistant on Windows and Ubuntu using mounted or backed-up user directories.
 - Retry available ports automatically and stop the server from the web interface after active requests finish.
+- Portable SQLite/FTS5 full-text search: Chinese short terms, mixed-language queries, source/project/date/tool filters and offline cached conversations. Reasoning is excluded by default.
+- Extract editable Skill drafts from at least three independent complete conversations. Review evidence and outcomes before explicitly exporting; no model calls, installation or script execution. See [search and draft guide](docs/search-and-skills.md) (Chinese).
 
 | Source | Default conversation location | Support |
 |---|---|---|
@@ -301,7 +305,7 @@ CodeBuddy CLI and IDE appear under one source. DSH and WorkBuddy have separate n
 
 ### Download and launch
 
-Current development preview: **v0.3.0-dev.1** · [Download the universal archive](https://github.com/FriedOnion2/agent-relay-portable/releases/download/v0.3.0-dev.1/AgentRelay-v0.3.0-dev.1-universal.zip) · [Release notes and checksums](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v0.3.0-dev.1)
+Current development preview: **v0.4.0-dev.1** · [Download the universal archive](https://github.com/FriedOnion2/agent-relay-portable/releases/download/v0.4.0-dev.1/AgentRelay-v0.4.0-dev.1-universal.zip) · [Release notes and checksums](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v0.4.0-dev.1)
 
 Download **`AgentRelay-<version>-universal.zip`** from [GitHub Releases](https://github.com/FriedOnion2/agent-relay-portable/releases), extract it completely, and use the launcher for your device. GitHub's automatically generated **Source code** archives are for development.
 
@@ -311,7 +315,7 @@ Download **`AgentRelay-<version>-universal.zip`** from [GitHub Releases](https:/
 | Mac | `AgentRelay.app` or `bash 启动_AgentRelay.command` | Apple Silicon: macOS 14+; Intel: macOS 15+ |
 | Linux | `bash 启动_AgentRelay.sh` | Ubuntu 22.04+ / glibc 2.35+ x64 |
 
-Keep the entire extracted folder on your portable drive. Its optional `config.json` and `storage/` directory are shared across devices. The launcher extracts only the matching runtime into a local cache, avoiding portable-drive executable restrictions and Mac symlink differences. **Keep `runtimes/`; no runtime is downloaded at startup.** Device overrides live in `devices/<device-id>.json`; another device starts with its own defaults. Inaccessible shared paths prompt reselection in **环境与兼容** (Environment and compatibility); save an empty directory to restore automatic detection.
+Keep the entire extracted folder on your portable drive. Its optional `config.json`, `storage/`, and `index/` directories are shared across devices. Finish background jobs and exit the service before copying; copy drafts exported elsewhere separately. The launcher extracts only the matching runtime into a local cache, avoiding portable-drive executable restrictions and Mac symlink differences. **Keep `runtimes/`; no runtime is downloaded at startup.** Device overrides live in `devices/<device-id>.json`; another device starts with its own defaults. Inaccessible shared paths prompt reselection in **环境与兼容** (Environment and compatibility); save an empty directory to restore automatic detection.
 
 The Mac app is not notarized by Apple. If macOS blocks it, run `bash Mac首次运行.command` in the trusted extracted directory, then launch again. Runtime caches are `%LOCALAPPDATA%/AgentRelay/<version>/` on Windows, `~/Library/Caches/AgentRelay/<version>/` on Mac, and `~/.cache/agentrelay/<version>/` on Linux (respecting `XDG_CACHE_HOME`). If extraction is interrupted, remove that version's cache and retry.
 
@@ -429,7 +433,7 @@ python -m unittest discover -s tests -v
 node --test tests/web.test.cjs
 ```
 
-As of 2026-10-07, local regression coverage is **104 Python tests (4 skipped on Mac) and 22 web tests**. GitHub Actions tests Python 3.8, 3.12, and 3.14 across Windows, Ubuntu, and macOS in eight combinations (macOS excludes Python 3.8). Browser checks also saved two conversation archives and two Skill archives using temporary samples.
+As of 2026-10-08, stage-two local regression coverage is **140 Python tests (4 environment-dependent skips on Windows) and 27 web tests**. GitHub Actions tests Python 3.8, 3.12, and 3.14 across Windows, Ubuntu, and macOS in eight combinations (macOS excludes Python 3.8). Release smoke runs exercise FTS5, Chinese queries, reasoning exclusion/purge, workflow drafts, explicit export and a relocated corpus inside every frozen runtime.
 
 Tests cover conversion, archive round trips, integrity and conflict protection, occupied ports, shutdown waiting, asynchronous lists, and partial batch failures. They use temporary synthetic data without modifying real conversations or executing Skill scripts.
 

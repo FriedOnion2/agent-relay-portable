@@ -13,6 +13,7 @@ work/
 storage/
 devices/
 health-output/
+index/
 # Portable interpreters are installed locally, not published with source.
 runtime/*
 !runtime/README.txt

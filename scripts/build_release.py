@@ -32,6 +32,7 @@ def build(tag, output):
         '--specpath', str(work), '--add-data', str(ROOT / 'app/web') + os.pathsep + 'web',
         '--collect-submodules', 'relay', '--collect-all', 'zstandard',
         '--hidden-import', 'cli', '--hidden-import', 'server',
+        '--hidden-import', 'sqlite3', '--hidden-import', '_sqlite3',
         str(ROOT / 'app/portable.py'),
     ], check=True, cwd=ROOT)
     stage = work / name

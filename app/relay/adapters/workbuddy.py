@@ -219,9 +219,11 @@ class WorkBuddyAdapter(BaseAdapter):
                 cid = rec.get("callId") or ""
                 out = rec.get("output")
                 if isinstance(out, dict):
-                    out = out.get("text") or json.dumps(out, ensure_ascii=False)
+                    out = out["text"] if isinstance(out.get("text"), str) else json.dumps(out, ensure_ascii=False)
+                elif out is None:
+                    out = ""
                 elif not isinstance(out, str):
-                    out = json.dumps(out or "", ensure_ascii=False)
+                    out = json.dumps(out, ensure_ascii=False)
                 ensure_assistant(ts)
                 pending_assistant.blocks.append(
                     ir.Block.tool_result(cid, out or "", is_error=str(rec.get("status")) == "error")

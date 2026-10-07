@@ -15,6 +15,8 @@
     --shadow:0 1px 2px rgba(16,24,40,.05), 0 4px 14px rgba(16,24,40,.05);
   }
   *{box-sizing:border-box}
+  #corpusPanel .session{padding:12px;margin:8px 0;background:var(--panel);border:1px solid var(--line);border-radius:8px}
+  #corpusDocument pre{max-height:420px;overflow:auto;background:var(--panel);padding:12px}
   html,body{height:100%}
   body{
     margin:0; background:var(--bg); color:var(--text);
@@ -159,6 +161,7 @@
   <span class="tagline">读取 WorkBuddy · DSH · CodeBuddy · Claude Code / Agent SDK · Codex 会话</span>
   <div class="agent-chips" id="chips"></div>
   <button class="btn" id="btnStorage">对话存储</button>
+  <button class="btn" id="btnCorpus">搜索与提炼</button>
   <button class="btn" id="btnSkillStorage">Skill 存储</button>
   <button class="btn" id="btnEnvironment">环境与兼容</button>
   <button class="btn" id="btnExit" title="停止当前后台服务">退出服务</button>
@@ -261,6 +264,45 @@
   <div class="bar"><button class="btn" id="runHealth">运行格式自检</button></div>
   <p>自检仅验证临时合成样本，客户端版本与真实续聊未验证时明确显示未知；不读取真实对话、不调用模型。</p>
   <div id="healthResult"></div>
+</section>
+<section id="corpusPanel" style="display:none;position:fixed;inset:70px 24px 24px;z-index:83;background:var(--bg);padding:20px;overflow:auto;border:1px solid #bbb;border-radius:12px" role="dialog" aria-label="全文搜索与 Skill 草稿">
+  <div class="bar"><b>全文搜索与 Skill 草稿</b><button class="btn" id="closeCorpus">关闭</button></div>
+  <p>在本机处理，本功能不上传正文、不调用模型。索引随 index 文件夹搬走；复制前先结束任务并退出服务。旧设备的会话缓存可离线查看，恢复时仍需选择本机目录。</p>
+  <div class="bar" style="flex-wrap:wrap">
+    <label class="opt"><input type="checkbox" id="indexThinking">索引思考内容（默认关闭）</label>
+    <label class="opt"><input type="checkbox" id="indexPackages" checked>包含已存储对话包</label>
+    <button class="btn" id="updateCorpus">更新索引</button>
+    <button class="btn" id="extractDrafts">提炼 Skill 草稿</button>
+    <button class="btn" id="cancelCorpus" disabled>取消任务</button>
+  </div>
+  <p class="meta">更新最多扫描 10,000 条记录 / 120 秒；提炼最多 500 份完整会话 / 60 秒。达到上限会提示，可缩小索引来源或清理无关缓存。部分会话不会用于提炼。</p>
+  <label>更新来源 <select class="sel" id="indexSource"><option value="">全部已配置来源</option></select></label>
+  <pre id="corpusStatus" style="white-space:pre-wrap" aria-live="polite"></pre>
+  <div class="bar" style="flex-wrap:wrap">
+    <input class="input" id="corpusQuery" placeholder="中文单字、短词或英文全文搜索" style="width:300px" aria-label="全文关键词">
+    <select class="sel" id="corpusSource" aria-label="搜索来源"><option value="">全部来源</option></select>
+    <input class="input" id="corpusProject" placeholder="项目路径包含" style="width:200px">
+    <input class="input" id="corpusTool" placeholder="工具字段包含" style="width:140px">
+    <label>从 <input class="input" type="date" id="corpusAfter" style="width:150px"></label>
+    <label>至 <input class="input" type="date" id="corpusBefore" style="width:150px"></label>
+    <label class="opt"><input type="checkbox" id="searchThinking">搜索思考内容</label>
+    <button class="btn primary" id="searchCorpus">搜索</button>
+    <button class="btn" id="moreCorpus" disabled>下一页</button>
+  </div>
+  <div id="corpusResults"></div>
+  <div id="corpusDocument"></div>
+  <p>Skill 候选需要至少三条独立会话证据。排序分不是成功概率，非空工具返回也不证明任务成功。没有重复流程时返回空列表。</p>
+  <div id="draftCandidates"></div>
+  <div id="draftEditor" style="display:none">
+    <p>选中候选后编辑 Markdown，再勾选审核确认。导出只生成草稿文件，不安装、不执行；同名拒绝覆盖，可修改 name 另存。</p>
+    <textarea class="input" id="draftMarkdown" rows="18" spellcheck="false" aria-label="Skill 草稿 Markdown"></textarea>
+    <div class="bar" style="flex-wrap:wrap">
+      <input class="input" id="draftDirectory" placeholder="本机已存在的导出父目录" style="width:400px">
+      <label class="opt"><input type="checkbox" id="confirmDraft">已编辑并审核这份草稿</label>
+      <button class="btn primary" id="exportDraft" disabled>导出选中草稿</button>
+    </div>
+    <pre id="draftResult" style="white-space:pre-wrap"></pre>
+  </div>
 </section>
 <script>
 const AGENTS = {workbuddy:'WorkBuddy', dsh:'DeepSeek Harness', codebuddy:'CodeBuddy', claude:'Claude Code', claude_sdk:'Claude Agent SDK', codex:'OpenAI Codex'};
@@ -398,6 +440,8 @@ async function init(){
   buildTarget();
   bind();
   await loadSessions();
+  const evidence=new URLSearchParams(globalThis.location?.search||'').get('document');
+  if(evidence){await openCorpus();await openCorpusDocument(evidence);}
 }
 
 async function loadSources(){
@@ -467,6 +511,17 @@ async function exitService(){
 }
 
 function bind(){
+  $('#btnCorpus').onclick=openCorpus;
+  $('#closeCorpus').onclick=()=>{$('#corpusPanel').style.display='none';};
+  $('#updateCorpus').onclick=()=>startCorpusJob('index');
+  $('#extractDrafts').onclick=()=>startCorpusJob('extract');
+  $('#cancelCorpus').onclick=cancelCorpusJob;
+  $('#searchCorpus').onclick=()=>searchCorpus(0);
+  $('#moreCorpus').onclick=()=>searchCorpus(corpusState.offset+50);
+  $('#confirmDraft').onchange=updateDraftAction;
+  $('#draftMarkdown').oninput=()=>{$('#confirmDraft').checked=false;updateDraftAction();};
+  $('#draftDirectory').oninput=updateDraftAction;
+  $('#exportDraft').onclick=exportDraft;
   $('#btnEnvironment').onclick=async()=>{
     $('#environmentPanel').style.display='';
     const selector=$('#deviceAgent');selector.innerHTML='';
@@ -735,6 +790,7 @@ function showEnvironment(r){
     r.free_bytes==null?'':'剩余空间：'+(r.free_bytes/1024/1024/1024).toFixed(1)+' GiB',
     r.runtime?'Python：'+r.runtime.python+' / '+(r.runtime.bundled?'Release 内置':'源码解释器')+'；Zstandard：'+(r.runtime.zstandard?'可用':'缺失'):'',
     r.runtime?'运行时目录：'+r.runtime.directory:'',r.runtime?r.runtime.checksum:'',
+    r.runtime?'SQLite：'+(r.runtime.sqlite||'不可用')+'；FTS5：'+(r.runtime.fts5?'可用':'缺失'):'',
     r.write_error,r.note,...(r.warnings||[]),...(r.plugin_errors||[])].filter(Boolean).join('\n');
 }
 async function saveDeviceHome(){
@@ -994,6 +1050,121 @@ async function doTransfer(){
   loadSources().catch(e=>toast('刷新失败：'+e.message, true));
 }
 
+const corpusState={request:0,documentRequest:0,offset:0,job:null,busy:false,timer:null,rendered:null,selected:null,exporting:false};
+async function openCorpus(){
+  $('#corpusPanel').style.display='';
+  for(const id of ['#indexSource','#corpusSource']){
+    const selector=$(id);selector.innerHTML='<option value="">全部来源</option>';
+    for(const row of state.sources){const option=document.createElement('option');option.value=row.name;option.textContent=AGENTS[row.name]||row.name;selector.appendChild(option);}
+  }
+  try{
+    const r=await api('/api/corpus');
+    $('#corpusStatus').textContent=r.exists?`索引中有 ${r.documents} 条记录；思考索引 ${r.thinking_documents} 条。`:'尚未建立索引，请点击更新索引。';
+    await pollCorpusJob();
+  }catch(e){toast(e.message,true);}
+}
+function corpusBusy(value){
+  corpusState.busy=value;
+  $('#updateCorpus').disabled=value;$('#extractDrafts').disabled=value;
+  $('#cancelCorpus').disabled=!value;
+}
+async function startCorpusJob(kind){
+  if(corpusState.busy)return;
+  corpusBusy(true);
+  if(kind==='extract'){
+    corpusState.selected=null;$('#draftEditor').style.display='none';$('#draftCandidates').innerHTML='';
+  }
+  const payload=kind==='index'?{include_thinking:$('#indexThinking').checked,packages:$('#indexPackages').checked,
+    sources:$('#indexSource').value?[$('#indexSource').value]:null}:{};
+  try{
+    const r=await api('/api/'+kind,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    corpusState.job=r.id;
+    await pollCorpusJob();
+  }catch(e){corpusBusy(false);toast(e.message,true);}
+}
+async function pollCorpusJob(){
+  clearTimeout(corpusState.timer);
+  const r=await api('/api/job');
+  if(r.status==='idle')return;
+  corpusState.job=r.id;
+  corpusBusy(r.status==='running');
+  const p=r.result||r.progress||{};
+  const {candidates,...details}=p;
+  $('#corpusStatus').textContent=`${r.kind==='index'?'索引':'提炼'}：${r.status}\n`+JSON.stringify(details,null,2)+(r.error?'\n'+r.error:'');
+  if(r.kind==='extract' && r.status==='completed' && corpusState.rendered!==r.id){
+    renderDraftCandidates(candidates||[]);corpusState.rendered=r.id;
+  }
+  if(r.status==='running')corpusState.timer=setTimeout(()=>pollCorpusJob().catch(e=>{corpusBusy(false);toast(e.message,true);}),650);
+}
+async function cancelCorpusJob(){
+  if(!corpusState.job)return;
+  try{
+    await api('/api/job-cancel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:corpusState.job})});
+    $('#cancelCorpus').disabled=true;$('#corpusStatus').textContent+='\n正在取消；已完成的索引事务会保留。';
+  }catch(e){toast(e.message,true);}
+}
+async function searchCorpus(offset=0){
+  const request=++corpusState.request;
+  const filters={q:$('#corpusQuery').value,source:$('#corpusSource').value,project:$('#corpusProject').value,
+    tool:$('#corpusTool').value,after:$('#corpusAfter').value,before:$('#corpusBefore').value,
+    include_thinking:$('#searchThinking').checked,offset};
+  $('#moreCorpus').disabled=true;
+  try{
+    const url='/api/search?'+Object.entries(filters).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
+    const r=await api(url);
+    if(request!==corpusState.request)return;
+    corpusState.offset=offset;$('#corpusResults').innerHTML='';$('#moreCorpus').disabled=!r.more;
+    if(!r.results.length)$('#corpusResults').textContent=r.indexed?'没有匹配会话。':'尚未建立索引。';
+    for(const row of r.results){
+      const box=document.createElement('div');box.className='session';
+      const title=document.createElement('b');title.textContent=row.title||row.sid;box.appendChild(title);
+      const meta=document.createElement('p');meta.textContent=`${row.source} · ${row.origin==='package'?'存储包':'本机记录'}${row.offline?'（离线缓存）':''}${row.partial?' · 部分内容':''} · ${row.cwd}`;box.appendChild(meta);
+      const snippet=document.createElement('p');snippet.textContent=row.snippet;box.appendChild(snippet);
+      const button=document.createElement('button');button.className='btn';button.textContent='查看会话';button.onclick=()=>openCorpusDocument(row.key);box.appendChild(button);
+      $('#corpusResults').appendChild(box);
+    }
+  }catch(e){if(request===corpusState.request)toast(e.message,true);}
+}
+async function openCorpusDocument(key){
+  const request=++corpusState.documentRequest;
+  try{
+    const r=await api('/api/document?key='+encodeURIComponent(key)+'&include_thinking='+$('#searchThinking').checked);
+    if(request!==corpusState.documentRequest)return;
+    const panel=$('#corpusDocument');panel.innerHTML='';
+    const title=document.createElement('h3');title.textContent=r.title||r.sid;panel.appendChild(title);
+    const pre=document.createElement('pre');pre.style.whiteSpace='pre-wrap';
+    pre.textContent=r.conversation.turns.map(t=>t.role+'\n'+t.blocks.map(b=>b.text||(b.name?b.name+'\n':'')+(b.arguments||b.output||'')).join('\n')).join('\n\n');panel.appendChild(pre);
+    if(r.can_open){const button=document.createElement('button');button.className='btn';button.textContent='打开本机原会话';button.onclick=async()=>{
+      state.source=r.source;await loadSessions();await openSession({id:r.sid});$('#corpusPanel').style.display='none';
+    };panel.appendChild(button);}
+  }catch(e){if(request===corpusState.documentRequest)toast(e.message,true);}
+}
+function renderDraftCandidates(candidates){
+  corpusState.selected=null;$('#draftEditor').style.display='none';$('#draftCandidates').innerHTML='';
+  if(!candidates.length){$('#draftCandidates').textContent='没有找到至少三条独立会话支持的重复流程。';return;}
+  for(const c of candidates){
+    const box=document.createElement('div');box.className='session';
+    const text=document.createElement('p');text.textContent=`${c.name} · ${c.evidence_count} 条独立证据 · 排序分 ${c.score}`;box.appendChild(text);
+    const button=document.createElement('button');button.className='btn';button.textContent='选中并编辑这份草稿';button.onclick=()=>{
+      corpusState.selected=c.id;$('#draftMarkdown').value=c.markdown;$('#confirmDraft').checked=false;
+      $('#draftResult').textContent='';$('#draftEditor').style.display='';updateDraftAction();
+    };box.appendChild(button);
+    for(const key of c.evidence){const evidence=document.createElement('button');evidence.className='btn';evidence.textContent='查看证据 '+key.slice(0,8);evidence.onclick=()=>openCorpusDocument(key);box.appendChild(evidence);}
+    $('#draftCandidates').appendChild(box);
+  }
+}
+function updateDraftAction(){
+  $('#exportDraft').disabled=!corpusState.selected||!$('#confirmDraft').checked||!$('#draftDirectory').value.trim()||corpusState.exporting;
+}
+async function exportDraft(){
+  if(!corpusState.selected||!$('#confirmDraft').checked||corpusState.exporting)return;
+  corpusState.exporting=true;updateDraftAction();
+  try{
+    const r=await api('/api/export-draft',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      markdown:$('#draftMarkdown').value,directory:$('#draftDirectory').value.trim(),confirmed:true})});
+    $('#draftResult').textContent='草稿已导出：'+r.path;$('#confirmDraft').checked=false;
+  }catch(e){toast(e.message,true);}finally{corpusState.exporting=false;updateDraftAction();}
+}
 function download(name, text){
   const b = new Blob([text], {type:'text/markdown;charset=utf-8'});
   const a = document.createElement('a');

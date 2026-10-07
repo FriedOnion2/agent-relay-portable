@@ -7,6 +7,52 @@ const vm = require('node:vm');
 const html = fs.readFileSync(path.join(__dirname, '../app/web/index.html'), 'utf8');
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1].split('\ninit().catch')[0];
 
+test('late corpus search and document responses cannot replace current results',async()=>{
+  const t=setup();t.el('#corpusQuery').value='旧';
+  const old=t.app.searchCorpus();t.el('#corpusQuery').value='新';const latest=t.app.searchCorpus();
+  t.response(1,{ok:true,indexed:true,results:[{key:'new',title:'new',source:'codex',snippet:'<script>unsafe</script>'}]});await latest;
+  t.response(0,{ok:true,indexed:true,results:[{key:'old',title:'old',source:'claude'}]});await old;
+  assert.equal(t.el('#corpusResults').children[0].children[0].textContent,'new');
+  assert.equal(t.el('#corpusResults').children[0].children[2].textContent,'<script>unsafe</script>');
+  const first=t.app.openCorpusDocument('old');const second=t.app.openCorpusDocument('new');
+  t.response(3,{ok:true,title:'new',can_open:false,conversation:{turns:[]}});await second;
+  t.response(2,{ok:true,title:'old',can_open:true,conversation:{turns:[]}});await first;
+  assert.equal(t.el('#corpusDocument').children[0].textContent,'new');
+  assert.equal(t.el('#corpusDocument').children.length,2);
+});
+
+test('Skill candidates are unselected and export requires editing review, captures text and prevents duplicate writes',async()=>{
+  const t=setup();t.app.bind();
+  t.app.renderDraftCandidates([{id:'draft',name:'workflow',markdown:'draft text',evidence_count:3,score:6,evidence:[]}]);
+  assert.equal(t.app.corpusState.selected,null);
+  await t.app.exportDraft();assert.equal(t.requests.length,0);
+  t.el('#draftCandidates').children[0].children[1].onclick();
+  assert.equal(t.el('#confirmDraft').checked,false);
+  await t.app.exportDraft();assert.equal(t.requests.length,0);
+  t.el('#draftDirectory').value='/output';t.el('#confirmDraft').checked=true;
+  t.el('#draftMarkdown').oninput();assert.equal(t.el('#confirmDraft').checked,false);
+  t.el('#confirmDraft').checked=true;
+  const pending=t.app.exportDraft();await t.app.exportDraft();
+  assert.equal(t.requests.length,1);const payload=JSON.parse(t.requests[0].options.body);
+  assert.equal(payload.markdown,'draft text');assert.equal(payload.directory,'/output');assert.equal(payload.confirmed,true);
+  t.response(0,{ok:true,path:'/output/workflow/SKILL.md'});await pending;
+  assert.equal(t.el('#confirmDraft').checked,false);
+});
+
+test('index jobs capture disabled thought option and cancellation targets the active job',async()=>{
+  const t=setup();t.el('#indexThinking').checked=false;t.el('#indexPackages').checked=true;
+  const pending=t.app.startCorpusJob('index');await t.app.startCorpusJob('extract');
+  assert.equal(t.requests.length,1);
+  assert.equal(JSON.parse(t.requests[0].options.body).include_thinking,false);
+  t.response(0,{ok:true,id:'job-a',status:'running'});
+  await new Promise(resolve=>setImmediate(resolve));
+  t.response(1,{ok:true,id:'job-a',kind:'index',status:'running',progress:{processed:1}});await pending;
+  const canceled=t.app.cancelCorpusJob();assert.equal(JSON.parse(t.requests[2].options.body).id,'job-a');
+  t.response(2,{ok:true});await canceled;
+  const poll=t.app.pollCorpusJob();t.response(3,{ok:true,id:'job-a',kind:'index',status:'canceled',result:{canceled:true}});await poll;
+  assert.equal(t.app.corpusState.busy,false);assert.equal(t.el('#cancelCorpus').disabled,true);
+});
+
 function setup({automaticPreview=true,confirmed=true}={}){
   class Element {
     constructor(){ this.children=[]; this.value=''; this.checked=true; this.disabled=false;
@@ -33,7 +79,7 @@ function setup({automaticPreview=true,confirmed=true}={}){
       return new Promise((resolve,reject)=>requests.push({url,options,resolve,reject}));
     },
   });
-  vm.runInContext(script + '\n globalThis.app={selections,selectAll,storeBatch,state,loadSessions,openSession,doTransfer,doImportWindows,updateActions,bind,buildTarget,buildTabs,loadSources,storeCurrent,refreshStorage,restoreStored,buildSkillAgents,loadSkills,refreshSkillPackages,storeSelectedSkill,restoreSelectedSkill};',context);
+  vm.runInContext(script + '\n globalThis.app={selections,selectAll,storeBatch,state,loadSessions,openSession,doTransfer,doImportWindows,updateActions,bind,buildTarget,buildTabs,loadSources,storeCurrent,refreshStorage,restoreStored,buildSkillAgents,loadSkills,refreshSkillPackages,storeSelectedSkill,restoreSelectedSkill,corpusState,searchCorpus,openCorpusDocument,renderDraftCandidates,exportDraft,updateDraftAction,startCorpusJob,pollCorpusJob,cancelCorpusJob};',context);
   const response = (index,body,status=200)=>requests[index].resolve({ok:status<400,status,json:async()=>body});
   return {app:context.app, elements, requests, previews, response, el:document.querySelector};
 }
