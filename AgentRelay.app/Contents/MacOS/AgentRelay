@@ -1,7 +1,8 @@
 #!/bin/bash
 # AgentRelay 便携版 · macOS 应用包入口
 # 双击 AgentRelay.app 走这里。脚本做的事和「启动_AgentRelay.command」一样，
-# 区别在于：它把服务放后台跑、日志写进 U 盘的 logs/，然后开浏览器，不留终端窗口。
+# 区别在于：它把服务放后台跑，然后开浏览器，不留终端窗口。
+# 外置盘禁止写日志时，使用本机 ~/Library/Logs/AgentRelay。
 
 APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"          # .../AgentRelay.app/Contents
 APP_RES="$APP_DIR/Resources"
@@ -10,11 +11,19 @@ APP_RES="$APP_DIR/Resources"
 cd "$APP_SRC" || exit 1
 
 LOG_DIR="$APP_SRC/../logs"
-mkdir -p "$LOG_DIR" 2>/dev/null
-LOG="$LOG_DIR/server-$(date +%Y%m%d-%H%M%S).log"
+LOG_NAME="server-$(date +%Y%m%d-%H%M%S)-$$.log"
+if ! { mkdir -p "$LOG_DIR" && : >"$LOG_DIR/$LOG_NAME"; } 2>/dev/null; then
+  LOG_DIR="$HOME/Library/Logs/AgentRelay"
+fi
+if ! { mkdir -p "$LOG_DIR" && : >"$LOG_DIR/$LOG_NAME"; } 2>/dev/null; then
+  printf 'AgentRelay 无法创建日志：%s\n' "$LOG_DIR" >&2
+  exit 1
+fi
+LOG="$LOG_DIR/$LOG_NAME"
 
 # ---------- 找 Python ----------
 CANDIDATES=(
+  "$APP_SRC/../runtime/macos-$(uname -m)/bin/python3"
   "$APP_SRC/../runtime/python/bin/python3"
   "/opt/homebrew/bin/python3"
   "/usr/local/bin/python3"
@@ -32,10 +41,12 @@ for c in "${CANDIDATES[@]}"; do
 done
 
 die() {
-  osascript -e "display alert \"AgentRelay\" message \"$1\" buttons {\"好\"}" >/dev/null 2>&1
-  # osascript 不可用时退回通知中心
-  osascript -e "display notification \"$1\" with title \"AgentRelay\"" >/dev/null 2>&1
-  echo "$1" >>"$LOG"
+  printf '%s\n' "$1" >>"$LOG"
+  osascript - "$1" <<'APPLESCRIPT' >/dev/null 2>&1
+on run argv
+  display alert "AgentRelay" message (item 1 of argv) buttons {"好"}
+end run
+APPLESCRIPT
   exit 1
 }
 
@@ -52,18 +63,50 @@ PORT=$("$PY" -c 'import bootstrap;print(bootstrap.effective_port())' 2>/dev/null
 PORT=${PORT:-8745}
 
 # 端口被占就往后挪，避免上次没关干净导致启动失败
+FREE_PORT=""
 for try in 0 1 2 3 4 5; do
   P=$((PORT + try))
-  if ! lsof -nP -iTCP:"$P" -sTCP:LISTEN >/dev/null 2>&1; then PORT=$P; break; fi
+  [ "$P" -le 65535 ] || break
+  if ! /usr/sbin/lsof -nP -iTCP:"$P" -sTCP:LISTEN >/dev/null 2>&1; then FREE_PORT=$P; break; fi
 done
+[ -n "$FREE_PORT" ] || die "端口 $PORT 及后续端口均被占用，请停止旧服务后重试。"
+PORT=$FREE_PORT
 
-nohup "$PY" "$APP_SRC/cli.py" serve --port "$PORT" >"$LOG" 2>&1 &
+# 先确认 HTTP 就绪再打开浏览器，避免固定等待导致误报及连接失败。
+nohup "$PY" -u "$APP_SRC/cli.py" serve --port "$PORT" --no-browser </dev/null >>"$LOG" 2>&1 &
 SRV=$!
+printf '[AgentRelay] server_pid=%s port=%s python=%s\n' "$SRV" "$PORT" "$PY" >>"$LOG"
 
-sleep 1.5
-if ! kill -0 $SRV 2>/dev/null; then
-  die "服务启动失败，日志见：$LOG"
+if ! "$PY" - "$PORT" "$SRV" <<'PYTHON' >>"$LOG" 2>&1
+import os, sys, time, urllib.request
+port, pid = map(int, sys.argv[1:])
+deadline = time.monotonic() + 15
+while time.monotonic() < deadline:
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        break
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:%d/" % port, timeout=1) as response:
+            if response.status == 200 and response.headers.get("Server", "").startswith("AgentRelay/"):
+                raise SystemExit(0)
+    except (OSError, ValueError):
+        pass
+    time.sleep(0.2)
+raise SystemExit(1)
+PYTHON
+then
+  kill "$SRV" 2>/dev/null
+  die "服务未能就绪，日志见：$LOG"
 fi
 
-osascript -e "display notification \"已打开 http://127.0.0.1:${PORT}
-停止服务请在活动监视器里结束 python 进程\" with title \"AgentRelay 已启动\"" >/dev/null 2>&1
+"$PY" - "$PORT" <<'PYTHON' >>"$LOG" 2>&1
+import bootstrap, sys, webbrowser
+if bootstrap.effective_open_browser():
+    webbrowser.open("http://127.0.0.1:%s/" % sys.argv[1])
+PYTHON
+osascript - "$PORT" "$LOG" <<'APPLESCRIPT' >/dev/null 2>&1
+on run argv
+  display notification ("服务：http://127.0.0.1:" & item 1 of argv & return & "日志：" & item 2 of argv) with title "AgentRelay 已启动"
+end run
+APPLESCRIPT

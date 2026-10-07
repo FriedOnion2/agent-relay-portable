@@ -75,7 +75,7 @@ class NativeImportTests(unittest.TestCase):
                                          native_import.dsh_project(str(self.cwd).replace("\\", "/")))
                         self.assertEqual(records[0]["id"], "native-id")
         self.assertEqual(before, self.snapshot(self.profile))
-        self.assertEqual(registry.writable_keys(), ["workbuddy", "claude", "codex"])
+        self.assertEqual(registry.writable_keys(), ["workbuddy", "dsh", "claude", "codex"])
 
     def test_original_id_collision_refuses_overwrite_and_new_id_can_be_used(self):
         for key in ("workbuddy", "claude", "claude_sdk", "codex", "dsh"):

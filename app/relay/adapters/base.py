@@ -82,6 +82,10 @@ class ToolNameMap:
         "Glob": "list_dir",
         "Grep": "search",
     }
+    TO_DSH: Dict[str, str] = {
+        "Bash":"bash", "Read":"read", "Write":"write", "Edit":"edit",
+        "Glob":"glob", "Grep":"grep", "TodoWrite":"todo_write",
+    }
 
     @classmethod
     def convert(cls, name: str, target: str, enabled: bool = True) -> str:
@@ -91,6 +95,9 @@ class ToolNameMap:
             return cls.TO_CODEX.get(name, name)
         if name.startswith(("mcp__", "builtin__")):
             return name
+        if target == "dsh":
+            canonical = cls.TO_CANONICAL.get(name, name)
+            return cls.TO_DSH.get(canonical, canonical)
         return cls.TO_CANONICAL.get(name, name)
 
 

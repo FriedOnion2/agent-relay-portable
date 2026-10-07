@@ -16,6 +16,7 @@ printf '  目录： %s\n\n' "$PWD"
 # ---------- 1. 找 Python ----------
 # 顺序：盘上自带 runtime → Homebrew → 系统 Python → PATH
 CANDIDATES=(
+  "$PWD/runtime/macos-$(uname -m)/bin/python3"
   "$PWD/runtime/python/bin/python3"
   "$PWD/runtime/python/bin/python"
   "/opt/homebrew/bin/python3"

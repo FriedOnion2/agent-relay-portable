@@ -16,6 +16,7 @@ chmod +x "启动_AgentRelay.command" 2>/dev/null \
 
 chmod +x "AgentRelay.app/Contents/MacOS/AgentRelay" 2>/dev/null \
   && printf '  ✓ 已赋可执行权限：AgentRelay.app\n'
+chmod +x "Mac安装依赖.command" 2>/dev/null
 
 if command -v xattr >/dev/null 2>&1; then
   xattr -dr com.apple.quarantine . >/dev/null 2>&1
@@ -35,7 +36,13 @@ else
   printf '    × 没找到 python3。建议执行： brew install python\n'
 fi
 
+printf '\n  准备 DSH 压缩日志依赖（首次需要网络）：\n'
+if ! bash "Mac安装依赖.command"; then
+  printf '\n  依赖安装未完成。基本功能仍可用，DSH 压缩会话需稍后重跑 Mac安装依赖.command。\n'
+  exit 1
+fi
+
 printf '\n  会话目录探测：\n'
-python3 app/bootstrap.py 2>/dev/null | sed -n '/会话目录/,$p' || printf '    （稍后可用 python3 app/bootstrap.py 查看）\n'
+"$PWD/runtime/macos-$(uname -m)/bin/python3" app/bootstrap.py | sed -n '/会话目录/,$p'
 
 printf '\n  准备完成。现在可以双击「启动_AgentRelay.command」或「AgentRelay.app」了。\n\n'

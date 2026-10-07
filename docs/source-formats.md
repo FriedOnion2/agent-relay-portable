@@ -11,7 +11,14 @@
 
 读取 `sessions/<project>/<encoded-id>/session[.vN].jsonl[.zstd]` 的最大 canonical 世代；未知最新版本不退回旧世代。
 普通与压缩日志同时存在视为歧义。工具调用按 call ID 去重；完成消息优先于流式 chunks，旧版 packed chunks 展开后处理。
-通用 IR 导出为事件历史，不重建当前运行上下文，也没有 DSH 通用 writer。
+读取输出为事件历史，保留来源元数据，不声称能重建原会话压缩/替换后的当前运行上下文。
+
+写入使用官方已发布 v0 协议：`sessions/<projectKey>/<id>/session.jsonl.zstd`；projectKey 按 UTF-16 码元采用官方 `~XXXX` 编码。header 和各个事件使用独立、带校验和的 Zstd frames。日志包含连续 seq、消息 ID、surface append、助手块流及其 sourceEventSeqs、成对工具生命周期、已关闭 turn/step 和 end-seed 标记；导入标题使用用户指定标题语义。源会话 ID 不复用，目标 ID 全局防重，不覆盖现有世代。
+
+通过本机官方 `dsh-session-persistence-jsonl` 0.1.2-rc.1 的 list/prepare/deriveMessages/追加消息/退出落盘/重新读取验证；另通过官方 `dsh-session-format-catalog` 0.2.1-alpha.1 严格恢复，将生成的 v0 历史迁移到 v4。验证使用临时合成会话，不发送模型请求，不修改用户历史。可选验证脚本为 `tests/dsh_native_smoke.mjs` 和 `tests/dsh_catalog_smoke.mjs`。
+
+未完成或重复 ID 的工具调用保留为文字，避免恢复出待执行调用；图片/未知块降级为完整标注 JSON。来源工具参数不转换，也不安装工具。新会话模型仍由 DSH profile 的当前配置选择，导入消息里的模型仅表示来源历史。
+
 Windows → Ubuntu 的对应软件迁入复制完整 v4 原生事件，保留运行状态事件而不经 IR 重建；
 路径编码遵循官方 `format.ts` 的 UTF-16 `encodeSegment` / `projectKey`，Zstd 首帧仅含 header。
 分叉先迁父会话；旧版、损坏或子代理的单独导入会停止。

@@ -16,6 +16,10 @@ runtime/ —— 可选的自带 Python（放了它才算真正免安装）
 
 
 【macOS】
+  bash Mac安装依赖.command 会自动创建 runtime/macos-<架构>/，
+  并安装读取 DSH 压缩日志所需的 zstandard；Mac 启动器优先使用它。
+  这是依赖本机 Python 的虚拟环境，换机器后请重新运行首次准备。
+
   免安装的最好办法不是拷贝 Python（动态库路径会失效），而是：
 
     brew install python

@@ -109,6 +109,10 @@ test('six source tabs and only supported writable targets are offered',()=>{
   t.app.state.sources=[{name:'codex',can_write:false}];
   t.app.buildTarget();
   assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','claude']);
+  t.app.state.source='codex';
+  t.app.state.sources=[];
+  t.app.buildTarget();
+  assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','dsh','claude']);
 });
 
 test('SDK selection shows shared-storage attribution and offers only writable targets',()=>{
@@ -118,7 +122,7 @@ test('SDK selection shows shared-storage attribution and offers only writable ta
   t.app.buildTarget();
   assert.match(t.el('#sourceNote').textContent,/共用会话存储/);
   assert.equal(t.el('#sourceNote').style.display,'');
-  assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','claude','codex']);
+  assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','dsh','claude','codex']);
   t.app.state.source='claude';
   t.app.buildTabs();
   assert.equal(t.el('#sourceNote').style.display,'none');
@@ -134,7 +138,7 @@ test('Windows sources appear separately with paths and never become writable tar
   assert.equal(t.el('#tabs').children.length,7);
   assert.equal(t.el('#tabs').children.at(-1).textContent,'Windows · OpenAI Codex');
   assert.match(t.el('#sourceNote').textContent,/\/media\/Win/);
-  assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','claude','codex']);
+  assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','dsh','claude','codex']);
   assert.equal(t.app.state.target,'codex');
 });
 
