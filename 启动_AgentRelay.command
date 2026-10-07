@@ -71,7 +71,7 @@ fi
 
 # ---------- 4. 启动 ----------
 printf '\n  正在启动 Web 界面，浏览器会自动打开。\n'
-printf '  关闭这个窗口即可停止服务。\n\n'
+printf '  点击网页「退出服务」或按 Ctrl+C 停止服务。\n\n'
 "$PY" app/cli.py serve
 
 printf '\n  服务已停止。\n'

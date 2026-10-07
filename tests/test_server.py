@@ -15,7 +15,7 @@ import server
 class HttpTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.srv = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+        cls.srv = server.RelayServer(("127.0.0.1", 0), server.Handler)
         cls.thread = threading.Thread(target=cls.srv.serve_forever, daemon=True)
         cls.thread.start()
 
@@ -149,3 +149,65 @@ class HttpTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ShutdownTests(unittest.TestCase):
+    def test_shutdown_rejects_foreign_origin_and_stops_only_its_server(self):
+        srv = server.RelayServer(("127.0.0.1", 0), server.Handler)
+        thread = threading.Thread(target=srv.serve_forever)
+        thread.start()
+        try:
+            for origin, expected in (("https://evil.example", 403), (None, 200)):
+                conn = http.client.HTTPConnection("127.0.0.1", srv.server_port, timeout=3)
+                headers = {"Content-Type": "application/json"}
+                if origin:
+                    headers["Origin"] = origin
+                conn.request("POST", "/api/shutdown", "{}", headers)
+                response = conn.getresponse()
+                self.assertEqual(response.status, expected)
+                response.read()
+                conn.close()
+                if origin:
+                    self.assertTrue(thread.is_alive())
+            thread.join(timeout=3)
+            self.assertFalse(thread.is_alive())
+        finally:
+            if thread.is_alive():
+                srv.shutdown()
+            srv.server_close()
+            thread.join(timeout=3)
+
+    def test_close_waits_for_inflight_request(self):
+        entered, release, closed = threading.Event(), threading.Event(), threading.Event()
+        class SlowHandler(server.Handler):
+            def do_GET(self):
+                entered.set()
+                release.wait(timeout=5)
+                self._json({"ok": True})
+        srv = server.RelayServer(("127.0.0.1", 0), SlowHandler)
+        serving = threading.Thread(target=srv.serve_forever)
+        serving.start()
+        def request():
+            conn = http.client.HTTPConnection("127.0.0.1", srv.server_port, timeout=5)
+            try:
+                conn.request("GET", "/")
+                conn.getresponse().read()
+            finally:
+                conn.close()
+        client = threading.Thread(target=request)
+        client.start()
+        self.assertTrue(entered.wait(timeout=3))
+        srv.shutdown()
+        def close():
+            srv.server_close()
+            closed.set()
+        closer = threading.Thread(target=close)
+        closer.start()
+        try:
+            self.assertFalse(closed.wait(timeout=.1))
+        finally:
+            release.set()
+            client.join(timeout=3)
+            closer.join(timeout=3)
+            serving.join(timeout=3)
+        self.assertTrue(closed.is_set())

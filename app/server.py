@@ -23,6 +23,11 @@ from relay import registry  # noqa: E402
 MAX_BODY = 4 * 1024 * 1024
 
 
+class RelayServer(ThreadingHTTPServer):
+    # Preserve in-flight writes when the user stops the service.
+    daemon_threads = False
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "AgentRelay/0.1"
 
@@ -181,6 +186,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._error(f"请求体解析失败: {e}")
 
         try:
+            if u.path == "/api/shutdown":
+                self._json({"ok": True})
+                # shutdown must run outside the serve_forever thread.
+                threading.Thread(target=self.server.shutdown, daemon=True).start()
+                return
             if u.path == "/api/store-skill":
                 from relay.skill_store import store_skill
                 if not body.get("agent") or not body.get("path"):
@@ -259,10 +269,10 @@ class Handler(BaseHTTPRequestHandler):
 def run(host: str = "127.0.0.1", port: int = 8745, open_browser: bool = True):
     if host not in ("127.0.0.1", "localhost"):
         raise ValueError("服务只支持本机地址 127.0.0.1 或 localhost")
-    srv = ThreadingHTTPServer((host, port), Handler)
+    srv = RelayServer((host, port), Handler)
     url = f"http://{host}:{srv.server_address[1]}/"
     print(f"AgentRelay Web 已启动: {url}")
-    print("按 Ctrl+C 停止")
+    print("点击网页右上角「退出服务」或按 Ctrl+C 停止")
     if open_browser:
         timer = threading.Timer(0.6, lambda: webbrowser.open(url))
         timer.daemon = True
