@@ -30,6 +30,13 @@ def get(source: str, **kw) -> BaseAdapter:
     if not isinstance(source, str) or not source.strip():
         raise ValueError("缺少 agent 名称")
     key = source.lower()
+    from . import device, plugins
+    if key in plugins.entries:
+        if kw:
+            raise ValueError('社区插件目录由插件自身管理')
+        return plugins.PluginAdapter(key)
+    if 'home' not in kw and key in device.blocked_homes:
+        raise ValueError(device.blocked_homes[key])
     if key.startswith(("windows_", "ubuntu_")):
         ubuntu = key.startswith("ubuntu_")
         native = key.split("_", 1)[1]
@@ -56,8 +63,9 @@ def get(source: str, **kw) -> BaseAdapter:
 
 
 def all_keys() -> List[str]:
+    from . import plugins
     keys = list(_ADAPTERS)
-    return (keys + (["windows_" + key for key in keys] if selected_profile() else [])
+    return (keys + list(plugins.entries) + (["windows_" + key for key in keys] if selected_profile() else [])
             + (["ubuntu_" + key for key in keys] if selected_ubuntu() else []))
 
 
@@ -84,7 +92,9 @@ def sources_info() -> List[Dict[str, Any]]:
                 info["session_count"] = 0
             out.append(info)
         except Exception as e:  # 单个 agent 出问题不能拖垮全局
-            out.append({"name": k, "available": False, "error": str(e), "session_count": 0})
+            from . import plugins
+            out.append({"name": k, "available": False, "error": str(e), "session_count": 0,
+                        "community":k in plugins.entries, "can_write":k in writable_keys()})
     return out
 
 
@@ -107,7 +117,8 @@ def read_conversation(source: str, sid: str) -> ir.Conversation:
 
 def transfer(source: str, sid: str, target: str, cwd: str | None = None,
              session_id: str | None = None, remap_tools: bool = True,
-             include_thinking: bool = True, new_title: str | None = None) -> Dict[str, Any]:
+             include_thinking: bool = True, new_title: str | None = None,
+             preview_token: str | None = None) -> Dict[str, Any]:
     """把 source 的一个会话迁移到 target，返回会话信息与新文件路径。"""
     src = get(source)
     dst = get(target)
@@ -119,12 +130,11 @@ def transfer(source: str, sid: str, target: str, cwd: str | None = None,
     conv = src.read(sid)
     if conv.truncated:
         raise ValueError("源会话超过读取限制，迁移已停止；可导出已读取的部分内容")
-    # Keep unsupported blocks inspectable when a native writer cannot represent them.
-    conv = replace(conv, turns=[replace(turn, blocks=[
-        ir.Block.text_block("[原始内容块]\n" + json.dumps(b.meta, ensure_ascii=False))
-        if b.kind == ir.RAW else b for b in turn.blocks]) for turn in conv.turns])
-    if new_title:
-        conv.title = new_title
+    from . import preview
+    options = dict(cwd=cwd, session_id=session_id, remap_tools=remap_tools, include_thinking=include_thinking, new_title=new_title)
+    plan = preview.report(conv, target, options, dst.home)
+    preview.check_token(preview_token, plan['token'])
+    conv = preview.prepare(conv, new_title)
     path = dst.write(conv, cwd=cwd, session_id=session_id,
                      remap_tools=remap_tools, include_thinking=include_thinking)
     return {
@@ -133,6 +143,7 @@ def transfer(source: str, sid: str, target: str, cwd: str | None = None,
         "to": {"source": target, "path": path, "cwd": cwd or conv.cwd},
         "stats": conv.stats(),
         "truncated": conv.truncated,
+        "preview": plan,
     }
 
 

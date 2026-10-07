@@ -39,6 +39,51 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn(b"AgentRelay", body)
 
+    def test_real_preview_is_readonly_and_changed_source_cannot_be_written(self):
+        from relay import ir, device
+        from relay.adapters.workbuddy import WorkBuddyAdapter
+        from relay.adapters.codex import CodexAdapter
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            source = WorkBuddyAdapter(home=str(root / 'workbuddy'))
+            target = CodexAdapter(home=str(root / 'codex'))
+            path = Path(source.write(ir.Conversation(cwd=folder, turns=[
+                ir.Turn(ir.USER, [ir.Block.text_block('original')])]), session_id='fixture'))
+            payload = {'source':'workbuddy', 'id':'fixture', 'target':'codex', 'cwd':folder}
+            headers = {'Content-Type':'application/json'}
+            with patch.dict(server.registry._CACHE, {'workbuddy':source, 'codex':target}, clear=True), \
+                 patch.dict(device.blocked_homes, {}, clear=True):
+                status, raw = self.request('POST', '/api/preview', json.dumps(payload), headers)
+                self.assertEqual(status, 200)
+                self.assertFalse((root / 'codex').exists())
+                plan = json.loads(raw)
+                path.write_text(path.read_text(encoding='utf-8').replace('original', 'changed'), encoding='utf-8')
+                status, _ = self.request('POST', '/api/transfer', json.dumps(dict(payload, preview_token=plan['token'])), headers)
+                self.assertEqual(status, 400)
+                self.assertFalse((root / 'codex').exists())
+                _, raw = self.request('POST', '/api/preview', json.dumps(payload), headers)
+                status, raw = self.request('POST', '/api/transfer', json.dumps(dict(payload, preview_token=json.loads(raw)['token'])), headers)
+                self.assertEqual(status, 200)
+                self.assertTrue(json.loads(raw)['ok'])
+
+    def test_health_failure_is_visible_and_device_home_requires_valid_directory(self):
+        from relay import device
+        with patch('relay.health.report', return_value={'ok':False, 'adapters':[{'status':'failed'}]}):
+            status, raw = self.request('GET', '/api/health')
+            self.assertEqual(status, 200)
+            self.assertTrue(json.loads(raw)['ok'])
+            self.assertFalse(json.loads(raw)['healthy'])
+        with tempfile.TemporaryDirectory() as folder, patch.object(device, 'project_root', return_value=Path(folder)):
+            headers = {'Content-Type':'application/json'}
+            for payload in ({'agent':'codex','home':str(Path(folder) / 'missing')}, {'agent':'sample','home':folder}, {'agent':'codex','home':42}):
+                self.assertEqual(self.request('POST', '/api/device-home', json.dumps(payload), headers)[0], 400)
+            self.assertFalse(device.config_path().exists())
+            with patch('bootstrap.apply_config'), patch('bootstrap.load_config', return_value={}), \
+                 patch.dict(server.registry._CACHE, {}, clear=True):
+                status, raw = self.request('POST', '/api/device-home', json.dumps({'agent':'codex', 'home':folder}), headers)
+                self.assertEqual(status, 200)
+                self.assertEqual(device.read()['agent_homes']['codex'], str(Path(folder).resolve()))
+
     def test_static_path_cannot_escape_via_sibling_prefix(self):
         with tempfile.TemporaryDirectory() as root:
             web = Path(root) / "web"
@@ -92,7 +137,7 @@ class HttpTests(unittest.TestCase):
             self.assertEqual(self.request("POST", "/api/import-windows", json.dumps(payload),
                          {"Content-Type":"application/json"})[0], 200)
             importer.assert_called_once_with("windows_dsh", "p/s", "/home/alice/project",
-                                             session_id="new", dsh_compression="none")
+                                             session_id="new", dsh_compression="none", preview_token=None)
         for body in ({"source":"windows_codex", "id":"s"}, {**payload, "dsh_compression":False}):
             with patch("relay.native_import.import_windows") as importer:
                 self.assertEqual(self.request("POST", "/api/import-windows", json.dumps(body),
@@ -109,7 +154,7 @@ class HttpTests(unittest.TestCase):
                 options = dict(session_id="new", dsh_compression="none")
                 if endpoint == "export-windows":
                     options["project_path"] = "/mnt/data/project"
-                importer.assert_called_once_with("codex", "s", "D:\\project", **options)
+                importer.assert_called_once_with("codex", "s", "D:\\project", preview_token=None, **options)
             for body in ({"source":"codex", "id":"s"}, {**payload,"project_path":False}):
                 with patch("relay.native_import." + endpoint.replace("-", "_")) as importer:
                     self.assertEqual(self.request("POST", "/api/" + endpoint, json.dumps(body),
@@ -125,7 +170,7 @@ class HttpTests(unittest.TestCase):
         payload = {"package":"/portable/session.zip", "cwd":"/project", "session_id":"new"}
         with patch("relay.session_store.restore_session", return_value={"ok":True}) as restore:
             self.assertEqual(self.request("POST", "/api/restore-session", json.dumps(payload), headers)[0], 200)
-            restore.assert_called_once_with("/portable/session.zip", "/project", "new", "zstd")
+            restore.assert_called_once_with("/portable/session.zip", "/project", "new", "zstd", None)
         for payload in ({"package":False,"cwd":"/p"}, {"package":"p.zip"}, {"storage":[]}, {}):
             with patch("relay.session_store.restore_session") as restore:
                 self.assertEqual(self.request("POST", "/api/restore-session", json.dumps(payload), headers)[0], 400)

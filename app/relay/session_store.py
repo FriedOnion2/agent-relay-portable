@@ -16,6 +16,8 @@ KIND = "agentrelay-session"
 
 def store_session(agent, sid, root=None):
     source = registry.get(agent)
+    if source.info().get('community'):
+        raise ValueError('社区插件仅支持读取与转换；尚不支持原生会话打包')
     native = getattr(source, "source", source.name)
     adapter = getattr(source, "adapter", source)
     conv = source.read(sid)
@@ -88,7 +90,10 @@ def store_sessions(agent, ids=None, all_sessions=False, root=None):
     return {"ok":not errors, "stored":results, "errors":errors}
 
 
-def restore_session(package, cwd, session_id=None, dsh_compression="zstd"):
+def restore_session(package, cwd, session_id=None, dsh_compression="zstd", preview_token=None):
+    if preview_token:
+        from . import preview
+        preview.check_token(preview_token, preview.package(package, cwd, session_id, dsh_compression)['token'])
     manifest, files = archive.read_package(package, KIND)
     agent = manifest.get("agent")
     if agent not in registry._ADAPTERS:

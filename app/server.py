@@ -106,6 +106,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self._static(path[len("/static/"):])
             if path == "/api/sources":
                 return self._json({"ok": True, "sources": registry.sources_info()})
+            if path == '/api/environment':
+                from relay import device, plugins
+                return self._json({'ok':True, **device.environment(),
+                                   'plugins':list(plugins.entries), 'plugin_errors':plugins.errors})
+            if path == '/api/health':
+                from relay import health
+                result = health.report()
+                return self._json(dict(result, healthy=result['ok'], ok=True))
             if path == "/api/stored-sessions":
                 from relay.archive import list_packages, storage_root
                 from relay.session_store import KIND
@@ -180,7 +188,7 @@ class Handler(BaseHTTPRequestHandler):
             body = json.loads(raw.decode("utf-8") or "{}")
             if not isinstance(body, dict):
                 return self._error("请求体必须是 JSON 对象")
-            for key in ("source", "id", "target", "cwd", "session_id", "title", "dsh_compression", "project_path", "storage", "package", "agent", "path", "skills_dir", "name"):
+            for key in ("source", "id", "target", "cwd", "session_id", "title", "dsh_compression", "project_path", "storage", "package", "agent", "path", "skills_dir", "name", 'mode', 'preview_token', 'home'):
                 if key in body and body[key] is not None and not isinstance(body[key], str):
                     return self._error(f"{key} 必须是字符串")
             for key in ("remap_tools", "include_thinking", "include_tools"):
@@ -190,6 +198,33 @@ class Handler(BaseHTTPRequestHandler):
             return self._error(f"请求体解析失败: {e}")
 
         try:
+            if u.path == '/api/device-home':
+                from relay import device
+                import bootstrap
+                saved = device.set_home(body.get('agent'), body.get('home') or '')
+                bootstrap.apply_config(bootstrap.load_config())
+                registry._CACHE.clear()
+                return self._json({'ok':True, 'path':saved, **device.environment()})
+            if u.path == '/api/preview':
+                from relay import preview
+                mode = body.get('mode') or 'convert'
+                if mode == 'restore-session':
+                    if not body.get('package') or not body.get('cwd'):
+                        return self._error('缺少存储包路径 / 本机项目目录')
+                    return self._json(preview.package(body.get('package'), body.get('cwd'),
+                               body.get('session_id') or None, body.get('dsh_compression') or 'zstd'))
+                if mode in ('import-windows', 'import-ubuntu', 'export-windows'):
+                    if not body.get('source') or not body.get('id') or not body.get('cwd'):
+                        return self._error('缺少来源 / 会话 ID / 目标项目目录')
+                    return self._json(preview.native(body.get('source'), body.get('id'), mode, body.get('cwd'),
+                           body.get('session_id') or None, body.get('project_path'), body.get('dsh_compression') or 'zstd'))
+                if mode != 'convert':
+                    return self._error('未知预览方式')
+                if not body.get('source') or not body.get('id') or not body.get('target'):
+                    return self._error('缺少来源 / 会话 ID / 目标')
+                return self._json(preview.conversion(body.get('source'), body.get('id'), body.get('target'),
+                           body.get('cwd') or None, body.get('session_id') or None,
+                           body.get('remap_tools', True), body.get('include_thinking', True), body.get('title') or None))
             if u.path == "/api/shutdown":
                 self._json({"ok": True})
                 # shutdown must run outside the serve_forever thread.
@@ -216,13 +251,13 @@ class Handler(BaseHTTPRequestHandler):
                 if not body.get("package") or not body.get("cwd"):
                     return self._error("缺少存储包路径 / 本机目标项目目录")
                 return self._json(restore_session(body["package"], body["cwd"], body.get("session_id") or None,
-                                                  body.get("dsh_compression") or "zstd"))
+                                                  body.get("dsh_compression") or "zstd", body.get('preview_token')))
             if u.path in ("/api/import-ubuntu", "/api/export-windows"):
                 from relay.native_import import import_ubuntu, export_windows
                 if not (body.get("source") and body.get("id") and body.get("cwd")):
                     return self._error("缺少来源 / 会话 ID / Windows 项目路径")
                 options = dict(session_id=body.get("session_id") or None,
-                               dsh_compression=body.get("dsh_compression") or "zstd")
+                               dsh_compression=body.get("dsh_compression") or "zstd", preview_token=body.get('preview_token'))
                 if u.path == "/api/export-windows":
                     options["project_path"] = body.get("project_path")
                 importer = export_windows if u.path == "/api/export-windows" else import_ubuntu
@@ -233,7 +268,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self._error("缺少 Windows 来源 / 会话 ID / Ubuntu 项目目录")
                 return self._json(import_windows(body["source"], body["id"], body["cwd"],
                                   session_id=body.get("session_id") or None,
-                                  dsh_compression=body.get("dsh_compression") or "zstd"))
+                                  dsh_compression=body.get("dsh_compression") or "zstd", preview_token=body.get('preview_token')))
             if u.path == "/api/transfer":
                 source = body.get("source")
                 sid = body.get("id")
@@ -247,6 +282,7 @@ class Handler(BaseHTTPRequestHandler):
                     remap_tools=bool(body.get("remap_tools", True)),
                     include_thinking=bool(body.get("include_thinking", True)),
                     new_title=body.get("title") or None,
+                    preview_token=body.get('preview_token'),
                 )
                 return self._json(res)
             if u.path == "/api/export-md":

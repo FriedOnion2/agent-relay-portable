@@ -1,5 +1,7 @@
 # 对话与 Skill 的跨设备存储
 
+会话包恢复现在先显示保真度预览，确认后核对包与选项是否改变；取消不写入。CLI `restore-session` 支持 `--dry-run` 和 `--preview-token`。本机路径在「环境与兼容」重选，覆盖配置按设备保存在 `devices/`，不会把设备 A 的选择当作设备 B 的默认目标。
+
 对话包保存在项目目录 `storage/conversations/<agent>/<包ID>.zip`。把整个 `storage` 文件夹放到移动盘
 或复制到另一台设备，启动那台设备上的 AgentRelay 即可恢复。也可以只复制一个 ZIP 包。
 Release 总包中默认 `storage/` 位于总包根目录，Windows / Mac / Linux 共用，不落在解压运行库的本机缓存内。

@@ -11,6 +11,8 @@ __pycache__/
 .venv/
 work/
 storage/
+devices/
+health-output/
 # Portable interpreters are installed locally, not published with source.
 runtime/*
 !runtime/README.txt

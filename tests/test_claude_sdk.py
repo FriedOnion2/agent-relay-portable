@@ -106,7 +106,9 @@ class ClaudeSdkTests(unittest.TestCase):
             cfg = Path(root)/"config.json"
             cfg.write_text('{"agent_homes":{"claude_sdk":42}}', encoding="utf-8")
             with patch.object(bootstrap, "config_path", return_value=cfg), patch.object(sys, "stderr"):
-                self.assertEqual(bootstrap.load_config(), {})
+                self.assertEqual(bootstrap.load_config().get('agent_homes', {}), {})
+                from relay import device
+                self.assertTrue(any('共享配置读取失败' in warning for warning in device.warnings))
             fixture(root)
             adapters = {key:registry.get(key, home=os.path.join(root, key)) for key in registry.all_keys()}
             adapters["claude_sdk"] = ClaudeSdkAdapter(home=root)

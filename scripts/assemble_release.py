@@ -32,6 +32,10 @@ def assemble(tag, assets, output):
     shutil.copy2(ROOT / 'config.example.json', stage)
     windows = '''param([Parameter(ValueFromRemainingArguments=$true)][string[]]$RelayArguments)
 $ErrorActionPreference = 'Stop'
+# PowerShell 7 can pass module paths incompatible with Windows PowerShell 5.1.
+# Scope this repair to the launcher process; never change machine/user settings.
+$systemModules = Join-Path $env:SystemRoot 'System32\\WindowsPowerShell\\v1.0\\Modules'
+$env:PSModulePath = $systemModules + ';' + $env:PSModulePath
 $portableRoot = $PSScriptRoot
 $manifest = Get-Content -LiteralPath (Join-Path $portableRoot 'version.json') -Raw | ConvertFrom-Json
 $payload = $manifest.runtimes.'windows-x64'
@@ -62,7 +66,7 @@ $env:RELAY_PORTABLE_ROOT = $portableRoot
 exit $LASTEXITCODE
 '''
     (stage / 'Start-AgentRelay.ps1').write_text(windows, encoding='utf-8-sig')
-    (stage / '启动_AgentRelay.bat').write_bytes(b'@echo off\r\nchcp 65001 >nul\r\npowershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Start-AgentRelay.ps1" %*\r\nif errorlevel 1 pause\r\n')
+    (stage / '启动_AgentRelay.bat').write_bytes(b'@echo off\r\nchcp 65001 >nul\r\n"%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "%~dp0Start-AgentRelay.ps1" %*\r\nif errorlevel 1 pause\r\n')
     for system in ('macos', 'linux'):
         targets = ['macos-arm64', 'macos-x64'] if system == 'macos' else ['linux-x64']
         cases = []
@@ -174,8 +178,14 @@ Linux 缓存：~/.cache/agentrelay/{tag}/（尊重 XDG_CACHE_HOME）。
 恢复：总包根目录的 storage/ 按 Agent 分类保存 ZIP。整个包随移动盘切换设备，或复制 storage/，
   在目标设备存储面板选包、填写本机项目/Skill 目录后恢复。网页恢复逐包操作。
   同 ID/同名不覆盖。关闭正在写入源或目标记录的 Agent 后再操作。
-配置：复制 config.example.json 为 config.json。默认自动使用当前设备的 Agent 目录；
-  若手动填了原设备绝对路径，换设备需修改。存储包未加密，正文可能含敏感内容。
+环境与兼容：查看实际运行时、依赖、可写目录与空间，重选本机 Agent 根目录。
+  本机覆盖配置在 devices/<设备ID>.json，换设备默认自动探测；留空保存可恢复自动探测。
+  共享 config.json 的旧绝对路径不可访问时会提示重选，不静默回退。存储包未加密。
+迁移预览：通用迁移、双系统原生迁移和对话包恢复先显示保留、降级、丢弃、未知；
+  确认前源内容或选项变化需重新预览。同 ID/同名不覆盖，实际续聊仍需目标软件验证。
+格式自检：环境面板运行临时合成样本，显示验证证据；不读取真实对话、不调用模型。
+社区插件：API v1 可信单文件 Python 读取插件，CLI 显式启用；换设备需重新批准。
+  插件支持导出和迁出，暂不进行原生打包或写入；独立进程不是安全沙箱。
 
 通用写入目标：WorkBuddy、DSH、Claude Code、Codex。CodeBuddy/SDK 支持读取及对应软件原生恢复。
 DSH 导入写入 v0 历史；图片、加密思考及特有工具协议不能保证完整跨工具转换。

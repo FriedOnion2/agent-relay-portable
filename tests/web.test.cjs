@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const html = fs.readFileSync(path.join(__dirname, '../app/web/index.html'), 'utf8');
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1].split('\ninit().catch')[0];
 
-function setup(){
+function setup({automaticPreview=true,confirmed=true}={}){
   class Element {
     constructor(){ this.children=[]; this.value=''; this.checked=true; this.disabled=false;
       this.style={}; this.dataset={}; this.classList={add(){}, remove(){}}; this._html=''; }
@@ -18,6 +18,7 @@ function setup(){
   }
   const elements = new Map();
   const requests=[];
+  const previews=[];
   const document={
     body:new Element(),
     querySelector(selector){if(!elements.has(selector)) elements.set(selector,new Element()); return elements.get(selector);},
@@ -25,13 +26,16 @@ function setup(){
     createElement(){return new Element();},
     createTextNode(text){return {textContent:text};},
   };
-  const context = vm.createContext({document, encodeURIComponent, Blob, URL, navigator:{}, confirm(){return true;},
+  const context = vm.createContext({document, encodeURIComponent, Blob, URL, navigator:{}, confirm(){return confirmed;},
     setTimeout(){return 1;}, clearTimeout(){},
-    fetch(url,options){return new Promise((resolve,reject)=>requests.push({url,options,resolve,reject}));},
+    fetch(url,options){
+      if(url==='/api/preview' && automaticPreview){previews.push({url,options});return Promise.resolve({ok:true,status:200,json:async()=>({ok:true,token:'verified-fixture',target:'claude',blockers:[],warnings:[]})});}
+      return new Promise((resolve,reject)=>requests.push({url,options,resolve,reject}));
+    },
   });
   vm.runInContext(script + '\n globalThis.app={selections,selectAll,storeBatch,state,loadSessions,openSession,doTransfer,doImportWindows,updateActions,bind,buildTarget,buildTabs,loadSources,storeCurrent,refreshStorage,restoreStored,buildSkillAgents,loadSkills,refreshSkillPackages,storeSelectedSkill,restoreSelectedSkill};',context);
   const response = (index,body,status=200)=>requests[index].resolve({ok:status<400,status,json:async()=>body});
-  return {app:context.app, elements, requests, response, el:document.querySelector};
+  return {app:context.app, elements, requests, previews, response, el:document.querySelector};
 }
 
 test('a late session-list response cannot replace the newly selected source',async()=>{
@@ -44,6 +48,40 @@ test('a late session-list response cannot replace the newly selected source',asy
   t.response(0,{ok:true,sessions:[{id:'old',title:'old',turns:1}]});
   await old;
   assert.equal(t.app.state.sessions[0].id,'new');
+});
+
+test('migration waits for preview, carries token, and cancellation never writes',async()=>{
+  const t=setup({automaticPreview:false});
+  t.app.state.current={source:'codex',id:'s'};
+  t.app.state.target='claude';
+  const pending=t.app.doTransfer();
+  assert.equal(t.requests[0].url,'/api/preview');
+  assert.equal(t.requests.length,1);
+  await t.app.doTransfer();assert.equal(t.requests.length,1);
+  t.response(0,{ok:true,token:'source-hash',target:'claude',blockers:[],warnings:[],dropped:[{item:'image',count:1}]});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(t.requests[1].url,'/api/transfer');
+  assert.equal(JSON.parse(t.requests[1].options.body).preview_token,'source-hash');
+  t.response(1,{ok:false,error:'source changed'},400);await pending;
+  assert.equal(t.app.state.transferring,false);
+  const canceled=setup({confirmed:false});
+  canceled.app.state.current={source:'codex',id:'s'};
+  await canceled.app.doTransfer();
+  assert.equal(canceled.previews.length,1);
+  assert.equal(canceled.requests.length,0);
+  assert.equal(canceled.app.state.transferring,false);
+});
+
+test('a preview blocker prevents the write and community sources cannot be stored natively',async()=>{
+  const t=setup({automaticPreview:false});t.app.state.current={source:'sample',id:'s'};
+  t.app.state.source='sample';
+  t.app.state.sources=[{name:'sample',community:true,can_write:false}];
+  t.app.updateActions();assert.equal(t.el('#btnStore').disabled,true);
+  const pending=t.app.doTransfer();
+  t.response(0,{ok:true,target:'claude',blockers:['truncated source'],token:'blocked'});
+  await pending;
+  assert.equal(t.requests.length,1);
+  assert.match(t.el('#toast').children[0].textContent,/truncated source/);
 });
 
 test('a late detail response cannot enable migration after changing sources',async()=>{
@@ -76,6 +114,7 @@ test('transfer captures the selected source and cannot be submitted twice',async
   const t=setup();
   t.app.state.current={id:'selected',source:'codex'};
   const first=t.app.doTransfer();
+  await new Promise(resolve=>setImmediate(resolve));
   assert.equal(JSON.parse(t.requests[0].options.body).source,'codex');
   const detail=t.app.openSession({id:'other'});
   t.response(1,{ok:true,info:{title:'other',stats:{}},turns:[]});
@@ -156,6 +195,7 @@ test('same-app Windows import needs a project and captures selection without dup
   t.app.updateActions();
   assert.equal(t.el('#btnImport').disabled,false);
   const importing=t.app.doImportWindows();
+  await new Promise(resolve=>setImmediate(resolve));
   const payload=JSON.parse(t.requests[0].options.body);
   assert.equal(t.requests[0].url,'/api/import-windows');
   assert.equal(payload.source,'windows_claude_sdk');
@@ -182,6 +222,7 @@ test('Windows import failure releases buttons and displays the backend reason',a
   t.el('#cwd').value='/home/alice/project';
   t.app.updateActions();
   const importing=t.app.doImportWindows();
+  await new Promise(resolve=>setImmediate(resolve));
   t.response(0,{ok:false,error:'先创建原生工作区'},400);
   await importing;
   assert.equal(t.app.state.transferring,false);
@@ -201,6 +242,7 @@ test('Ubuntu export requires both Windows cwd and accessible mount path and capt
   t.el('#projectPath').value='/mnt/data/project';
   t.app.updateActions();
   const pending=t.app.doImportWindows();
+  await new Promise(resolve=>setImmediate(resolve));
   await t.app.doImportWindows();
   assert.equal(t.requests.length,1);
   assert.equal(t.requests[0].url,'/api/export-windows');
@@ -226,6 +268,7 @@ test('Windows imports Ubuntu sources into local counterpart without a mount-path
   assert.equal(t.app.state.target,'codex');
   assert.equal(t.el('#projectPath').style.display,'none');
   const pending=t.app.doImportWindows();
+  await new Promise(resolve=>setImmediate(resolve));
   assert.equal(t.requests[0].url,'/api/import-ubuntu');
   assert.equal('project_path' in JSON.parse(t.requests[0].options.body),false);
   t.response(0,{ok:false,error:'目标会话 ID 已存在'},409);
@@ -244,6 +287,7 @@ test('generic conversion on Ubuntu uses the accessible project path rather than 
   t.el('#projectPath').value='/mnt/data/project';
   t.app.updateActions();
   const pending=t.app.doTransfer();
+  await new Promise(resolve=>setImmediate(resolve));
   assert.equal(JSON.parse(t.requests[0].options.body).cwd,'/mnt/data/project');
   t.response(0,{ok:false,error:'fixture error'},400);
   await pending;
@@ -267,6 +311,7 @@ test('storing captures the selected source and package restore captures local cw
   t.el('#packagePath').value='/storage/codex/p.zip';
   t.el('#restoreCwd').value='/home/a/project';
   const restoring=t.app.restoreStored();
+  await new Promise(resolve=>setImmediate(resolve));
   await t.app.restoreStored();
   assert.equal(t.requests.length,3);
   assert.equal(t.requests[2].url,'/api/restore-session');
