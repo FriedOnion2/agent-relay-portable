@@ -152,12 +152,28 @@ def environment():
         free = shutil.disk_usage(root).free
     except OSError:
         free = None
+    fts5 = False
+    sqlite_version = None
+    try:
+        import sqlite3
+        database = sqlite3.connect(':memory:')
+        try:
+            database.execute('CREATE VIRTUAL TABLE probe USING fts5(text)')
+            fts5 = True
+            sqlite_version = sqlite3.sqlite_version
+        finally:
+            database.close()
+    except (ImportError, RuntimeError) as exc:
+        error = error or str(exc)
+    except Exception as exc:
+        error = error or ('SQLite/FTS5：' + str(exc))
     return {'device_id': identity(), 'system': platform.system(), 'architecture': platform.machine(),
             'data_root': str(root), 'config_path': str(config_path()), 'writable': writable,
             'runtime': {'bundled':bool(getattr(sys, 'frozen', False)),
                         'python':platform.python_version(), 'executable':sys.executable,
                         'directory':str(Path(sys.executable).resolve().parent),
                         'zstandard':importlib.util.find_spec('zstandard') is not None,
+                        'sqlite':sqlite_version, 'fts5':fts5,
                         'checksum':'总包启动器每次校验运行时压缩包 SHA-256；本面板不验证已解压文件。'},
             'free_bytes': free, 'write_error': error, 'warnings': list(warnings),
             'note': '换设备默认使用该主机目录；本机覆盖配置保存在 devices/，不会在其他设备自动启用。'}

@@ -31,6 +31,15 @@ class RelayServer(ThreadingHTTPServer):
     allow_reuse_address = sys.platform != "win32"
     allow_reuse_port = False
 
+    def __init__(self, *args, **kwargs):
+        from relay.jobs import Jobs
+        self.jobs = Jobs()
+        super().__init__(*args, **kwargs)
+
+    def server_close(self):
+        self.jobs.close()
+        super().server_close()
+
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "AgentRelay/0.1"
@@ -106,6 +115,20 @@ class Handler(BaseHTTPRequestHandler):
                 return self._static(path[len("/static/"):])
             if path == "/api/sources":
                 return self._json({"ok": True, "sources": registry.sources_info()})
+            if path in ('/api/corpus', '/api/search', '/api/document'):
+                from relay.corpus import Corpus
+                store = Corpus()
+                if path == '/api/corpus':
+                    return self._json(store.status())
+                if path == '/api/document':
+                    return self._json(dict(ok=True, **store.document((q.get('key') or [''])[0],
+                                                (q.get('include_thinking') or ['false'])[0] == 'true')))
+                options = {name:(q.get(name) or [''])[0] for name in ('source','project','tool','after','before')}
+                return self._json(store.search((q.get('q') or [''])[0], **options,
+                                  include_thinking=(q.get('include_thinking') or ['false'])[0] == 'true',
+                                  limit=int((q.get('limit') or ['50'])[0]), offset=int((q.get('offset') or ['0'])[0])))
+            if path == '/api/job':
+                return self._json(self.server.jobs.status())
             if path == '/api/environment':
                 from relay import device, plugins
                 return self._json({'ok':True, **device.environment(),
@@ -188,17 +211,35 @@ class Handler(BaseHTTPRequestHandler):
             body = json.loads(raw.decode("utf-8") or "{}")
             if not isinstance(body, dict):
                 return self._error("请求体必须是 JSON 对象")
-            for key in ("source", "id", "target", "cwd", "session_id", "title", "dsh_compression", "project_path", "storage", "package", "agent", "path", "skills_dir", "name", 'mode', 'preview_token', 'home'):
+            for key in ("source", "id", "target", "cwd", "session_id", "title", "dsh_compression", "project_path", "storage", "package", "agent", "path", "skills_dir", "name", 'mode', 'preview_token', 'home', 'markdown', 'directory'):
                 if key in body and body[key] is not None and not isinstance(body[key], str):
                     return self._error(f"{key} 必须是字符串")
-            for key in ("remap_tools", "include_thinking", "include_tools"):
+            for key in ("remap_tools", "include_thinking", "include_tools", 'packages', 'confirmed'):
                 if key in body and type(body[key]) is not bool:
                     return self._error(f"{key} 必须为 true 或 false")
         except Exception as e:
             return self._error(f"请求体解析失败: {e}")
 
         try:
+            if u.path == '/api/index':
+                from relay.corpus import Corpus
+                sources = body.get('sources')
+                if sources is not None and (not isinstance(sources, list) or any(not isinstance(s,str) or s not in registry.all_keys() for s in sources)):
+                    return self._error('sources 必须是有效来源名称列表')
+                return self._json(self.server.jobs.start('index', lambda progress,cancel:Corpus().update(
+                    sources=sources, include_thinking=body.get('include_thinking',False),
+                    packages=body.get('packages',True), progress=progress, cancel=cancel)))
+            if u.path == '/api/extract':
+                from relay.extraction import extract
+                return self._json(self.server.jobs.start('extract', lambda progress,cancel:extract(progress=progress,cancel=cancel)))
+            if u.path == '/api/job-cancel':
+                return self._json(self.server.jobs.cancel(body.get('id')))
+            if u.path == '/api/export-draft':
+                from relay.extraction import export_draft
+                return self._json(export_draft(body.get('markdown'),body.get('directory'),body.get('confirmed',False)))
             if u.path == '/api/device-home':
+                if self.server.jobs.status()['status'] == 'running':
+                    return self._error('请先结束索引/提炼任务再更换本机目录')
                 from relay import device
                 import bootstrap
                 saved = device.set_home(body.get('agent'), body.get('home') or '')
