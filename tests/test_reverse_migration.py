@@ -60,7 +60,7 @@ class ReverseMigrationTests(unittest.TestCase):
                 with self.assertRaises(FileExistsError):
                     native_import.export_windows(key, sid, cwd, project_path=str(self.cwd), session_id=new_id)
         self.assertEqual(before, self.snapshot(self.root / "ubuntu"))
-        self.assertEqual(registry.writable_keys(), ["workbuddy", "claude", "codex"])
+        self.assertEqual(registry.writable_keys(), ["workbuddy", "dsh", "claude", "codex"])
 
     def test_windows_imports_accessible_ubuntu_home_and_linux_ide_layout(self):
         # Treat the synthetic source as a copied Ubuntu home, including its IDE layout.

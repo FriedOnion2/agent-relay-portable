@@ -142,15 +142,16 @@ def human_size(n: int) -> str:
     return f"{n:.1f} GB"
 
 
-def atomic_write(path: str, lines, encoding: str = "utf-8", overwrite: bool = True) -> None:
-    """逐行写入，先写临时文件再替换，避免写到一半产生坏文件。"""
+def atomic_write(path: str, lines, encoding: str | None = "utf-8", overwrite: bool = True) -> None:
+    """原子发布文本行；encoding=None 时原样发布字节块（用于压缩日志）。"""
     directory = os.path.dirname(os.path.abspath(path))
     os.makedirs(directory, exist_ok=True)
     fd, tmp = tempfile.mkstemp(prefix=".relay-", suffix=".partial", dir=directory)
     try:
-        with os.fdopen(fd, "w", encoding=encoding, newline="\n") as f:
+        options = {"encoding":encoding, "newline":"\n"} if encoding is not None else {}
+        with os.fdopen(fd, "w" if encoding is not None else "wb", **options) as f:
             for line in lines:
-                f.write(line if line.endswith("\n") else line + "\n")
+                f.write(line if encoding is None or line.endswith("\n") else line + "\n")
             f.flush()
             os.fsync(f.fileno())
         if overwrite:

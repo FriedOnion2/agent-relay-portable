@@ -292,7 +292,7 @@ function buildTabs(){
 function buildTarget(){
   const sel = $('#target'); sel.innerHTML='';
   const opts = Object.keys(AGENTS).filter(k=>k!==state.source &&
-    (state.sources.find(s=>s.name===k)?.can_write ?? ['workbuddy','claude','codex'].includes(k)));
+    (state.sources.find(s=>s.name===k)?.can_write ?? ['workbuddy','dsh','claude','codex'].includes(k)));
   const same = state.source.replace(/^(windows_|ubuntu_)/,'');
   state.target = opts.includes(same) ? same : (opts.includes(state.target) ? state.target : opts[0]);
   opts.forEach(k=>{

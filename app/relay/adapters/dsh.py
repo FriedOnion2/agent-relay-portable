@@ -1,4 +1,4 @@
-"""DeepSeek Harness event logs: historical export, not active surface replay."""
+"""DeepSeek Harness historical log reader and native import adapter."""
 from __future__ import annotations
 import json
 import os
@@ -6,7 +6,7 @@ import re
 from .. import ir
 from ..locations import resolve_home
 from ..paths import iso, safe_ms
-from .base import ReadOnlyAdapter, SessionInfo
+from .base import BaseAdapter, SessionInfo
 
 MAX_SCAN_BYTES = 32 * 1024 * 1024
 GENERATION = re.compile(r"session(?:\.v([1-9][0-9]*))?\.jsonl(\.zstd)?$")
@@ -117,9 +117,13 @@ def read_records(path):
     return expanded
 
 
-class DshAdapter(ReadOnlyAdapter):
+class DshAdapter(BaseAdapter):
     name = "dsh"
     label = "DeepSeek Harness"
+
+    def write(self, conv, cwd=None, session_id=None, remap_tools=True, include_thinking=True):
+        from .dsh_write import write_native
+        return write_native(self.home, conv, cwd, session_id, remap_tools, include_thinking)
 
     def __init__(self, home=None, clean=True):
         self.root = resolve_home(self.name, home)
@@ -163,14 +167,20 @@ class DshAdapter(ReadOnlyAdapter):
                            len(conv.turns) if conv else 0, path, not bool(error), error)
 
     def read(self, sid):
+        matches = []
         for path, error in self._candidates():
             identity = os.path.relpath(os.path.dirname(path), self.home).replace("\\", "/")
-            if identity == sid:
-                if error:
-                    raise ValueError(error)
-                conv = self._parse(path)
-                conv.id = identity
-                return conv
+            if identity == sid or os.path.basename(os.path.dirname(path)) == sid:
+                matches.append((path, identity, error))
+        if len(matches) > 1:
+            raise ValueError("DSH 会话 ID 匹配多条记录，请使用完整 ID")
+        if matches:
+            path, identity, error = matches[0]
+            if error:
+                raise ValueError(error)
+            conv = self._parse(path)
+            conv.id = identity
+            return conv
         raise FileNotFoundError(f"找不到 DSH 会话: {sid}")
 
     def _parse(self, path):

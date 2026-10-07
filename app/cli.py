@@ -228,6 +228,10 @@ def cmd_transfer(args):
         print("  ⚠ 源文件过大，迁移内容可能不完整")
     if t["source"] == "claude":
         print(f"\n提示: 在该目录下执行 `claude --resume {os.path.basename(t['path']).split('.')[0]}` 继续会话")
+    elif t["source"] == "dsh":
+        sid = os.path.basename(os.path.dirname(t["path"]))
+        print(f"\nDSH 会话 ID: {sid}")
+        print("提示: 在 DSH 会话列表中选择导入会话，或使用支持 --resume 的 DSH profile 恢复该 ID。")
 
 
 def cmd_serve(args):

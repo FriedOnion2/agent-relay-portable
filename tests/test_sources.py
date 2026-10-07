@@ -84,12 +84,12 @@ class IndependentSourcesTests(unittest.TestCase):
             self.assertIn("WorkBuddy", row.error)
 
     def test_read_only_targets_rejected_before_source_read(self):
-        for target in ("dsh", "codebuddy"):
+        for target in ("codebuddy",):
             with self.subTest(target=target), patch.dict(registry._CACHE, {}, clear=True):
                 with patch.object(WorkBuddyAdapter, "read", side_effect=AssertionError("must not read")):
                     with self.assertRaisesRegex(ValueError, "迁移目标"):
                         registry.transfer("workbuddy", "none", target)
-        self.assertEqual(registry.writable_keys(), ["workbuddy", "claude", "codex"])
+        self.assertEqual(registry.writable_keys(), ["workbuddy", "dsh", "claude", "codex"])
 
 
 class DshTests(unittest.TestCase):
@@ -258,6 +258,8 @@ class CodeBuddyTests(unittest.TestCase):
                 sid = next(src.discover()).id
                 original = src.read(sid)
                 for target in registry.writable_keys():
+                    if target == source or (target == "dsh" and zstd is None):
+                        continue
                     with self.subTest(source=source, target=target):
                         dst = registry.get(target, home=os.path.join(root, "target-"+source+target))
                         with patch.dict(registry._CACHE, {source:src, target:dst}, clear=True):

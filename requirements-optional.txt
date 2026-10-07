@@ -1,2 +1,2 @@
-# Required only to decode DeepSeek Harness .jsonl.zstd sessions.
+# Required to decode DeepSeek Harness compressed sessions and import into DSH.
 zstandard>=0.23.0,<1

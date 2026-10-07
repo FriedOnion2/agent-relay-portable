@@ -36,6 +36,7 @@ jobs:
         run: |
           bash -n 启动_AgentRelay.command
           bash -n Mac首次准备.command
+          bash -n Mac安装依赖.command
           bash -n AgentRelay.app/Contents/MacOS/AgentRelay
           bash -n 启动_AgentRelay.sh
           bash -n Ubuntu首次准备.sh
