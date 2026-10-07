@@ -9,10 +9,13 @@ from . import ir
 from .adapters.claude import ClaudeAdapter
 from .adapters.codex import CodexAdapter
 from .adapters.dsh import DshAdapter
+from .adapters.workbuddy import WorkBuddyAdapter
+from .adapters.codebuddy import CodeBuddyAdapter
 from .adapters.markdown import render as render_markdown
 from .adapters.base import BaseAdapter
 
-_ADAPTERS = {"dsh": DshAdapter, "claude": ClaudeAdapter, "codex": CodexAdapter}
+_ADAPTERS = {"workbuddy": WorkBuddyAdapter, "dsh": DshAdapter,
+             "codebuddy": CodeBuddyAdapter, "claude": ClaudeAdapter, "codex": CodexAdapter}
 
 _CACHE: Dict[str, BaseAdapter] = {}
 
@@ -35,6 +38,10 @@ def all_keys() -> List[str]:
     return list(_ADAPTERS)
 
 
+def writable_keys() -> List[str]:
+    return [key for key, cls in _ADAPTERS.items() if cls.can_write]
+
+
 def sources_info() -> List[Dict[str, Any]]:
     out = []
     for k in all_keys():
@@ -44,6 +51,10 @@ def sources_info() -> List[Dict[str, Any]]:
             if info["available"]:
                 s = list(a.discover())
                 info["session_count"] = len(s)
+                info["unreadable_count"] = sum(not row.readable for row in s)
+                errors = list(dict.fromkeys(row.error for row in s if row.error))
+                if errors:
+                    info["error"] = "; ".join(errors[:3])
             else:
                 info["session_count"] = 0
             out.append(info)
@@ -75,6 +86,8 @@ def transfer(source: str, sid: str, target: str, cwd: str | None = None,
     """把 source 的一个会话迁移到 target，返回会话信息与新文件路径。"""
     src = get(source)
     dst = get(target)
+    if not dst.can_write:
+        raise ValueError(f"{dst.label} 尚不支持作为迁移目标")
     conv = src.read(sid)
     if new_title:
         conv.title = new_title

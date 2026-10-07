@@ -5,7 +5,7 @@
     python cli.py list codex
     python cli.py show dsh <id>
     python cli.py export dsh <id> -o /tmp/x.md
-    python cli.py transfer codex <id> --to dsh
+    python cli.py transfer codex <id> --to workbuddy
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ def cmd_sources(args):
     print(f"{'agent':<10} {'状态':<8} {'会话数':>6}  目录")
     print("-" * 78)
     for r in rows:
-        avail = "可用" if r["available"] else "缺失"
+        avail = ("可用" if r.get("can_write") else "只读") if r["available"] else "缺失"
         cnt = r.get("session_count", 0)
         print(f"{r['name']:<10} {avail:<8} {cnt:>6}  {r.get('home') or ''}")
         if r.get("error"):
@@ -67,8 +67,10 @@ def cmd_list(args):
     print(f"{'#':>3}  {'会话 id':<38} {'更新':<20} {'轮次':>4}  标题")
     print("-" * 100)
     for i, r in enumerate(rows, 1):
-        sid = r["id"][:36]
+        sid = r["id"]
         print(f"{i:>3}  {sid:<38} {r['updated']:<20} {r['turns']:>4}  {r['title'][:50]}")
+        if r.get("error"):
+            print(f"     读取受限：{r['error']}")
     print(f"\n共 {len(rows)} 条")
 
 
@@ -153,7 +155,7 @@ def cmd_serve(args):
 
 
 def cmd_doctor(args):
-    """换机器后先跑这个：看 Python 找没找到、三个 agent 的目录在哪。"""
+    """换机器后先跑这个：看 Python 找没找到、五个 agent 的目录在哪。"""
     code = bootstrap.print_report()
     print()
     if code == 0:
@@ -171,12 +173,12 @@ def cmd_doctor(args):
 def build_parser():
     p = argparse.ArgumentParser(
         prog="relay",
-        description="在 DSH / Claude Code / Codex 之间迁移对话记录",
+        description="独立读取 WorkBuddy / DeepSeek Harness / CodeBuddy / Claude Code / Codex 会话",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    p1 = sub.add_parser("sources", help="查看三个 agent 是否可用及会话数量")
+    p1 = sub.add_parser("sources", help="查看五个 agent 是否可用及会话数量")
     p1.add_argument("--json", action="store_true")
     p1.set_defaults(func=cmd_sources)
 
@@ -208,7 +210,7 @@ def build_parser():
     p5 = sub.add_parser("transfer", help="迁移会话到另一个 agent")
     p5.add_argument("agent", choices=AGENTS, help="来源 agent")
     p5.add_argument("id", help="源会话 id")
-    p5.add_argument("--to", "-t", required=True, choices=AGENTS, help="目标 agent")
+    p5.add_argument("--to", "-t", required=True, choices=registry.writable_keys(), help="支持写入的目标 agent")
     p5.add_argument("--cwd", help="写入到哪个工作目录（默认沿用源会话的目录）")
     p5.add_argument("--session-id", help="指定新会话 id（默认自动生成）")
     p5.add_argument("--title", help="覆盖标题")

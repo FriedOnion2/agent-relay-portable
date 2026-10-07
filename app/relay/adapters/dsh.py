@@ -1,328 +1,262 @@
-"""DSH / WorkBuddy 会话适配器。
-
-存储结构：
-    ~/.workbuddy/projects/<cwd-slug>/<sessionId>.jsonl
-    ~/.workbuddy/sessions/<pid>.json          （进程元数据，可选）
-
-记录类型：session-meta / ai-title / message / reasoning /
-          function_call / function_call_result / file-history-snapshot
-"""
-
+"""DeepSeek Harness event logs: historical export, not active surface replay."""
 from __future__ import annotations
-
 import json
 import os
-from typing import Any, Dict, Iterable, List, Optional
-
+import re
 from .. import ir
-from ..clean import strip_scaffolding
-from ..paths import iso, read_jsonl, safe_ms, slug_for, atomic_write, uuid7, now_ms, native_path, validate_session_id
-from .base import BaseAdapter, SessionInfo, ToolNameMap
+from ..locations import resolve_home
+from ..paths import iso, safe_ms
+from .base import ReadOnlyAdapter, SessionInfo
 
 MAX_SCAN_BYTES = 32 * 1024 * 1024
+GENERATION = re.compile(r"session(?:\.v([1-9][0-9]*))?\.jsonl(\.zstd)?$")
 
 
-class DshAdapter(BaseAdapter):
+def json_text(value):
+    return value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+
+
+def content_text(content):
+    if isinstance(content, str):
+        return content
+    return "\n".join(b.get("text", "") for b in content or []
+                     if isinstance(b, dict) and b.get("type") == "text")
+
+
+def blocks(content):
+    if isinstance(content, str):
+        return [ir.Block.text_block(content)]
+    if content is not None and not isinstance(content, list):
+        raise ValueError("消息 content 必须是文本或块列表")
+    out = []
+    for b in content or []:
+        if not isinstance(b, dict):
+            raise ValueError("消息块必须是 JSON 对象")
+        kind = b.get("type")
+        if kind == "text":
+            out.append(ir.Block.text_block(b.get("text", "")))
+        elif kind in ("reasoning", "thinking"):
+            out.append(ir.Block.thinking_block(b.get("text") or b.get("thinking", "")))
+        elif kind in ("text-chunks", "reasoning-chunks"):
+            text = "".join(c if isinstance(c, str) else c.get("text", "") for c in b.get("chunks", []))
+            out.append(ir.Block.text_block(text) if kind == "text-chunks" else ir.Block.thinking_block(text))
+        elif kind == "tool-call":
+            out.append(ir.Block.tool_call(b.get("id") or b.get("toolCallId", ""),
+                       b.get("name") or b.get("toolName", ""),
+                       json_text(b.get("arguments", b.get("args", {})))))
+        elif kind == "tool-result":
+            output = content_text(b.get("content")) if "content" in b else json_text(b.get("result"))
+            out.append(ir.Block.tool_result(b.get("toolCallId", ""), output, bool(b.get("isError"))))
+        elif kind in ("image", "file"):
+            out.append(ir.Block(ir.IMAGE if kind == "image" else ir.RAW, meta=b))
+        else:
+            out.append(ir.Block(ir.RAW, meta=b))
+    return out
+
+
+def read_records(path):
+    """Fail closed on corrupt/incomplete logs; bound encoded and decoded data."""
+    with open(path, "rb") as f:
+        raw = f.read(MAX_SCAN_BYTES + 1)
+    if len(raw) > MAX_SCAN_BYTES:
+        raise ValueError("DSH 日志超过 32 MiB 读取限制")
+    if path.endswith(".zstd"):
+        try:
+            import zstandard as zstd
+        except ImportError:
+            raise ValueError("已识别 DSH 压缩会话；请安装 requirements-optional.txt 的 zstandard") from None
+        decoded = bytearray()
+        try:
+            offset = 0
+            while offset < len(raw):
+                decoder = zstd.ZstdDecompressor(max_window_size=MAX_SCAN_BYTES).decompressobj()
+                while offset < len(raw) and not decoder.eof:
+                    chunk = raw[offset:offset + 256]
+                    offset += len(chunk)
+                    data = decoder.decompress(chunk)
+                    if len(decoded) + len(data) > MAX_SCAN_BYTES:
+                        raise ValueError("DSH 解压内容超过 32 MiB 读取限制")
+                    decoded.extend(data)
+                if not decoder.eof:
+                    raise ValueError("DSH 压缩帧不完整，请等会话写入完成后重试")
+                offset -= len(decoder.unused_data)
+        except zstd.ZstdError as exc:
+            raise ValueError("DSH 压缩文件损坏或窗口过大") from exc
+        raw = bytes(decoded)
+    try:
+        records = [json.loads(line) for line in raw.decode("utf-8-sig").splitlines() if line.strip()]
+    except (ValueError, UnicodeError) as exc:
+        raise ValueError("DSH 日志损坏或末行未写完") from exc
+    if not records or any(not isinstance(r, dict) for r in records):
+        raise ValueError("不是 DSH 会话日志")
+    # v0/v1 compact multiple streaming events into one physical row.
+    expanded = [records[0]]
+    for rec in records[1:]:
+        kind = rec.get("type")
+        if kind not in ("text-chunks", "reasoning-chunks", "tool-call-chunks"):
+            expanded.append(rec)
+            continue
+        data = rec.get("data") or {}
+        values = data.get("args" if kind == "tool-call-chunks" else "texts")
+        deltas = data.get("dt")
+        if (not isinstance(values, list) or not values or not all(isinstance(v, str) for v in values)
+                or not isinstance(deltas, list) or len(deltas) != len(values) - 1):
+            raise ValueError("DSH packed chunks 无效")
+        timestamp = rec["time0"]
+        for index, value in enumerate(values):
+            if index:
+                timestamp += deltas[index - 1]
+            chunk = {"index":data["index"], "type":"tool-call-delta" if kind == "tool-call-chunks"
+                     else "reasoning-delta" if kind == "reasoning-chunks" else "text-delta"}
+            if kind == "tool-call-chunks":
+                chunk.update(id=data["id"], name=data.get("name", ""), argumentsDelta=value)
+            else:
+                chunk["text"] = value
+            expanded.append({"type":"assistant/chunk", "seq":rec["seq0"] + index, "time":timestamp,
+                             "data":{"turn":data["turn"], "step":data["step"], "chunk":chunk}})
+    return expanded
+
+
+class DshAdapter(ReadOnlyAdapter):
     name = "dsh"
-    label = "DSH / WorkBuddy"
+    label = "DeepSeek Harness"
 
-    def __init__(self, home: str | None = None, clean: bool = True):
-        root = (home
-                or os.environ.get("RELAY_DSH_HOME")
-                or os.path.expanduser(os.path.join("~", ".workbuddy")))
-        self.root = root
-        self.home = os.path.join(root, "projects")
-        self.sessions_meta_dir = os.path.join(root, "sessions")
+    def __init__(self, home=None, clean=True):
+        self.root = resolve_home(self.name, home)
+        self.home = os.path.join(self.root, "sessions")
         self.clean = clean
 
-    # ---------------- 发现 ----------------
+    def _candidates(self):
+        if not os.path.isdir(self.home):
+            return
+        for directory, _, filenames in os.walk(self.home):
+            generations = {}
+            for filename in filenames:
+                match = GENERATION.fullmatch(filename)
+                if match:
+                    generations.setdefault(int(match.group(1) or 0), []).append(os.path.join(directory, filename))
+            if generations:
+                version = max(generations)
+                candidates = sorted(generations[version])
+                error = "DSH 同一世代有普通和压缩日志，无法确定来源" if len(candidates) != 1 else ""
+                if version > 4:
+                    error = f"不支持 DSH v{version}；支持 v0–v4"
+                yield candidates[0], error
 
-    def discover(self) -> Iterable[SessionInfo]:
-        cwd_map = self._cwd_from_sessions_meta()
-        for path in self._iter_files(self.home, "*.jsonl"):
-            info = self._peek(path, cwd_map)
-            if info:
-                yield info
+    def discover(self):
+        for path, error in self._candidates():
+            st = self._stat(path)
+            sid = os.path.relpath(os.path.dirname(path), self.home).replace("\\", "/")
+            conv = None
+            if not error:
+                try:
+                    conv = self._parse(path)
+                except (ValueError, OSError, TypeError, KeyError, AttributeError) as exc:
+                    error = str(exc)
+            yield SessionInfo(self.name, sid, (conv.title if conv else "DSH 会话") or "未命名会话",
+                              conv.cwd if conv else "", (conv.model or "") if conv else "",
+                              safe_ms(conv.created_at) if conv else None,
+                              safe_ms(conv.updated_at) if conv else st["updated_ms"], st["size"],
+                              len(conv.turns) if conv else 0, path, not bool(error), error)
 
-    def _cwd_from_sessions_meta(self) -> Dict[str, str]:
-        """<pid>.json 里记录了 sessionId -> cwd，用来补全 projects 目录缺失的信息。"""
-        out: Dict[str, str] = {}
-        for p in self._iter_files(self.sessions_meta_dir, "*.json"):
-            try:
-                with open(p, "r", encoding="utf-8") as f:
-                    d = json.load(f)
-                if d.get("sessionId") and d.get("cwd"):
-                    out[d["sessionId"]] = d["cwd"]
-            except Exception:
-                continue
-        return out
+    def read(self, sid):
+        for path, error in self._candidates():
+            identity = os.path.relpath(os.path.dirname(path), self.home).replace("\\", "/")
+            if identity == sid:
+                if error:
+                    raise ValueError(error)
+                conv = self._parse(path)
+                conv.id = identity
+                return conv
+        raise FileNotFoundError(f"找不到 DSH 会话: {sid}")
 
-    def _peek(self, path: str, cwd_map: Dict[str, str]) -> Optional[SessionInfo]:
-        st = self._stat(path)
-        sid = os.path.splitext(os.path.basename(path))[0]
-        cwd = ""
-        title = ""
-        model = ""
-        created_ms = None
-        updated_ms = None
-        turns = 0
-        first_user = ""
-        for rec, _trunc in read_jsonl(path, MAX_SCAN_BYTES):
-            rt = rec.get("type")
-            ts = safe_ms(rec.get("timestamp"))
-            if rt == "ai-title":
-                title = rec.get("aiTitle") or title
-            elif rt == "message":
-                if not cwd:
-                    cwd = rec.get("cwd") or ""
-                if not model:
-                    model = (rec.get("providerData") or {}).get("model", "")
-                if rec.get("role") == ir.USER and not first_user:
-                    for b in rec.get("content") or []:
-                        t = b.get("text") if isinstance(b, dict) else None
-                        if t:
-                            first_user = ir.summarize_line(strip_scaffolding(t) if self.clean else t, 60)
-                            break
-                turns += 1
-            elif rt in ("reasoning", "function_call", "function_call_result"):
-                if not cwd:
-                    cwd = rec.get("cwd") or ""
-                if not model:
-                    model = (rec.get("providerData") or {}).get("model", "")
-                turns += 1
-            if ts is not None:
-                created_ms = ts if created_ms is None else min(created_ms, ts)
-                updated_ms = ts if updated_ms is None else max(updated_ms, ts)
-        if not cwd:
-            cwd = cwd_map.get(sid, "")
-        if not title:
-            title = first_user
-        return SessionInfo(
-            source=self.name, id=sid, title=title or "未命名会话",
-            cwd=cwd.replace("\\", "/"), model=model,
-            created_ms=created_ms, updated_ms=updated_ms or st["updated_ms"],
-            size=st["size"], turns=turns, path=path,
-        )
-
-    # ---------------- 读取 ----------------
-
-    def read(self, sid: str) -> ir.Conversation:
-        path = self.find_path(sid)
-        if not path:
-            raise FileNotFoundError(f"找不到 DSH 会话: {sid}")
-        return self._parse(path)
-
-    def _parse(self, path: str) -> ir.Conversation:
-        conv = ir.Conversation(
-            source=self.name,
-            id=os.path.splitext(os.path.basename(path))[0],
-            path=path,
-            truncated=os.path.getsize(path) > MAX_SCAN_BYTES,
-        )
-        pending_assistant: Optional[ir.Turn] = None   # 累积同一个 assistant 回合
-        call_names: Dict[str, str] = {}              # callId -> tool name
-
-        def flush():
-            nonlocal pending_assistant
-            if pending_assistant and pending_assistant.blocks:
-                conv.turns.append(pending_assistant)
-            pending_assistant = None
-
-        def ensure_assistant(ts_ms):
-            nonlocal pending_assistant
-            if pending_assistant is None:
-                pending_assistant = ir.Turn(role=ir.ASSISTANT, ts=iso(ts_ms), source_type="dsh-turn")
-
-        for rec, truncated in read_jsonl(path, MAX_SCAN_BYTES):
-            conv.truncated = conv.truncated or truncated
-            rt = rec.get("type")
-            ts = safe_ms(rec.get("timestamp"))
-
-            if rt == "session-meta":
-                conv.meta.update(rec.get("meta") or {})
-                if not conv.created_at:
-                    conv.created_at = iso(ts)
-
-            elif rt == "ai-title":
-                conv.title = rec.get("aiTitle") or conv.title
-
-            elif rt == "message":
-                role = rec.get("role") or ir.USER
-                cwd = rec.get("cwd")
-                if cwd and not conv.cwd:
-                    conv.cwd = cwd.replace("\\", "/")
-                model = (rec.get("providerData") or {}).get("model")
-                if model and not conv.model:
-                    conv.model = model
-
-                blocks: List[ir.Block] = []
-                for b in rec.get("content") or []:
-                    if not isinstance(b, dict):
-                        continue
-                    bt = b.get("type")
-                    if bt in ("input_text", "output_text", "text"):
-                        text = b.get("text") or ""
-                        if self.clean:
-                            text = strip_scaffolding(text)
-                        if text:
-                            blocks.append(ir.Block.text_block(text))
-
-                if not blocks:
-                    continue
-
-                if role == ir.USER:
-                    flush()
-                    # 只有 tool_result 的用户消息也可能是工具回填，这里按纯文本处理即可
-                    conv.turns.append(ir.Turn(role=ir.USER, blocks=blocks, ts=iso(ts),
-                                              source_type="message"))
-                else:
-                    ensure_assistant(ts)
-                    for blk in blocks:
-                        pending_assistant.blocks.append(blk)
-                    if model:
-                        pending_assistant.model = model
-
-            elif rt == "reasoning":
-                raw = rec.get("rawContent") or []
-                text = ""
-                if isinstance(raw, list):
-                    text = "\n\n".join(
-                        (x.get("text") or "") for x in raw
-                        if isinstance(x, dict) and x.get("type") == "reasoning_text"
-                    )
-                if not text:
-                    text = "\n".join(x.get("text", "") for x in (rec.get("content") or []) if isinstance(x, dict))
-                if not text:
-                    text = rec.get("text") or ""
-                if self.clean:
-                    text = strip_scaffolding(text)
-                if text:
-                    ensure_assistant(ts)
-                    pending_assistant.blocks.append(ir.Block.thinking_block(text))
-
-            elif rt == "function_call":
-                flush()
-                cid = rec.get("callId") or rec.get("id") or ""
-                name = rec.get("name") or "unknown"
-                args = rec.get("arguments")
-                if not isinstance(args, str):
-                    args = json.dumps(args or {}, ensure_ascii=False)
-                call_names[cid] = name
-                ensure_assistant(ts)
-                pending_assistant.blocks.append(ir.Block.tool_call(cid, name, args))
-
-            elif rt == "function_call_result":
-                cid = rec.get("callId") or ""
-                out = rec.get("output")
-                if isinstance(out, dict):
-                    out = out.get("text") or json.dumps(out, ensure_ascii=False)
-                elif not isinstance(out, str):
-                    out = json.dumps(out or "", ensure_ascii=False)
-                ensure_assistant(ts)
-                pending_assistant.blocks.append(
-                    ir.Block.tool_result(cid, out or "", is_error=str(rec.get("status")) == "error")
-                )
-                call_names.pop(cid, None)
-
-            # file-history-snapshot 等直接忽略
-
-            if ts and not conv.updated_at:
-                conv.updated_at = iso(ts)
+    def _parse(self, path):
+        records = read_records(path)
+        header = records[0]
+        actual = header.get("version")
+        if header.get("type") != "session" or not isinstance(header.get("id"), str) or not header["id"] or type(actual) is not int:
+            raise ValueError("不是 DSH session header；WorkBuddy 请选独立来源")
+        filename = GENERATION.fullmatch(os.path.basename(path))
+        expected = int(filename.group(1) or 0) if filename else None
+        if actual not in range(5) or (expected is not None and actual != expected):
+            raise ValueError("DSH header 版本与文件世代不匹配或尚不支持")
+        conv = ir.Conversation(source=self.name, id=str(header["id"]), path=path,
+                               cwd=header.get("cwd") or "", created_at=iso(safe_ms(header.get("createdAt"))),
+                               meta={"format_version":actual, "header":header,
+                                     "notes":["DSH 导出保留事件历史；不等同于压缩、替换后的当前运行上下文。"],
+                                     "export_mode":"historical-events; not active surface replay"})
+        seen_calls = set()
+        final_steps = {(r["data"].get("turn"), r["data"].get("step")) for r in records[1:]
+                       if r.get("type") == "assistant/message" and isinstance(r.get("data"), dict)}
+        chunk_turns = {}
+        final_calls = {b.get("id") for r in records[1:] if r.get("type") == "assistant/message"
+                       for b in ((r.get("data") or {}).get("message") or {}).get("content", [])
+                       if isinstance(b, dict) and b.get("type") == "tool-call"}
+        for seq, rec in enumerate(records[1:]):
+            if type(rec.get("seq")) is not int or rec["seq"] != seq or not isinstance(rec.get("data"), dict):
+                raise ValueError("DSH event seq 不连续或 data 无效")
+            kind, data = rec.get("type"), rec["data"]
+            ts = iso(safe_ms(rec.get("time")))
             if ts:
-                conv.updated_at = iso(ts)
-
-        flush()
-
-        if not conv.cwd:
-            conv.cwd = os.path.dirname(os.path.dirname(path))
+                conv.updated_at = ts
+            if kind == "session/title":
+                conv.title = data.get("title") or conv.title
+            elif kind == "assistant/chunk":
+                key = (data.get("turn"), data.get("step"))
+                if key in final_steps:
+                    continue
+                if key not in chunk_turns:
+                    turn = ir.Turn(ir.ASSISTANT, ts=ts, source_type="assistant/chunk")
+                    conv.turns.append(turn)
+                    chunk_turns[key] = (turn, {})
+                turn, indices = chunk_turns[key]
+                chunk = data.get("chunk") or {}
+                index = chunk.get("index", 0)
+                if index not in indices:
+                    kind_map = {"text-delta":ir.TEXT, "reasoning-delta":ir.THINKING, "tool-call-delta":ir.TOOL_CALL}
+                    block = ir.Block(kind_map.get(chunk.get("type"), ir.RAW), call_id=chunk.get("id", ""),
+                                     name=chunk.get("name", ""))
+                    indices[index] = block
+                    turn.blocks = [indices[i] for i in sorted(indices)]
+                block = indices[index]
+                block.text += chunk.get("text", "")
+                block.arguments += chunk.get("argumentsDelta", "")
+                block.name = chunk.get("name") or block.name
+                if block.call_id:
+                    seen_calls.add(block.call_id)
+            elif kind in ("user/message", "assistant/message", "tool/result", "system/message", "developer/message"):
+                message = data if kind == "user/message" else data.get("message", {})
+                if not isinstance(message, dict):
+                    raise ValueError("DSH message 必须是 JSON 对象")
+                parsed = blocks(message.get("content"))
+                if kind == "tool/result" and actual == 4:
+                    if message.get("role") != "tool" or not message.get("toolCallId"):
+                        raise ValueError("DSH v4 工具结果必须有 tool role 和 toolCallId")
+                    parsed = [ir.Block.tool_result(message.get("toolCallId", ""),
+                              content_text(message.get("content")), bool(message.get("isError")))]
+                    parsed[0].meta["content"] = message.get("content", [])
+                role = ir.ASSISTANT if kind in ("assistant/message", "tool/result") else (
+                       ir.USER if kind == "user/message" and (message.get("source") or {}).get("kind", "user") == "user"
+                       else ir.SYSTEM)
+                model = (message.get("source") or {}).get("model")
+                if model:
+                    conv.model = model
+                filtered = []
+                for block in parsed:
+                    if block.kind == ir.TOOL_CALL:
+                        if block.call_id in seen_calls:
+                            continue
+                        seen_calls.add(block.call_id)
+                    filtered.append(block)
+                if filtered:
+                    conv.turns.append(ir.Turn(role, filtered, ts=ts, model=model, source_type=kind,
+                                             meta={"surfaceOp":rec.get("surfaceOp"), "source":message.get("source")}))
+            elif kind == "tool/call" and data.get("callId") not in seen_calls | final_calls:
+                seen_calls.add(data.get("callId"))
+                conv.turns.append(ir.Turn(ir.ASSISTANT, [ir.Block.tool_call(data.get("callId", ""),
+                                  data.get("name", ""), json_text(data.get("arguments", {})))], ts=ts,
+                                  source_type=kind))
+            else:
+                conv.meta.setdefault("events", []).append(rec)
+        conv.title = conv.title or conv.first_user_text(60)
         return conv
-
-    # ---------------- 写入 ----------------
-
-    def write(self, conv: ir.Conversation, cwd: str | None = None,
-              session_id: str | None = None, remap_tools: bool = True,
-              include_thinking: bool = True) -> str:
-        target_cwd = (cwd or conv.cwd or os.getcwd()).replace("\\", "/")
-        sid = validate_session_id(session_id if session_id is not None else uuid7())
-        slug = self.project_dir_for(target_cwd)
-        out_path = os.path.join(self.home, slug, f"{sid}.jsonl")
-        win_cwd = native_path(target_cwd)
-
-        lines: List[str] = []
-        base = now_ms()
-
-        def rid(i: int) -> str:
-            return uuid7(base + i)
-
-        # 会话元信息
-        lines.append(json.dumps({
-            "type": "session-meta", "id": rid(0), "sessionId": sid,
-            "timestamp": base, "meta": {"relay.imported-from": conv.source or "unknown"},
-        }, ensure_ascii=False))
-
-        if conv.title:
-            lines.append(json.dumps({
-                "type": "ai-title", "id": rid(1), "timestamp": base + 1,
-                "aiTitle": conv.title, "sessionId": sid, "cwd": win_cwd,
-            }, ensure_ascii=False))
-
-        seq = 2 if conv.title else 1
-        for turn in conv.turns:
-            ts = safe_ms(turn.ts) or (base + seq)
-            if turn.role == ir.USER:
-                texts = [b.text for b in turn.blocks if b.kind in (ir.TEXT, ir.IMAGE) and (b.text or b.media_type)]
-                if not texts:
-                    continue
-                content = [{"type": "input_text" if b.kind != ir.IMAGE else "input_image",
-                            "text": b.text} for b in turn.blocks
-                           if b.kind in (ir.TEXT, ir.IMAGE) and b.text]
-                if not content:
-                    continue
-                lines.append(json.dumps({
-                    "id": rid(seq), "timestamp": ts, "type": "message", "role": ir.USER,
-                    "content": content, "sessionId": sid, "cwd": win_cwd,
-                }, ensure_ascii=False))
-                seq += 1
-                continue
-
-            if turn.role != ir.ASSISTANT:
-                continue
-
-            for b in turn.blocks:
-                ts_b = ts + (seq % 1000)
-                if b.kind == ir.THINKING and include_thinking:
-                    lines.append(json.dumps({
-                        "id": rid(seq), "timestamp": ts_b, "type": "reasoning",
-                        "providerData": {"relay.source": conv.source},
-                        "content": [], "rawContent": [{"type": "reasoning_text", "text": b.text}],
-                        "sessionId": sid, "cwd": win_cwd,
-                    }, ensure_ascii=False))
-                    seq += 1
-                elif b.kind == ir.TEXT:
-                    lines.append(json.dumps({
-                        "id": rid(seq), "timestamp": ts_b, "type": "message", "role": ir.ASSISTANT,
-                        "content": [{"type": "output_text", "text": b.text}],
-                        "sessionId": sid, "cwd": win_cwd,
-                    }, ensure_ascii=False))
-                    seq += 1
-                elif b.kind == ir.TOOL_CALL:
-                    name = ToolNameMap.convert(b.name, "dsh", remap_tools)
-                    cid = b.call_id or f"call-{rid(seq)}"
-                    lines.append(json.dumps({
-                        "id": rid(seq), "timestamp": ts_b, "type": "function_call",
-                        "callId": cid, "name": name, "arguments": b.arguments or "{}",
-                        "sessionId": sid, "cwd": win_cwd,
-                    }, ensure_ascii=False))
-                    seq += 1
-                elif b.kind == ir.TOOL_RESULT:
-                    lines.append(json.dumps({
-                        "id": rid(seq), "timestamp": ts_b, "type": "function_call_result",
-                        "name": b.meta.get("name", ""), "callId": b.call_id,
-                        "status": "error" if b.is_error else "completed",
-                        "output": {"type": "text", "text": b.output or ""},
-                        "sessionId": sid, "cwd": win_cwd,
-                    }, ensure_ascii=False))
-                    seq += 1
-
-        atomic_write(out_path, lines, overwrite=False)
-        return out_path

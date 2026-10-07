@@ -6,7 +6,7 @@
 
 负责三件事：
   1. 在陌生机器上找到能用的 Python 解释器
-  2. 找出当前主机上三个 agent 的会话目录（在主机上，不在 U 盘上）
+  2. 找出当前主机上五个 agent 的会话目录（在主机上，不在 U 盘上）
   3. 读取 U 盘上的 config.json，用里面的显式配置覆盖自动探测结果
 
 同时支持： python bootstrap.py   直接打印环境体检报告
@@ -21,6 +21,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from relay.locations import SOURCES
 
 MIN_PY = (3, 8)
 
@@ -182,6 +183,8 @@ DEFAULT_CONFIG = {
         "claude": "",
         "codex": "",
         "dsh": "",
+        "workbuddy": "",
+        "codebuddy": "",
     },
     "port": 8745,
     "open_browser": True,
@@ -208,7 +211,7 @@ def load_config() -> dict:
         homes = cfg.get("agent_homes", {})
         if not isinstance(homes, dict):
             raise ValueError("agent_homes 必须是 JSON 对象")
-        for key in ("claude", "codex", "dsh"):
+        for key in SOURCES:
             if key in homes and not isinstance(homes[key], str):
                 raise ValueError(f"agent_homes.{key} 必须是字符串")
         if "port" in cfg and (type(cfg["port"]) is not int or not 1 <= cfg["port"] <= 65535):
@@ -226,9 +229,8 @@ def apply_config(cfg: dict | None = None) -> list[str]:
     cfg = cfg if cfg is not None else load_config()
     applied = []
     homes = cfg.get("agent_homes") or {}
-    for key, envname in (("claude", "RELAY_CLAUDE_HOME"),
-                         ("codex", "RELAY_CODEX_HOME"),
-                         ("dsh", "RELAY_DSH_HOME")):
+    for key in SOURCES:
+        envname = "RELAY_" + key.upper() + "_HOME"
         v = (homes.get(key) or "").strip()
         if v:
             os.environ[envname] = os.path.expanduser(v)
@@ -253,30 +255,20 @@ def effective_open_browser(cfg: dict | None = None) -> bool:
 # ---------------------------------------------------------------- 主机会话目录
 
 def probe_agent_homes() -> list[dict]:
-    """列出三个 agent 在当前主机上的会话目录存不存在。"""
-    home = Path.home()
-    specs = [
-        ("claude", "Claude Code", os.environ.get("RELAY_CLAUDE_HOME")
-         or os.environ.get("CLAUDE_CONFIG_DIR") or str(home / ".claude"), "claude/projects"),
-        ("codex", "OpenAI Codex", os.environ.get("RELAY_CODEX_HOME")
-         or os.environ.get("CODEX_HOME") or str(home / ".codex"), "codex/sessions"),
-        ("dsh", "DSH / WorkBuddy", os.environ.get("RELAY_DSH_HOME")
-         or str(home / ".workbuddy"), "workbuddy/projects"),
-    ]
+    """使用同一套 adapter 探测目录和会话，避免将日志世代计为多个会话。"""
+    from relay import registry
     out = []
-    for key, label, root, sub in specs:
-        base = Path(root).expanduser()
-        data = base / sub.split("/")[1]
-        found = False
-        count = 0
-        if data.is_dir():
-            found = True
-            try:
-                count = len(list(data.rglob("*.jsonl")))
-            except Exception:
-                count = -1
-        out.append({"key": key, "label": label, "root": str(base),
-                    "data": str(data), "found": found, "files": count})
+    for key, (label, _) in SOURCES.items():
+        adapter = registry.get(key, clean=True)
+        try:
+            rows = list(adapter.discover()) if adapter.available() else []
+            count = len(rows)
+            errors = list(dict.fromkeys(row.error for row in rows if row.error))
+        except Exception as exc:
+            count, errors = -1, [str(exc)]
+        out.append({"key":key, "label":label, "root":adapter.root if hasattr(adapter, "root") else adapter.home,
+                    "data":"; ".join(getattr(adapter, "roots", [adapter.home])),
+                    "found":adapter.available(), "files":count, "errors":errors[:3]})
     return out
 
 
@@ -324,12 +316,14 @@ def print_report() -> int:
     print("  当前主机上的会话目录：")
     for a in r["agents"]:
         if a["found"]:
-            cnt = f"{a['files']} 个会话文件" if a["files"] >= 0 else "读取失败"
+            cnt = f"{a['files']} 个会话" if a["files"] >= 0 else "读取失败"
             print(f"    ✓ {a['label']:<16} {cnt}")
             print(f"      {a['data']}")
         else:
             print(f"    · {a['label']:<16} 未安装 / 目录不存在")
             print(f"      {a['data']}")
+        for error in a.get("errors", []):
+            print(f"      ↳ {error}")
     print()
     print(line)
     return 0 if py["ok"] else 2

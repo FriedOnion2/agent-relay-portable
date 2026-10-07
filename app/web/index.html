@@ -52,7 +52,7 @@
   #content{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden}
 
   /* ---------- 侧栏 ---------- */
-  .tabs{display:flex; gap:4px; padding:12px 12px 8px; border-bottom:1px solid var(--line-soft)}
+  .tabs{display:flex; flex-wrap:wrap; gap:4px; padding:12px 12px 8px; border-bottom:1px solid var(--line-soft)}
   .tab{
     flex:1; padding:7px 4px; border-radius:8px; border:1px solid transparent; background:transparent;
     cursor:pointer; color:var(--text-2); font-size:13px; transition:.15s; text-align:center;
@@ -151,7 +151,7 @@
     <path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
     AgentRelay
   </div>
-  <span class="tagline">在 DSH · Claude · Codex 之间搬运对话记录</span>
+  <span class="tagline">独立识别 WorkBuddy · DSH · CodeBuddy · Claude · Codex 会话</span>
   <div class="agent-chips" id="chips"></div>
 </header>
 
@@ -177,7 +177,7 @@
 
     <div id="content">
       <div class="placeholders">
-        从左侧选一个会话<br>可以在 DSH / Claude Code / Codex 之间来回迁移
+        从左侧选一个会话<br>支持预览、Markdown 导出和迁移到可写目标
       </div>
     </div>
   </main>
@@ -186,8 +186,8 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const AGENTS = {dsh:'DSH / WorkBuddy', claude:'Claude Code', codex:'OpenAI Codex'};
-const state = {source:'dsh', target:'claude', sessions:[], current:null, turnLimit:40,
+const AGENTS = {workbuddy:'WorkBuddy', dsh:'DeepSeek Harness', codebuddy:'CodeBuddy', claude:'Claude Code', codex:'OpenAI Codex'};
+const state = {source:'workbuddy', target:'claude', sources:[], sessions:[], current:null, turnLimit:40,
   listRequest:0, sessionRequest:0, transferring:false};
 
 const $ = s => document.querySelector(s);
@@ -201,7 +201,7 @@ async function api(url, options){
 }
 
 function updateActions(){
-  $('#btnGo').disabled = !state.current || state.transferring;
+  $('#btnGo').disabled = !state.current || !state.target || state.transferring;
   $('#btnMd').disabled = !state.current;
 }
 
@@ -231,12 +231,13 @@ async function init(){
 
 async function loadSources(){
   const r = await api('/api/sources');
+  state.sources = r.sources || [];
   const box = $('#chips'); box.innerHTML = '';
   (r.sources || []).forEach(s=>{
     const el = document.createElement('span');
     el.className = 'chip' + (s.available ? '' : ' off');
-    el.title = s.home || '数据目录不存在';
-    el.innerHTML = `<i class="dot"></i>${esc(s.name)} <b>${s.session_count||0}</b>`;
+    el.title = [s.homes ? s.homes.join('\n') : s.home, s.write_note, s.error].filter(Boolean).join('\n');
+    el.innerHTML = `<i class="dot"></i>${esc(s.label||s.name)}${s.can_write===false?'（只读）':''} <b>${s.session_count||0}</b>`;
     box.appendChild(el);
   });
   if (!state.listRequest && !(r.sources||[]).some(s=>s.available && s.name===state.source)){
@@ -258,7 +259,8 @@ function buildTabs(){
 
 function buildTarget(){
   const sel = $('#target'); sel.innerHTML='';
-  const opts = Object.keys(AGENTS).filter(k=>k!==state.source);
+  const opts = Object.keys(AGENTS).filter(k=>k!==state.source &&
+    (state.sources.find(s=>s.name===k)?.can_write ?? ['workbuddy','claude','codex'].includes(k)));
   state.target = opts.includes(state.target) ? state.target : opts[0];
   opts.forEach(k=>{
     const o = document.createElement('option');
@@ -266,6 +268,7 @@ function buildTarget(){
     sel.appendChild(o);
   });
   sel.value = state.target;
+  updateActions();
 }
 
 function bind(){
@@ -323,10 +326,10 @@ async function loadSessions(){
       <h4>${esc(s.title || '未命名会话')}</h4>
       <div class="meta">
         <span title="更新时间">${esc(s.updated)}</span>
-        <span>${s.turns} 轮</span>
+        <span>${s.readable===false?'读取受限':s.turns+' 轮'}</span>
         <span>${esc(s.size_str)}</span>
       </div>`;
-    el.title = `${s.id}\n${s.cwd||''}\n${s.path}`;
+    el.title = `${s.id}\n${s.cwd||''}\n${s.path}\n${s.error||''}`;
     el.onclick = ()=>{
       document.querySelectorAll('.item.on').forEach(x=>x.classList.remove('on'));
       el.classList.add('on');
@@ -343,6 +346,10 @@ async function openSession(s){
   state.current = null;
   updateActions();
   const main = $('#content');
+  if(s.readable===false){
+    main.innerHTML = `<div class="placeholders">${esc(s.error||'此会话暂时无法读取')}</div>`;
+    return;
+  }
   main.innerHTML = '<div class="placeholders">读取中…</div>';
   $('#btnGo').disabled = true; $('#btnMd').disabled = true;
   let r;
@@ -370,6 +377,7 @@ async function openSession(s){
       ${i.created_at ? `<span>${esc(i.created_at)} → ${esc(i.updated_at||'')}</span>` : ''}
     </div>
     ${i.truncated ? '<div class="warn">⚠ 源文件超过 32MB，只读取了部分内容，迁移结果可能不完整</div>' : ''}
+    ${(i.notes||[]).map(n=>`<div class="warn">${esc(n)}</div>`).join('')}
   `;
 
   const feed = document.createElement('div');
@@ -400,13 +408,13 @@ function renderTurn(t){
   el.className = 'turn ' + (t.role === 'user' ? 'u' : 'a');
   const av = document.createElement('div');
   av.className = 'avatar';
-  av.textContent = t.role === 'user' ? 'U' : 'A';
+  av.textContent = t.role === 'user' ? 'U' : t.role === 'system' ? 'S' : 'A';
   const bub = document.createElement('div');
   bub.className = 'bubble';
 
   const who = document.createElement('div');
   who.className = 'who';
-  who.innerHTML = `<span>${t.role === 'user' ? '用户' : '助手'}</span>${t.ts ? `<span>${esc(t.ts)}</span>`:''}${t.model?`<span>${esc(t.model)}</span>`:''}`;
+  who.innerHTML = `<span>${t.role === 'user' ? '用户' : t.role === 'system' ? '系统 / 上下文' : '助手'}</span>${t.ts ? `<span>${esc(t.ts)}</span>`:''}${t.model?`<span>${esc(t.model)}</span>`:''}`;
   bub.appendChild(who);
 
   const blocks = t.blocks || [];

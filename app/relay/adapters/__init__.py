@@ -2,8 +2,10 @@ from .base import BaseAdapter, SessionInfo, ToolNameMap
 from .claude import ClaudeAdapter
 from .codex import CodexAdapter
 from .dsh import DshAdapter
+from .workbuddy import WorkBuddyAdapter
+from .codebuddy import CodeBuddyAdapter
 
 __all__ = [
     "BaseAdapter", "SessionInfo", "ToolNameMap",
-    "ClaudeAdapter", "CodexAdapter", "DshAdapter",
+    "ClaudeAdapter", "CodexAdapter", "DshAdapter", "WorkBuddyAdapter", "CodeBuddyAdapter",
 ]

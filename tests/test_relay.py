@@ -16,9 +16,9 @@ from relay import ir, paths, registry
 from relay.adapters.base import _norm_cwd, BaseAdapter, SessionInfo
 from relay.adapters.claude import ClaudeAdapter
 from relay.adapters.codex import CodexAdapter
-from relay.adapters.dsh import DshAdapter
+from relay.adapters.workbuddy import WorkBuddyAdapter
 
-ADAPTERS = {"claude": ClaudeAdapter, "codex": CodexAdapter, "dsh": DshAdapter}
+ADAPTERS = {"claude": ClaudeAdapter, "codex": CodexAdapter, "workbuddy": WorkBuddyAdapter}
 
 
 def sample():
@@ -122,9 +122,9 @@ class TransferTests(unittest.TestCase):
             self.assertTrue(conv.turns[0].blocks[0].is_error)
             self.assertEqual(conv.turns[1].blocks[0].text, "follow-up")
 
-    def test_dsh_record_ids_are_unique(self):
+    def test_workbuddy_record_ids_are_unique(self):
         with tempfile.TemporaryDirectory() as root:
-            output = DshAdapter(home=root).write(sample())
+            output = WorkBuddyAdapter(home=root).write(sample())
             ids = [rec["id"] for rec, _ in paths.read_jsonl(output)]
             self.assertEqual(len(ids), len(set(ids)))
 

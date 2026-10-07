@@ -115,6 +115,7 @@ class Handler(BaseHTTPRequestHandler):
                         "created_at": conv.created_at, "updated_at": conv.updated_at,
                         "path": conv.path, "truncated": conv.truncated,
                         "stats": conv.stats(),
+                        "notes": conv.meta.get("notes", []),
                     },
                     "turns": [
                         {

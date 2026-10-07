@@ -1,6 +1,6 @@
 """统一中间表示 (Intermediate Representation)。
 
-三家 agent 的会话格式各不相同，transfer 时先统一转成 IR，再由目标适配器序列化，
+各家 agent 的会话格式各不相同，transfer 时先统一转成 IR，再由目标适配器序列化，
 避免 N×N 的直接转换器。
 """
 
@@ -90,7 +90,7 @@ class Turn:
 
 @dataclass
 class Conversation:
-    source: str = ""            # claude | codex | dsh
+    source: str = ""            # workbuddy | dsh | codebuddy | claude | codex
     id: str = ""
     title: str = ""
     cwd: str = ""

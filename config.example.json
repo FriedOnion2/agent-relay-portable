@@ -1,16 +1,16 @@
 {
   "_说明": "全部留空即可 —— 留空时程序会自动探测。只有在会话目录不在默认位置时才需要填。",
   "_用法": "把这个文件改名成 config.json 放在 U 盘根目录，然后按实际路径填写。",
-
   "agent_homes": {
     "_说明": "留空 = 用当前主机 ~/ 下的默认位置。填了就强制用你指定的路径。",
     "_例子_windows": "D:\\backups\\claude",
     "_例子_macos": "/Users/你的名字/backup/.codex",
     "claude": "",
     "codex": "",
-    "dsh": ""
+    "dsh": "",
+    "workbuddy": "",
+    "codebuddy": ""
   },
-
   "port": 8745,
   "open_browser": true
 }

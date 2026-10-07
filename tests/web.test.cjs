@@ -27,7 +27,7 @@ function setup(){
     setTimeout(){return 1;}, clearTimeout(){},
     fetch(url,options){return new Promise((resolve,reject)=>requests.push({url,options,resolve,reject}));},
   });
-  vm.runInContext(script + '\n globalThis.app={state,loadSessions,openSession,doTransfer,bind};',context);
+  vm.runInContext(script + '\n globalThis.app={state,loadSessions,openSession,doTransfer,bind,buildTarget,buildTabs,loadSources};',context);
   const response = (index,body,status=200)=>requests[index].resolve({ok:status<400,status,json:async()=>body});
   return {app:context.app, elements, requests, response, el:document.querySelector};
 }
@@ -67,7 +67,7 @@ test('rapid detail selections keep the newest conversation',async()=>{
   t.response(0,{ok:true,info:{title:'old',stats:{}},turns:[]});
   await old;
   assert.equal(t.app.state.current.id,'new');
-  assert.equal(t.app.state.current.source,'dsh');
+  assert.equal(t.app.state.current.source,'workbuddy');
 });
 
 test('transfer captures the selected source and cannot be submitted twice',async()=>{
@@ -96,4 +96,28 @@ test('export failure is shown to the user and does not reject the event handler'
   t.requests[0].reject(new Error('offline'));
   await exporting;
   assert.match(t.el('#toast').children[0].textContent,/offline/);
+});
+
+test('five distinct tabs and only supported writable targets are offered',()=>{
+  const t=setup();
+  t.app.buildTabs();
+  assert.deepEqual(t.el('#tabs').children.map(x=>x.textContent),
+    ['WorkBuddy','DeepSeek Harness','CodeBuddy','Claude Code','OpenAI Codex']);
+  t.app.state.source='dsh';
+  t.app.buildTarget();
+  assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','claude','codex']);
+  t.app.state.sources=[{name:'codex',can_write:false}];
+  t.app.buildTarget();
+  assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','claude']);
+});
+
+test('unreadable source rows show the error and disable export and migration',async()=>{
+  const t=setup();
+  t.app.state.current={id:'old',source:'workbuddy'};
+  await t.app.openSession({id:'compressed',readable:false,error:'install zstandard'});
+  assert.equal(t.requests.length,0);
+  assert.equal(t.app.state.current,null);
+  assert.equal(t.el('#btnGo').disabled,true);
+  assert.equal(t.el('#btnMd').disabled,true);
+  assert.match(t.el('#content').innerHTML,/install zstandard/);
 });

@@ -26,6 +26,8 @@ def render(conv: ir.Conversation, include_thinking: bool = True,
     if conv.model:
         lines.append(f"- **模型**：{conv.model}")
     lines.append(f"- **来源**：{conv.source}")
+    for note in conv.meta.get("notes", []):
+        lines.append(f"- **读取说明**：{note}")
     if conv.created_at:
         lines.append(f"- **创建时间**：{conv.created_at}")
     if conv.updated_at:

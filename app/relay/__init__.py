@@ -1,3 +1,3 @@
-"""AgentRelay —— 在 DSH / Claude Code / Codex 之间迁移对话记录。"""
+"""AgentRelay: independent WorkBuddy, DSH, CodeBuddy, Claude and Codex sessions."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

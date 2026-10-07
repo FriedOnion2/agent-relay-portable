@@ -1,0 +1,2 @@
+# Required only to decode DeepSeek Harness .jsonl.zstd sessions.
+zstandard>=0.23.0,<1

@@ -45,6 +45,8 @@ class SessionInfo:
     size: int
     turns: int
     path: str
+    readable: bool = True
+    error: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
@@ -94,6 +96,7 @@ class BaseAdapter:
     name: str = ""
     label: str = ""
     home: Optional[str] = None          # 会话根目录
+    can_write: bool = True
 
     # ---------------- 子类实现 ----------------
 
@@ -181,6 +184,9 @@ class BaseAdapter:
             "label": self.label,
             "home": self.home,
             "available": self.available(),
+            "can_read": True,
+            "can_write": self.can_write,
+            "write_note": "" if self.can_write else "支持读取、导出及迁出；尚不支持写入此来源",
         }
 
     @staticmethod
@@ -213,3 +219,10 @@ class BaseAdapter:
 def summarize_for_list(conv: ir.Conversation) -> Dict[str, int]:
     """从完整会话里算会话列表需要的统计（用于无法廉价取标题的场景）。"""
     return conv.stats()
+
+
+class ReadOnlyAdapter(BaseAdapter):
+    can_write = False
+
+    def write(self, conv, **kwargs):
+        raise ValueError(f"{self.label} 暂不支持作为迁移目标；可读取、导出或迁移到其他工具")

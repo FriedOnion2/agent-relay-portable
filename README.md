@@ -1,7 +1,18 @@
 # AgentRelay Portable
 
-本地会话迁移工具，在 **Claude Code、OpenAI Codex、DSH / WorkBuddy** 之间转换对话记录，
-也可导出 Markdown 交接文档。程序只使用 Python 标准库，无需安装第三方依赖。
+本地会话迁移工具，独立识别 **WorkBuddy、DeepSeek Harness（DSH）、CodeBuddy、Claude Code、OpenAI Codex**，
+可预览、导出 Markdown 或迁移到支持写入的目标。基本功能只使用 Python 标准库；读取 DSH 压缩日志需要可选的 `zstandard`。
+
+| 来源 | 默认会话位置 | 能力 |
+|---|---|---|
+| WorkBuddy | `~/.workbuddy/projects` | 读取、导出、写入 |
+| DeepSeek Harness / DSH | `~/.dsh/sessions` | 读取 v0–v4 普通或 Zstd 日志、导出、迁出 |
+| CodeBuddy CLI | `~/.codebuddy/projects` | 读取、导出、迁出 |
+| CodeBuddy CN IDE / Extension | 系统的 `CodeBuddyExtension/Data/**/history` | 读取 manifest 与消息文件、导出、迁出 |
+| Claude Code | `~/.claude/projects` | 读取、导出、写入 |
+| OpenAI Codex | `~/.codex/sessions` | 读取、导出、写入 |
+
+CodeBuddy CLI 与 IDE 在同一个独立来源下显示；DSH 与 WorkBuddy 不再共用名称、配置或目录。
 
 ## 快速启动
 
@@ -11,6 +22,14 @@
 
 需要 Python **3.8 或更新版本**。Windows 可将完整的嵌入式 Python 解压到 `runtime/python/`。
 也可通过 `RELAY_PYTHON` 指定解释器。默认网址为 `http://127.0.0.1:8745/`。
+
+DSH 默认保存压缩会话。使用启动器所选的 Python 安装一次可选依赖：
+
+```sh
+python -m pip install -r requirements-optional.txt
+```
+
+缺少解码器时仍会列出 DSH 会话并显示安装提示；损坏、未写完、过大或未知版本日志会显示读取受限，避免迁移不完整数据。
 
 ```sh
 python app/cli.py doctor
@@ -25,6 +44,15 @@ python app/cli.py export codex <session-id> -o handoff.md
 
 复制 `config.example.json` 为 `config.json` 后可配置会话根目录、端口和是否打开浏览器。
 目录覆盖优先级为：配置文件 → `RELAY_<AGENT>_HOME` → agent 环境变量 → 当前用户默认目录。
+DSH 尊重 `DSH_HOME`，WorkBuddy 尊重 `WORKBUDDY_HOME`，CodeBuddy 尊重 `CODEBUDDY_HOME`。
+目录应填写工具根目录，不要填写其 `projects` / `sessions` 子目录。
+
+**旧配置升级：** 如果原 `agent_homes.dsh` 或 `RELAY_DSH_HOME` 指向 `.workbuddy`，请把该值移到
+`workbuddy` / `RELAY_WORKBUDDY_HOME`；`dsh` 现在只代表 DeepSeek Harness，不会静默别名为 WorkBuddy。
+
+CodeBuddy 默认同时扫描 CLI 与 IDE。IDE Windows 根目录为 `%LOCALAPPDATA%/CodeBuddyExtension/Data`，
+macOS 为 `~/Library/Application Support/CodeBuddyExtension/Data`，Linux 为 `~/.config/CodeBuddyExtension/Data`。
+显式设置 CodeBuddy 根目录时仅扫描该目录，可填写备份的 `.codebuddy` 或 IDE `Data` 根目录。
 
 程序只监听本机地址。转换读取源会话，并向目标 agent 的会话目录写入新文件；
 同名目标不会被覆盖。日志、本机配置、Python 运行时、缓存和真实会话数据不应上传 GitHub，
@@ -33,12 +61,14 @@ python app/cli.py export codex <session-id> -o handoff.md
 ## 验证
 
 ```sh
+python -m pip install -r requirements-optional.txt
 python -m unittest discover -s tests -v
 node --test tests/web.test.cjs
 ```
 
-Python 测试覆盖六个迁移方向的文本和工具顺序、Claude 父记录链、长消息、截断标记、
-UUIDv7、配置以及 HTTP 接口。Node.js 仅用于网页回归测试，运行应用不需要 Node.js。
+Python 测试覆盖三个可写目标之间的六个迁移方向、独立来源路径、DSH 世代/压缩/工具结果、
+CodeBuddy CLI/IDE 消息顺序与缺失文件、只读目标拦截，以及原有文本、HTTP 和配置回归。
+Node.js 仅用于网页回归测试，运行应用不需要 Node.js。
 所有测试均使用临时合成数据，不修改真实会话目录。
 
 GitHub Actions 在 Windows、Linux 和 macOS 上运行测试，包含 Python 3.8、3.12 和 3.14；
@@ -46,7 +76,10 @@ macOS 的 Python 3.8 因 runner 架构限制不在矩阵中。
 
 ## 当前限制
 
-- 单个源文件最多读取 32MB，超出时显示截断提示；不会完整迁移超出部分。
+- WorkBuddy / Claude / Codex 最多读取 32 MiB，超出时显示截断提示；DSH 普通/解压数据与 CodeBuddy IDE 总读取量超过限制会拒绝读取。
+- DSH 导出保留事件历史，不重放 surface replacement、compaction、seed 或 native resume 状态。
+- DSH、CodeBuddy 暂不支持原生写回，网页及 CLI 只提供 WorkBuddy、Claude、Codex 作为迁移目标。
+- CodeBuddy CLI/IDE 格式来自第三方消费者观测，未获得厂商原生续聊协议验证；格式依据见 [来源格式说明](docs/source-formats.md)。
 - 图片、加密思考及厂商特有元数据不能保证完整保留。
 - 工具名转换不会安装目标工具，也不会转换各家工具的参数协议。
 - Codex Desktop 可能需要自己的数据库索引；生成 JSONL 不保证会话自动出现在桌面列表。
