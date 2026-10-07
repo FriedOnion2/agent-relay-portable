@@ -11,6 +11,7 @@ function setup(){
   class Element {
     constructor(){ this.children=[]; this.value=''; this.checked=true; this.disabled=false;
       this.style={}; this.dataset={}; this.classList={add(){}, remove(){}}; this._html=''; }
+    setAttribute(name,value){this[name]=value;}
     set innerHTML(value){this._html=value; this.children=[];}
     get innerHTML(){return this._html;}
     appendChild(child){this.children.push(child); return child;}
@@ -28,7 +29,7 @@ function setup(){
     setTimeout(){return 1;}, clearTimeout(){},
     fetch(url,options){return new Promise((resolve,reject)=>requests.push({url,options,resolve,reject}));},
   });
-  vm.runInContext(script + '\n globalThis.app={state,loadSessions,openSession,doTransfer,doImportWindows,updateActions,bind,buildTarget,buildTabs,loadSources,storeCurrent,refreshStorage,restoreStored,buildSkillAgents,loadSkills,refreshSkillPackages,storeSelectedSkill,restoreSelectedSkill};',context);
+  vm.runInContext(script + '\n globalThis.app={selections,selectAll,storeBatch,state,loadSessions,openSession,doTransfer,doImportWindows,updateActions,bind,buildTarget,buildTabs,loadSources,storeCurrent,refreshStorage,restoreStored,buildSkillAgents,loadSkills,refreshSkillPackages,storeSelectedSkill,restoreSelectedSkill};',context);
   const response = (index,body,status=200)=>requests[index].resolve({ok:status<400,status,json:async()=>body});
   return {app:context.app, elements, requests, response, el:document.querySelector};
 }
@@ -352,4 +353,72 @@ test('exit waits for active transfers, suppresses duplicate requests and reports
   t.response(1,{ok:true});
   await exiting;
   assert.equal(t.el('#btnExit').disabled,true);
+});
+
+
+test('session checkboxes select only readable rows, support partial selection and reset on filtering',async()=>{
+  const t=setup();
+  const loading=t.app.loadSessions();
+  t.response(0,{ok:true,sessions:[{id:'a',title:'A'},{id:'b',title:'B'},{id:'bad',readable:false}]});
+  await loading;
+  t.app.selectAll('sessions',true);
+  assert.deepEqual([...t.app.selections.sessions.selected],['a','b']);
+  assert.equal(t.el('#selectAllSessions').checked,true);
+  const input=t.app.selections.sessions.inputs.get('a');
+  input.checked=false;input.onchange();
+  assert.equal(t.el('#selectAllSessions').indeterminate,true);
+  assert.equal(t.app.selections.sessions.inputs.get('bad').disabled,true);
+  const filtering=t.app.loadSessions();
+  assert.equal(t.app.selections.sessions.selected.size,0);
+  assert.equal(t.el('#storeSessions').disabled,true);
+  t.response(1,{ok:true,sessions:[]});await filtering;
+});
+
+test('batch conversation storage captures source and destination, continues failures and prevents duplicates',async()=>{
+  const t=setup();
+  const loading=t.app.loadSessions();
+  t.response(0,{ok:true,sessions:[{id:'a'},{id:'b'}]});await loading;
+  t.app.selectAll('sessions',true);
+  t.el('#storageRoot').value='/usb/storage';
+  const storing=t.app.storeBatch('sessions');
+  await t.app.storeBatch('sessions');
+  assert.equal(t.requests.length,2);
+  t.app.state.source='codex';t.el('#storageRoot').value='/other';
+  t.response(1,{ok:false,error:'exists'},409);
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.deepEqual(JSON.parse(t.requests[2].options.body),{source:'workbuddy',id:'b',storage:'/usb/storage'});
+  t.response(2,{ok:true,path:'/usb/b.zip'});
+  await new Promise(resolve=>setImmediate(resolve));
+  t.response(3,{ok:true,packages:[],root:'/other'});await storing;
+  assert.equal(t.app.state.transferring,false);
+  assert.deepEqual([...t.app.selections.sessions.selected],['a']);
+  assert.match(t.el('#storageResult').textContent,/成功 1 项，失败 1 项/);
+  assert.match(t.el('#storageResult').textContent,/exists/);
+});
+
+test('Skill select all saves each readable directory and clears successful selections',async()=>{
+  const t=setup();t.el('#skillAgent').value='codex';
+  const loading=t.app.loadSkills();
+  t.response(0,{ok:true,skills:[{name:'A',path:'/a'},{name:'B',path:'/b'},{name:'bad',path:'/bad',readable:false}]});
+  await loading;t.app.selectAll('skills',true);
+  assert.equal(t.app.selections.skills.selected.size,2);
+  const storing=t.app.storeBatch('skills');
+  t.response(1,{ok:true,path:'/a.zip'});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.deepEqual(JSON.parse(t.requests[2].options.body),{agent:'codex',path:'/b',storage:null});
+  t.response(2,{ok:true,path:'/b.zip'});
+  await new Promise(resolve=>setImmediate(resolve));
+  t.response(3,{ok:true,packages:[],root:'/storage'});await storing;
+  assert.equal(t.app.selections.skills.selected.size,0);
+  assert.equal(t.el('#storeSkills').disabled,true);
+});
+
+test('late Skill scans cannot overwrite the latest directory and its selections',async()=>{
+  const t=setup();t.el('#skillAgent').value='codex';
+  const old=t.app.loadSkills();t.el('#skillsDir').value='/new';
+  const latest=t.app.loadSkills();
+  t.response(1,{ok:true,skills:[{path:'/new/skill',name:'new'}]});await latest;
+  t.app.selectAll('skills',true);
+  t.response(0,{ok:true,skills:[{path:'/old/skill',name:'old'}]});await old;
+  assert.deepEqual([...t.app.selections.skills.selected],['/new/skill']);
 });
