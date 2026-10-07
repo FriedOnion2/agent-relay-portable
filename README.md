@@ -301,7 +301,7 @@ CodeBuddy CLI and IDE appear under one source. DSH and WorkBuddy have separate n
 
 ### Download and launch
 
-Current development preview: **v0.2.0-dev.2** · [Download the universal archive](https://github.com/FriedOnion2/agent-relay-portable/releases/download/v0.2.0-dev.2/AgentRelay-v0.2.0-dev.2-universal.zip) · [Release notes and checksums](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v0.2.0-dev.2)
+Current development preview: **v0.3.0-dev.1** · [Download the universal archive](https://github.com/FriedOnion2/agent-relay-portable/releases/download/v0.3.0-dev.1/AgentRelay-v0.3.0-dev.1-universal.zip) · [Release notes and checksums](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v0.3.0-dev.1)
 
 Download **`AgentRelay-<version>-universal.zip`** from [GitHub Releases](https://github.com/FriedOnion2/agent-relay-portable/releases), extract it completely, and use the launcher for your device. GitHub's automatically generated **Source code** archives are for development.
 
@@ -311,7 +311,7 @@ Download **`AgentRelay-<version>-universal.zip`** from [GitHub Releases](https:/
 | Mac | `AgentRelay.app` or `bash 启动_AgentRelay.command` | Apple Silicon: macOS 14+; Intel: macOS 15+ |
 | Linux | `bash 启动_AgentRelay.sh` | Ubuntu 22.04+ / glibc 2.35+ x64 |
 
-Keep the entire extracted folder on your portable drive. Its optional `config.json` and `storage/` directory are shared across devices. The launcher extracts only the matching runtime into a local cache, avoiding portable-drive executable restrictions and Mac symlink differences. **Keep `runtimes/`; no runtime is downloaded at startup.** Manually configured absolute paths need updating when switching devices; unset directory options use each device's defaults.
+Keep the entire extracted folder on your portable drive. Its optional `config.json` and `storage/` directory are shared across devices. The launcher extracts only the matching runtime into a local cache, avoiding portable-drive executable restrictions and Mac symlink differences. **Keep `runtimes/`; no runtime is downloaded at startup.** Device overrides live in `devices/<device-id>.json`; another device starts with its own defaults. Inaccessible shared paths prompt reselection in **环境与兼容** (Environment and compatibility); save an empty directory to restore automatic detection.
 
 The Mac app is not notarized by Apple. If macOS blocks it, run `bash Mac首次运行.command` in the trusted extracted directory, then launch again. Runtime caches are `%LOCALAPPDATA%/AgentRelay/<version>/` on Windows, `~/Library/Caches/AgentRelay/<version>/` on Mac, and `~/.cache/agentrelay/<version>/` on Linux (respecting `XDG_CACHE_HOME`). If extraction is interrupted, remove that version's cache and retry.
 
@@ -407,7 +407,9 @@ On Windows, `python app/cli.py ubuntu-use "D:\UbuntuBackup\alice"` selects an ac
 
 ### Configuration and data
 
-Copy `config.example.json` to `config.json` to configure source roots, the port, and browser opening. Directory precedence is: configuration file → `RELAY_<AGENT>_HOME` → assistant environment variable → current user's default directory. DSH respects `DSH_HOME`, WorkBuddy `WORKBUDDY_HOME`, and CodeBuddy `CODEBUDDY_HOME`.
+Copy `config.example.json` to `config.json` to configure source roots, the port, and browser opening. Directory precedence is: device configuration → shared configuration → `RELAY_<AGENT>_HOME` → assistant environment variable → current user's default directory. Relative roots resolve against the portable folder. DSH respects `DSH_HOME`, WorkBuddy `WORKBUDDY_HOME`, and CodeBuddy `CODEBUDDY_HOME`.
+
+Phase one adds migration previews with preserved/degraded/dropped/unknown categories, consistency tokens, device environment checks, trusted read-only adapter plugins, and daily synthetic format reports. Migration and `restore-session` commands accept `--dry-run` and `--preview-token`; existing direct calls remain compatible. CLI commands `device-config`, `plugins`, and `health --output health-output` expose these features. Native client continuation and latest client versions remain explicitly unverified. See [compatibility evidence](docs/compatibility.md), [adapter API and example](docs/adapters.md), and [portable troubleshooting](docs/troubleshooting.md) (Chinese).
 
 SDK defaults respect `CLAUDE_CONFIG_DIR`; override separately with `agent_homes.claude_sdk` / `RELAY_CLAUDE_SDK_HOME`. It does not inherit a Claude Code-only `RELAY_CLAUDE_HOME`. Supply an assistant's root directory, not its `projects` / `sessions` subdirectory.
 
