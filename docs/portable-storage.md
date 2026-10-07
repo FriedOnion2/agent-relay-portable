@@ -2,6 +2,7 @@
 
 对话包保存在项目目录 `storage/conversations/<agent>/<包ID>.zip`。把整个 `storage` 文件夹放到移动盘
 或复制到另一台设备，启动那台设备上的 AgentRelay 即可恢复。也可以只复制一个 ZIP 包。
+Release 总包中默认 `storage/` 位于总包根目录，Windows / Mac / Linux 共用，不落在解压运行库的本机缓存内。
 默认目录相对程序定位，不依赖原设备的盘符；`--storage` 或 `RELAY_STORAGE_HOME` 可以指定另一存储目录。
 
 ## 网页操作
