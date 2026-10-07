@@ -14,6 +14,7 @@ import argparse
 import json
 import os
 import sys
+from pathlib import Path
 
 # Windows 控制台默认 GBK，中文标题会炸
 if hasattr(sys.stdout, "reconfigure"):
@@ -27,14 +28,66 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import bootstrap  # noqa: E402  —— 便携版引导层：读 U 盘上的配置，按主机定位会话目录
 
-bootstrap.apply_config()
-
 _CFG = bootstrap.load_config()
+bootstrap.apply_config(_CFG)
 
 from relay import registry  # noqa: E402
 from relay import ir  # noqa: E402
 
-AGENTS = registry.all_keys()
+AGENTS = list(bootstrap.SOURCES)
+READ_AGENTS = list(dict.fromkeys(AGENTS + ["windows_" + k for k in bootstrap.SOURCES]))
+
+
+def cmd_windows_users(args):
+    from relay.windows import discover_profiles
+    rows = discover_profiles()
+    if args.json:
+        _print_json(rows)
+        return
+    for row in rows:
+        print(f"{row['user']}  {row['home']}\n  来源：{', '.join(row['sources'])}")
+    if not rows:
+        print("未找到已挂载的 Windows 会话目录。请在 Ubuntu 文件管理器中打开 Windows 分区。")
+    print('选择用户： python3 app/cli.py windows-use "/media/用户名/分区/Users/Windows用户名"')
+
+
+def cmd_windows_use(args):
+    from relay.windows import PROFILE_ENV
+    import platform
+    if platform.system() != "Linux":
+        raise ValueError("windows-use 仅用于 Ubuntu / Linux 读取挂载的 Windows 分区")
+    if args.clear and args.path:
+        raise ValueError("目录与 --clear 不能同时使用")
+    path = ""
+    if not args.clear:
+        if not args.path:
+            raise ValueError("请填写 Windows 用户目录，或用 --clear 清除选择")
+        profile = Path(args.path).expanduser()
+        if not profile.is_absolute() or not profile.is_dir():
+            raise ValueError("请填写已挂载且存在的 Windows 用户目录绝对路径（…/Users/用户名）")
+        if not os.access(profile, os.R_OK | os.X_OK):
+            raise ValueError("Windows 用户目录没有读取权限")
+        path = str(profile)
+    config = bootstrap.config_path()
+    # Preserve unknown keys and refuse to replace a malformed local config.
+    cfg = json.loads(config.read_text(encoding="utf-8-sig")) if config.exists() else {}
+    if not isinstance(cfg, dict):
+        raise ValueError("config.json 不是 JSON 对象，请先修复配置")
+    cfg["windows_user_home"] = path
+    import tempfile
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=str(config.parent),
+                                     prefix=".config-", suffix=".partial", delete=False) as f:
+        temporary = Path(f.name)
+        json.dump(cfg, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+    try:
+        os.replace(str(temporary), str(config))
+    finally:
+        temporary.unlink(missing_ok=True)
+    os.environ[PROFILE_ENV] = path
+    registry._CACHE.clear()
+    print(f"已保存 Windows 只读用户目录：{path}" if path else "已清除 Windows 用户目录选择")
+    print("重启服务后生效；Windows / macOS 启动时会忽略此项。")
 
 
 def _print_json(obj):
@@ -160,7 +213,7 @@ def cmd_serve(args):
 
 def cmd_doctor(args):
     """换机器后先跑这个：看 Python 找没找到、各个来源的目录在哪。"""
-    code = bootstrap.print_report()
+    code = bootstrap.print_report(_CFG)
     print()
     if code == 0:
         rows = registry.sources_info()
@@ -182,19 +235,19 @@ def build_parser():
     )
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    p1 = sub.add_parser("sources", help="查看六个来源是否可用及会话数量")
+    p1 = sub.add_parser("sources", help="查看来源是否可用及会话数量")
     p1.add_argument("--json", action="store_true")
     p1.set_defaults(func=cmd_sources)
 
     p2 = sub.add_parser("list", help="列出某个 agent 的会话")
-    p2.add_argument("agent", choices=AGENTS)
+    p2.add_argument("agent", choices=READ_AGENTS)
     p2.add_argument("--filter", "-f", default="", help="按标题/目录/id 过滤")
     p2.add_argument("--limit", "-n", type=int, default=500)
     p2.add_argument("--json", action="store_true")
     p2.set_defaults(func=cmd_list)
 
     p3 = sub.add_parser("show", help="查看会话内容")
-    p3.add_argument("agent", choices=AGENTS)
+    p3.add_argument("agent", choices=READ_AGENTS)
     p3.add_argument("id")
     p3.add_argument("--role", choices=["user", "assistant", "system"], help="只看某个角色")
     p3.add_argument("--head", type=int, default=0, help="只显示前 N 轮，0=全部")
@@ -203,7 +256,7 @@ def build_parser():
     p3.set_defaults(func=cmd_show)
 
     p4 = sub.add_parser("export", help="导出为 markdown 交接文档")
-    p4.add_argument("agent", choices=AGENTS)
+    p4.add_argument("agent", choices=READ_AGENTS)
     p4.add_argument("id")
     p4.add_argument("-o", "--output", help="输出文件，省略则打印到标准输出")
     p4.add_argument("--no-thinking", action="store_true", help="不包含思考过程")
@@ -212,7 +265,7 @@ def build_parser():
     p4.set_defaults(func=cmd_export)
 
     p5 = sub.add_parser("transfer", help="迁移会话到另一个 agent")
-    p5.add_argument("agent", choices=AGENTS, help="来源 agent")
+    p5.add_argument("agent", choices=READ_AGENTS, help="来源 agent")
     p5.add_argument("id", help="源会话 id")
     p5.add_argument("--to", "-t", required=True, choices=registry.writable_keys(), help="支持写入的目标 agent")
     p5.add_argument("--cwd", help="写入到哪个工作目录（默认沿用源会话的目录）")
@@ -232,6 +285,18 @@ def build_parser():
     p7.add_argument("--no-browser", action="store_true")
     p7.set_defaults(func=cmd_serve)
 
+    p8 = sub.add_parser("windows-users", help="探测已挂载 Windows 分区中的 Agent 用户目录")
+    p8.add_argument("--json", action="store_true")
+    p8.set_defaults(func=cmd_windows_users)
+    p9 = sub.add_parser("windows-use", help="保存 Windows 用户目录选择（Linux 只读来源）")
+    p9.add_argument("path", nargs="?")
+    p9.add_argument("--clear", action="store_true")
+    p9.set_defaults(func=cmd_windows_use)
+    # Per-command override can be passed through the Linux launcher. Choices
+    # are built before parsing, so recognize Windows source names explicitly.
+    for command in (p1, p2, p3, p4, p5, p6, p7):
+        command.add_argument("--windows-user", help="临时选择 Windows 用户目录，不保存配置")
+
     return p
 
 
@@ -239,6 +304,15 @@ def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
+        if getattr(args, "windows_user", None):
+            import platform
+            from relay.windows import PROFILE_ENV, selected_profile
+            if platform.system() != "Linux":
+                raise ValueError("--windows-user 仅用于 Ubuntu / Linux")
+            os.environ[PROFILE_ENV] = args.windows_user
+            _CFG["windows_user_home"] = args.windows_user
+            selected_profile()  # validate before using it
+            registry._CACHE.clear()
         result = args.func(args)
         return result if isinstance(result, int) else 0
     except KeyboardInterrupt:

@@ -22,6 +22,7 @@ import subprocess
 import sys
 from pathlib import Path
 from relay.locations import SOURCES
+from relay.windows import PROFILE_ENV, selected_profile
 
 MIN_PY = (3, 8)
 
@@ -189,6 +190,7 @@ DEFAULT_CONFIG = {
     },
     "port": 8745,
     "open_browser": True,
+    "windows_user_home": "",
 }
 
 
@@ -219,6 +221,11 @@ def load_config() -> dict:
             raise ValueError("port 必须是 1 到 65535 的整数")
         if "open_browser" in cfg and type(cfg["open_browser"]) is not bool:
             raise ValueError("open_browser 必须为 true 或 false")
+        if "windows_user_home" in cfg and not isinstance(cfg["windows_user_home"], str):
+            raise ValueError("windows_user_home 必须是字符串")
+        profile = (cfg.get("windows_user_home") or "").strip()
+        if profile and platform.system() == "Linux" and not Path(profile).expanduser().is_absolute():
+            raise ValueError("windows_user_home 必须是 Ubuntu 中的绝对挂载路径")
         return cfg
     except Exception as e:
         print(f"⚠ config.json 解析失败，忽略此文件：{e}", file=sys.stderr)
@@ -229,6 +236,10 @@ def apply_config(cfg: dict | None = None) -> list[str]:
     """把配置里的 agent 目录覆盖写进环境变量，返回生效的说明列表。"""
     cfg = cfg if cfg is not None else load_config()
     applied = []
+    profile = (cfg.get("windows_user_home") or "").strip()
+    if profile and platform.system() == "Linux":
+        os.environ[PROFILE_ENV] = os.path.expanduser(profile)
+        applied.append(f"Windows 用户目录（只读） ← {profile}")
     homes = cfg.get("agent_homes") or {}
     for key in SOURCES:
         envname = "RELAY_" + key.upper() + "_HOME"
@@ -259,7 +270,7 @@ def probe_agent_homes() -> list[dict]:
     """使用同一套 adapter 探测目录和会话，避免将日志世代计为多个会话。"""
     from relay import registry
     out = []
-    for key, (label, _) in SOURCES.items():
+    for key in registry.all_keys():
         adapter = registry.get(key, clean=True)
         try:
             rows = list(adapter.discover()) if adapter.available() else []
@@ -267,7 +278,7 @@ def probe_agent_homes() -> list[dict]:
             errors = list(dict.fromkeys(row.error for row in rows if row.error))
         except Exception as exc:
             count, errors = -1, [str(exc)]
-        out.append({"key":key, "label":label, "root":adapter.root if hasattr(adapter, "root") else adapter.home,
+        out.append({"key":key, "label":adapter.label, "root":adapter.root if hasattr(adapter, "root") else adapter.home,
                     "data":"; ".join(getattr(adapter, "roots", [adapter.home])),
                     "found":adapter.available(), "files":count, "errors":errors[:3]})
     return out
@@ -275,9 +286,9 @@ def probe_agent_homes() -> list[dict]:
 
 # ---------------------------------------------------------------- 体检报告
 
-def report(verbose: bool = True) -> dict:
+def report(verbose: bool = True, cfg: dict | None = None) -> dict:
     py = find_python()
-    cfg = load_config()
+    cfg = cfg if cfg is not None else load_config()
     apply_config(cfg)
     return {
         "platform": f"{platform.system()} {platform.release()} ({platform.machine()})",
@@ -289,11 +300,12 @@ def report(verbose: bool = True) -> dict:
         "overrides": cfg.get("agent_homes") or {},
         "agents": probe_agent_homes(),
         "port": effective_port(cfg),
+        "windows_user_home": selected_profile(),
     }
 
 
-def print_report() -> int:
-    r = report()
+def print_report(cfg: dict | None = None) -> int:
+    r = report(cfg=cfg)
     line = "─" * 66
     print(line)
     print(" AgentRelay 便携版 · 运行环境体检")
@@ -302,6 +314,8 @@ def print_report() -> int:
     print(f"  程序位置     {r['app_root']}")
     print(f"  所在盘       {r['media_root']}  [{r['media_kind']}]")
     print(f"  配置文件     {r['config']}")
+    if r["windows_user_home"]:
+        print(f"  Windows 用户 {r['windows_user_home']}（跨系统只读）")
     print()
     py = r["python"]
     if py["ok"]:

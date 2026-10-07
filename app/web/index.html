@@ -251,12 +251,17 @@ function buildTabs(){
   const box = $('#tabs'); box.innerHTML='';
   const note = state.sources.find(s=>s.name===state.source)?.read_note ||
     (state.source==='claude_sdk'?'SDK 与 Claude Code 共用会话存储；此入口显示共享记录，无法仅凭日志确认创建者。':'');
-  $('#sourceNote').textContent = note;
-  $('#sourceNote').style.display = note ? '' : 'none';
-  Object.keys(AGENTS).forEach(k=>{
+  const sourceInfo = state.sources.find(s=>s.name===state.source);
+  const location = sourceInfo?.homes?.join('；') || sourceInfo?.home || '';
+  const fullNote = [note, location ? '读取路径：' + location : '', sourceInfo?.error].filter(Boolean).join('\n');
+  $('#sourceNote').textContent = fullNote;
+  $('#sourceNote').style.display = fullNote ? '' : 'none';
+  const labels = {...AGENTS};
+  state.sources.forEach(s=>{ labels[s.name] = s.label || s.name; });
+  Object.keys(labels).forEach(k=>{
     const b = document.createElement('button');
     b.className = 'tab' + (k===state.source?' on':'');
-    b.textContent = AGENTS[k];
+    b.textContent = labels[k];
     b.onclick = ()=>{ if(state.source===k) return; state.source=k; buildTabs(); loadSessions(); };
     box.appendChild(b);
   });
@@ -368,7 +373,8 @@ async function openSession(s){
   if(request !== state.sessionRequest || source !== state.source) return;
 
   state.current = {id:s.id, title:r.info.title, truncated:!!r.info.truncated, source};
-  $('#cwd').placeholder = r.info.cwd ? `原目录：${r.info.cwd}` : '目标工作目录';
+  $('#cwd').placeholder = source.startsWith('windows_') ? '迁出必填：Ubuntu 项目目录 /home/…' :
+    (r.info.cwd ? `原目录：${r.info.cwd}` : '目标工作目录');
   updateActions();
 
   const i = r.info, st = i.stats || {};

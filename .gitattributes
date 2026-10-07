@@ -6,3 +6,4 @@
 *.command text eol=lf
 *.bat text eol=crlf
 AgentRelay.app/Contents/MacOS/AgentRelay text eol=lf
+*.sh text eol=lf

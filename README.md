@@ -21,7 +21,20 @@ SDK 与 Claude Code 共用默认存储，日志不能可靠证明创建者；SDK
 
 - **Windows**：双击 `启动_AgentRelay.bat`。
 - **macOS**：首次在项目目录运行 `bash Mac首次准备.command`，然后双击 `AgentRelay.app` 或 `启动_AgentRelay.command`。
-- **Linux / 命令行**：运行 `python3 app/cli.py serve`。
+- **Ubuntu / Linux**：首次运行 `bash Ubuntu首次准备.sh`，再运行 `bash 启动_AgentRelay.sh`；
+  无桌面环境加 `--no-browser`。非压缩格式也可直接 `python3 app/cli.py serve`。
+
+**Ubuntu / Windows 双系统：** 在 Ubuntu 挂载 Windows 分区后执行：
+
+```bash
+python3 app/cli.py windows-users
+python3 app/cli.py windows-use "/media/Ubuntu用户名/Windows分区/Users/Windows用户名"
+bash 启动_AgentRelay.sh
+```
+
+网页同时保留 Ubuntu 来源，并新增六个 **Windows 只读来源**，可浏览、导出和迁出。
+迁出时填写已存在的 Ubuntu 项目目录；不会自动改写历史中的 Windows 路径。
+完整步骤和挂载排查见 [Ubuntu 双系统说明](docs/ubuntu-dual-boot.md)。
 
 需要 Python **3.8 或更新版本**。Windows 可将完整的嵌入式 Python 解压到 `runtime/python/`。
 也可通过 `RELAY_PYTHON` 指定解释器。默认网址为 `http://127.0.0.1:8745/`。
@@ -31,6 +44,8 @@ DSH 默认保存压缩会话。使用启动器所选的 Python 安装一次可�
 ```sh
 python -m pip install -r requirements-optional.txt
 ```
+
+Ubuntu 推荐使用上述首次准备脚本，依赖放入用户级虚拟环境，兼容系统 Python 的 PEP 668 限制。
 
 缺少解码器时仍会列出 DSH 会话并显示安装提示；损坏、未写完、过大或未知版本日志会显示读取受限，避免迁移不完整数据。
 
@@ -52,6 +67,9 @@ DSH 尊重 `DSH_HOME`，WorkBuddy 尊重 `WORKBUDDY_HOME`，CodeBuddy 尊重 `CO
 SDK 默认尊重 `CLAUDE_CONFIG_DIR`；独立覆盖为 `agent_homes.claude_sdk` / `RELAY_CLAUDE_SDK_HOME`，
 不会继承仅为 Claude Code 设置的 `RELAY_CLAUDE_HOME`。
 目录应填写工具根目录，不要填写其 `projects` / `sessions` 子目录。
+
+`windows_user_home` / `RELAY_WINDOWS_USER_HOME` 指向 Ubuntu 挂载的 Windows 用户目录，只在 Linux 生效。
+临时 `--windows-user` 优先于保存的选择；此项追加只读来源，不改变本机写入目标。
 
 **旧配置升级：** 如果原 `agent_homes.dsh` 或 `RELAY_DSH_HOME` 指向 `.workbuddy`，请把该值移到
 `workbuddy` / `RELAY_WORKBUDDY_HOME`；`dsh` 现在只代表 DeepSeek Harness，不会静默别名为 WorkBuddy。
@@ -75,6 +93,7 @@ node --test tests/web.test.cjs
 Python 测试覆盖三个可写目标之间的六个迁移方向、独立来源路径、DSH 世代/压缩/工具结果、
 CodeBuddy CLI/IDE 消息顺序与缺失文件、SDK 共享目录、Claude 主链/压缩边界、RAW 保留、截断拦截，
 以及原有文本、HTTP 和配置回归。Claude / SDK / DSH 会话摘要缓存会在文件变化时失效。
+另覆盖双系统六来源读取、Windows 原文件不变、只读保护、原生 cwd、配置和 Ubuntu 启动器 HTTP 验证。
 Node.js 仅用于网页回归测试，运行应用不需要 Node.js。
 所有测试均使用临时合成数据，不修改真实会话目录。
 

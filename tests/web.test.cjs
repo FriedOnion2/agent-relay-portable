@@ -124,6 +124,19 @@ test('SDK selection shows shared-storage attribution and offers only writable ta
   assert.equal(t.el('#sourceNote').style.display,'none');
 });
 
+test('Windows sources appear separately with paths and never become writable targets',()=>{
+  const t=setup();
+  t.app.state.sources=[{name:'windows_codex',label:'Windows · OpenAI Codex',can_write:false,
+    home:'/media/Win/Users/A/.codex/sessions',read_note:'Windows 只读来源'}];
+  t.app.state.source='windows_codex';
+  t.app.buildTabs();
+  t.app.buildTarget();
+  assert.equal(t.el('#tabs').children.length,7);
+  assert.equal(t.el('#tabs').children.at(-1).textContent,'Windows · OpenAI Codex');
+  assert.match(t.el('#sourceNote').textContent,/\/media\/Win/);
+  assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','claude','codex']);
+});
+
 test('unreadable source rows show the error and disable export and migration',async()=>{
   const t=setup();
   t.app.state.current={id:'old',source:'workbuddy'};

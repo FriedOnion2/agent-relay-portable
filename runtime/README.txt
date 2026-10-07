@@ -25,8 +25,20 @@ runtime/ —— 可选的自带 Python（放了它才算真正免安装）
   单独复制不能组成可移植运行时。若使用系统 Python，需确认版本至少为 3.8。
 
 
-【linux】
-  同理：runtime/python/bin/python3
+【Ubuntu / Linux】
+  推荐在项目目录运行： bash Ubuntu首次准备.sh
+  缺少 venv 时先执行： sudo apt install python3 python3-venv
+  依赖装在用户级 ~/.local/share/agent-relay/venv，不修改系统 Python。
+  RELAY_VENV 可自定义位置；准备与启动时应设置相同值。
+  启动： bash 启动_AgentRelay.sh
+
+  Linux 启动器顺序：RELAY_PYTHON（若设置只使用它）→ 用户虚拟环境
+  → runtime/linux/bin/python3 → runtime/python/bin/python3 或 python → PATH。
+  runtime/linux 可与 Windows 的 runtime/python/python.exe 并存。
+  便携 Linux runtime 需要完整标准库和动态库，并匹配 Ubuntu 的 CPU / glibc；
+  不要仅复制 python3 文件，Windows python.exe 不能当 Linux Python 使用。
+  若项目盘 noexec，用 bash 启动脚本；Python/venv 本身需在允许执行的 Linux 文件系统上。
+  双系统读取 Windows 会话见 docs/ubuntu-dual-boot.md。
 
 
 放好之后，双击「启动_AgentRelay.bat」或运行：
