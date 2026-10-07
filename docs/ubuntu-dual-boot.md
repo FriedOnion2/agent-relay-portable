@@ -86,16 +86,58 @@ python3 app/cli.py export windows_codex <完整会话ID> -o Windows会话.md
 
 ## 4. 迁到 Ubuntu Agent
 
-仅查看和导出不需要转换项目路径。迁出时，必须填写**已存在的 Ubuntu 项目目录**，例如：
+支持直接迁入 Ubuntu 的**对应软件**。操作前关闭 Ubuntu 目标软件，选择 Windows 会话，在“目标工作目录”
+填写已存在的 Ubuntu 项目目录，再点击 **“迁到 Ubuntu 对应软件”**。无需另选目标，Windows Codex 会进入
+Ubuntu Codex，Windows SDK 会进入 Ubuntu SDK 使用的 Claude 共享存储。
+
+迁入会保留原生记录、未知字段、工具参数及会话原 ID，并调整项目元数据中的 cwd。
+同名目标不会覆盖；需要保留两份时点击“生成新 ID”，再执行迁入。
+完成后页面显示目标文件、会话 ID 与可用的续聊命令，也可点击“查看 Ubuntu 会话”检查内容。
+
+| Windows 来源 | Ubuntu 对应存储与条件 |
+|---|---|
+| WorkBuddy | 本机 `.workbuddy/projects`，优先复用已有项目目录 |
+| Claude Code | 本机 `.claude/projects`，保留原生父链及其他分支；提供 `claude --resume` 命令 |
+| Claude Agent SDK | 本机 SDK 配置的 Claude 原生共享存储；由 SDK 应用使用目标会话 ID 设置 `resume` |
+| Codex | 本机 `.codex/sessions`，同时迁入对应 `session_index.jsonl` 标题条目；提供 `codex resume` 命令 |
+| DSH | 本机 `.dsh/sessions`，完整 v4 原生事件、官方项目编码、独立 Zstd header frame；旧版需先升级 |
+| CodeBuddy CLI | 本机 `.codebuddy/projects`，保留原生 JSONL |
+| CodeBuddy IDE | 已存在的本机原生工作区，迁入 manifest / messages 并追加工作区 conversations 索引 |
+
+CodeBuddy IDE **先在 Ubuntu 的目标项目创建一条会话，再关闭软件**，让程序复用其真实工作区标识。
+缺少或存在多个匹配的工作区会停止导入，避免猜目录编码。多个 profile 匹配时，可显式配置
+CodeBuddy 的 Data 根目录。WorkBuddy / CodeBuddy CLI 也优先复用已有原生项目；新目录编码仍需对应软件核对。
+
+命令行示例（会话 ID 取 Windows 来源列表中的完整 ID）：
+
+```bash
+python3 app/cli.py import-windows codex <Windows会话ID> --cwd /home/alice/project
+python3 app/cli.py import-windows claude <Windows会话ID> --cwd /home/alice/project
+python3 app/cli.py import-windows claude_sdk <Windows会话ID> --cwd /home/alice/project
+python3 app/cli.py import-windows workbuddy <Windows会话ID> --cwd /home/alice/project
+python3 app/cli.py import-windows codebuddy <Windows完整会话ID> --cwd /home/alice/project
+~/.local/share/agent-relay/venv/bin/python3 app/cli.py import-windows dsh <Windows完整会话ID> --cwd /home/alice/project
+```
+
+`--session-id <新ID>` 可另外存一份；Claude、SDK、Codex 的新 ID 必须是 UUID。
+DSH 默认输出 Zstd，目标 DSH 配置为 `compression: none` 时使用 `--dsh-compression none`。
+分叉 DSH 会话需先迁入父会话并保留父 ID；子代理会话暂不单独迁入。完整主会话迁入保留事件历史，
+不经过 IR 重建，因此与通用导出不重放 surface 状态的限制不同。
+
+**通用跨软件转换**仍可使用原来的目标下拉框或命令：
 
 ```bash
 python3 app/cli.py transfer windows_codex <完整会话ID> --to claude --cwd /home/alice/project
 ```
 
-网页同样在“目标工作目录”填写 `/home/alice/project`。目标只能选择本机 WorkBuddy、Claude、Codex。
+通用转换的目标仍为 WorkBuddy、Claude、Codex。对应软件原生迁入另有独立入口，不开放任意内容写入 DSH/CodeBuddy/SDK。
 这里转换的是会话所属的项目目录；历史工具参数、正文中的 `C:\…` 或其他盘符不会自动替换，
 续聊前需自行确认对应文件和工具在 Ubuntu 上可用。
 项目目录也可以是 Ubuntu 中已挂载的共享项目路径；不要填写 Windows 盘符路径。
+
+迁移保留 Windows 原文件。不会复制登录凭据、配置、图片附件或子代理旁路文件，也不会自动启动模型请求。
+Codex Desktop 的数据库索引未自动修改，优先用给出的 CLI 命令恢复；Desktop 是否显示仍需本机软件检查。
+CodeBuddy 的格式依据来自已观测文件，自动回读通过不能代替对应版本的真实原生续聊验证。
 
 清除选择：
 
@@ -120,7 +162,11 @@ python3 app/cli.py windows-use --clear
 | 直接双击脚本不执行 | 在项目文件夹打开终端，使用 `bash 启动_AgentRelay.sh` |
 | Windows Agent 列表为空 | 默认目录没有对应记录，或 Windows 自定义了存储根目录；检查真实文件位置 |
 | 迁出提示项目目录无效 | 填写 Ubuntu 中已存在的绝对目录；原记录中的 Windows cwd 不会用作 Linux 写入路径 |
+| 对应软件导入提示 ID 已存在 | 保留现有会话；网页点击“生成新 ID”或命令行指定新 UUID 再导入 |
+| CodeBuddy IDE 没有匹配工作区 | 先在 Ubuntu 目标项目创建一条原生会话、关闭软件，再导入 |
+| DSH 旧世代 / 父会话缺失 | 先在 Windows DSH 升级到 v4；分叉会话先迁入父会话，保留父 ID |
 
 验证范围：自动测试使用合成 Windows 用户目录，覆盖六来源读取、CLI/IDE、只读保护、原文件不变、
 迁出 cwd、配置保留、挂载路径转义、切回 Windows/macOS、Ubuntu Bash 启动及停止。
+对应软件迁入另覆盖六个来源及 CodeBuddy 两种格式、原生未知字段、父链/事件、标题索引、同名保护与索引失败回滚。
 真实设备上的 NTFS 驱动、BitLocker、挂载权限与原生 Agent 续聊仍需在该双系统设备上检查。

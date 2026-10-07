@@ -74,6 +74,17 @@ class LinuxLauncherTests(unittest.TestCase):
                     with urllib.request.urlopen(request) as res:
                         self.assertIn("Windows", json.load(res)["markdown"])
                     self.assertEqual(original_path.read_bytes(), original)
+                    request = urllib.request.Request(url + "/api/import-windows", data=json.dumps(
+                        {"source": "windows_codex", "id": sid, "cwd": str(base)}).encode(),
+                        headers={"Content-Type": "application/json"})
+                    with urllib.request.urlopen(request) as res:
+                        imported = json.load(res)
+                    self.assertEqual(imported["to"]["source"], "codex")
+                    self.assertTrue(Path(imported["to"]["path"]).is_file())
+                    self.assertTrue(str(Path(imported["to"]["path"])).startswith(str(base / "empty" / "codex")))
+                    with urllib.request.urlopen(url + "/api/session?agent=codex&id=" + imported["to"]["id"]) as res:
+                        self.assertEqual(json.load(res)["info"]["cwd"], str(base))
+                    self.assertEqual(original_path.read_bytes(), original)
                     self.assertEqual(json.loads((root / "config.json").read_text())["windows_user_home"],
                                      str(base / "stale mount"))
                     proc.send_signal(signal.SIGINT)

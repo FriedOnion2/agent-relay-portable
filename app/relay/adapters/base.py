@@ -223,6 +223,7 @@ class BaseAdapter:
         if not os.path.isdir(root):
             return
         for dirpath, _dirnames, filenames in os.walk(root):
+            _dirnames[:] = [name for name in _dirnames if not (name.startswith(".relay-") and name.endswith(".partial"))]
             for fn in filenames:
                 if fnmatch.fnmatch(fn, pattern):
                     p = os.path.join(dirpath, fn)

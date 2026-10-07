@@ -27,7 +27,7 @@ function setup(){
     setTimeout(){return 1;}, clearTimeout(){},
     fetch(url,options){return new Promise((resolve,reject)=>requests.push({url,options,resolve,reject}));},
   });
-  vm.runInContext(script + '\n globalThis.app={state,loadSessions,openSession,doTransfer,bind,buildTarget,buildTabs,loadSources};',context);
+  vm.runInContext(script + '\n globalThis.app={state,loadSessions,openSession,doTransfer,doImportWindows,updateActions,bind,buildTarget,buildTabs,loadSources};',context);
   const response = (index,body,status=200)=>requests[index].resolve({ok:status<400,status,json:async()=>body});
   return {app:context.app, elements, requests, response, el:document.querySelector};
 }
@@ -135,6 +135,52 @@ test('Windows sources appear separately with paths and never become writable tar
   assert.equal(t.el('#tabs').children.at(-1).textContent,'Windows · OpenAI Codex');
   assert.match(t.el('#sourceNote').textContent,/\/media\/Win/);
   assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','claude','codex']);
+  assert.equal(t.app.state.target,'codex');
+});
+
+test('same-app Windows import needs a project and captures selection without duplicate submission',async()=>{
+  const t=setup();
+  t.app.state.source='windows_claude_sdk';
+  t.app.state.current={source:'windows_claude_sdk',id:'sdk-session'};
+  t.app.updateActions();
+  assert.equal(t.el('#btnImport').style.display,'');
+  assert.equal(t.el('#btnImport').disabled,true);
+  t.el('#cwd').value='/home/alice/project';
+  t.el('#importId').value='new-sdk';
+  t.app.updateActions();
+  assert.equal(t.el('#btnImport').disabled,false);
+  const importing=t.app.doImportWindows();
+  const payload=JSON.parse(t.requests[0].options.body);
+  assert.equal(t.requests[0].url,'/api/import-windows');
+  assert.equal(payload.source,'windows_claude_sdk');
+  assert.equal(payload.cwd,'/home/alice/project');
+  assert.equal(payload.session_id,'new-sdk');
+  assert.equal('target' in payload,false);
+  await t.app.doImportWindows();
+  assert.equal(t.requests.length,1);
+  t.response(0,{ok:true,to:{source:'claude_sdk',id:'new-sdk',native_id:'new-sdk',path:'/tmp/native.jsonl'},
+                  notes:['共享存储'],resume_command:''});
+  await new Promise(resolve=>setImmediate(resolve));
+  t.response(1,{ok:true,sources:[]});
+  await importing;
+  assert.equal(t.app.state.transferring,false);
+  assert.match(t.el('#importResult').children[0].textContent,/Claude Agent SDK/);
+  assert.equal(t.el('#importResult').children[1].textContent,'查看 Ubuntu 会话');
+  assert.equal(t.el('#importResult').style.display,'');
+});
+
+test('Windows import failure releases buttons and displays the backend reason',async()=>{
+  const t=setup();
+  t.app.state.source='windows_codebuddy';
+  t.app.state.current={source:'windows_codebuddy',id:'ide:0:session'};
+  t.el('#cwd').value='/home/alice/project';
+  t.app.updateActions();
+  const importing=t.app.doImportWindows();
+  t.response(0,{ok:false,error:'先创建原生工作区'},400);
+  await importing;
+  assert.equal(t.app.state.transferring,false);
+  assert.equal(t.el('#btnImport').disabled,false);
+  assert.match(t.el('#toast').children[0].textContent,/原生工作区/);
 });
 
 test('unreadable source rows show the error and disable export and migration',async()=>{

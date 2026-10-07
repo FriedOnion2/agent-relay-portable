@@ -33,6 +33,9 @@ bash 启动_AgentRelay.sh
 ```
 
 网页同时保留 Ubuntu 来源，并新增六个 **Windows 只读来源**，可浏览、导出和迁出。
+选择 Windows 会话、填写 Ubuntu 项目目录，点击 **“迁到 Ubuntu 对应软件”** 可保留原生记录迁入同款软件。
+支持 WorkBuddy、Claude、SDK、Codex、DSH v4、CodeBuddy CLI/IDE；IDE 需先创建本机工作区。
+也可运行 `python3 app/cli.py import-windows codex <会话ID> --cwd /home/你的用户/项目`。
 迁出时填写已存在的 Ubuntu 项目目录；不会自动改写历史中的 Windows 路径。
 完整步骤和挂载排查见 [Ubuntu 双系统说明](docs/ubuntu-dual-boot.md)。
 
@@ -105,7 +108,10 @@ macOS 的 Python 3.8 因 runner 架构限制不在矩阵中。
 - WorkBuddy / Claude / SDK / Codex / CodeBuddy CLI 最多读取 32 MiB，超出时可导出带标记的部分内容，迁移会停止；DSH 普通/解压数据与 CodeBuddy IDE 总读取量超过限制会拒绝读取。
 - Claude / SDK 默认读取当前 parentUuid 主链，不合并旧分支与子代理；压缩前的旧原文仍在原文件中，但不作为当前上下文重复迁移。
 - DSH 导出保留事件历史，不重放 surface replacement、compaction、seed 或 native resume 状态。
-- DSH、CodeBuddy、SDK 暂不支持原生写回，网页及 CLI 只提供 WorkBuddy、Claude、Codex 作为迁移目标。
+- 通用 IR 转换不写入 DSH、CodeBuddy、SDK；目标下拉框与 `transfer --to` 只提供 WorkBuddy、Claude、Codex。
+- 上述通用转换目标限制不影响“Windows → Ubuntu 对应软件”的原生文件迁入；后者保留原生记录，
+  不合成任意来源的 DSH/CodeBuddy/SDK 日志。DSH 需完整 v4，分叉先迁父会话，子代理不单独迁入；
+  CodeBuddy IDE 需唯一匹配的已有原生工作区，并在关闭软件后导入。
 - SDK 自行保存的 stream-json 输出不是 native transcript；关闭 persistence 或仅使用外部 SessionStore 的应用可能没有默认本地历史。
 - CodeBuddy CLI/IDE 格式来自第三方消费者观测，未获得厂商原生续聊协议验证；格式依据见 [来源格式说明](docs/source-formats.md)。
 - 图片、加密思考及厂商特有元数据不能保证完整保留。

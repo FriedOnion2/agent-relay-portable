@@ -106,6 +106,7 @@ class WindowsSource(ReadOnlyAdapter):
     def info(self):
         result = super().info()
         result.update(homes=self.roots, windows_profile=self.profile,
+                      native_import=True, native_target=self.source,
                       write_note="Windows 跨系统来源只读，不写回 Windows 会话目录")
         if not Path(self.profile).is_dir():
             result["error"] = "Windows 用户目录不可访问，请先挂载分区并核对路径"

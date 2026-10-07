@@ -85,6 +85,20 @@ class HttpTests(unittest.TestCase):
             self.assertEqual(status, 200)
             self.assertFalse(transfer.call_args.kwargs["include_thinking"])
 
+    def test_native_windows_import_routes_options_and_rejects_invalid_fields(self):
+        payload = {"source":"windows_dsh", "id":"p/s", "cwd":"/home/alice/project",
+                   "session_id":"new", "dsh_compression":"none"}
+        with patch("relay.native_import.import_windows", return_value={"ok":True}) as importer:
+            self.assertEqual(self.request("POST", "/api/import-windows", json.dumps(payload),
+                         {"Content-Type":"application/json"})[0], 200)
+            importer.assert_called_once_with("windows_dsh", "p/s", "/home/alice/project",
+                                             session_id="new", dsh_compression="none")
+        for body in ({"source":"windows_codex", "id":"s"}, {**payload, "dsh_compression":False}):
+            with patch("relay.native_import.import_windows") as importer:
+                self.assertEqual(self.request("POST", "/api/import-windows", json.dumps(body),
+                             {"Content-Type":"application/json"})[0], 400)
+                importer.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

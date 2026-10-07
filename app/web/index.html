@@ -169,12 +169,17 @@
     <div class="bar">
       <select class="sel" id="target"></select>
       <input class="input" id="cwd" style="width:290px" placeholder="目标工作目录（留空沿用原会话）">
+      <input class="input" id="importId" style="display:none;width:190px" placeholder="新会话 ID（可选）">
+      <button class="btn" id="btnNewId" style="display:none">生成新 ID</button>
       <label class="opt"><input type="checkbox" id="remap" checked>工具名适配</label>
       <label class="opt"><input type="checkbox" id="think" checked>保留思考</label>
       <div class="spacer"></div>
       <button class="btn" id="btnMd" disabled>导出 Markdown</button>
+      <button class="btn primary" id="btnImport" style="display:none" disabled>迁到 Ubuntu 对应软件</button>
       <button class="btn primary" id="btnGo" disabled>迁移到目标</button>
     </div>
+
+    <div id="importResult" class="meta" style="display:none;padding:12px 20px;white-space:pre-wrap"></div>
 
     <div id="content">
       <div class="placeholders">
@@ -203,6 +208,13 @@ async function api(url, options){
 
 function updateActions(){
   $('#btnGo').disabled = !state.current || state.current.truncated || !state.target || state.transferring;
+  const windows = state.source.startsWith('windows_');
+  $('#btnImport').style.display = windows ? '' : 'none';
+  $('#importId').style.display = windows ? '' : 'none';
+  $('#btnNewId').style.display = windows ? '' : 'none';
+  $('#btnImport').title = '对应软件迁移保留完整原生记录；工具名适配与保留思考勾选项仅用于通用迁移';
+  $('#btnImport').disabled = !windows || !state.current || state.current.truncated ||
+    !$('#cwd').value.trim() || state.transferring;
   $('#btnMd').disabled = !state.current;
 }
 
@@ -271,7 +283,8 @@ function buildTarget(){
   const sel = $('#target'); sel.innerHTML='';
   const opts = Object.keys(AGENTS).filter(k=>k!==state.source &&
     (state.sources.find(s=>s.name===k)?.can_write ?? ['workbuddy','claude','codex'].includes(k)));
-  state.target = opts.includes(state.target) ? state.target : opts[0];
+  const same = state.source.startsWith('windows_') ? state.source.slice(8) : '';
+  state.target = opts.includes(same) ? same : (opts.includes(state.target) ? state.target : opts[0]);
   opts.forEach(k=>{
     const o = document.createElement('option');
     o.value = k; o.textContent = '迁移到 ' + AGENTS[k];
@@ -282,10 +295,17 @@ function buildTarget(){
 }
 
 function bind(){
-  $('#target').onchange = e => state.target = e.target.value;
+  $('#target').onchange = e => {state.target = e.target.value; updateActions();};
+  $('#cwd').oninput = updateActions;
   let timer;
   $('#q').oninput = e => { clearTimeout(timer); timer = setTimeout(loadSessions, 260); };
   $('#btnGo').onclick = doTransfer;
+  $('#btnImport').onclick = doImportWindows;
+  $('#btnNewId').onclick = ()=>{
+    const id = globalThis.crypto?.randomUUID?.();
+    if(id) $('#importId').value = id;
+    else toast('当前浏览器不能生成 UUID，请手动填写新会话 ID',true);
+  };
   $('#btnMd').onclick = async ()=>{
     if(!state.current) return;
     const selected = state.current;
@@ -310,6 +330,8 @@ async function loadSessions(){
   updateActions();
   $('#content').innerHTML = '<div class="placeholders">从左侧选一个会话</div>';
   $('#cwd').value = '';
+  $('#importId').value = '';
+  $('#importResult').style.display = 'none';
   const box = $('#list');
   box.innerHTML = '<div class="empty">加载中…</div>';
   buildTarget();
@@ -495,6 +517,53 @@ function renderBlock(b){
 }
 
 /* ================= 迁移 ================= */
+async function doImportWindows(){
+  const selected = state.current;
+  const btn = $('#btnImport');
+  if(!selected || btn.disabled || state.transferring || !selected.source.startsWith('windows_')) return;
+  const payload = {source:selected.source, id:selected.id, cwd:$('#cwd').value.trim(),
+                   session_id:$('#importId').value.trim() || null};
+  if(!payload.cwd) return toast('请先填写 Ubuntu 项目目录',true);
+  state.transferring = true;
+  const old = btn.innerHTML;
+  btn.innerHTML = '<span class="spinner"></span> 导入中…';
+  updateActions();
+  try{
+    const r = await api('/api/import-windows',{
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)
+    });
+    const result = $('#importResult');
+    result.innerHTML = '';
+    const details = document.createElement('div');
+    details.textContent = `已导入 Ubuntu ${AGENTS[r.to.source]}\n会话 ID：${r.to.native_id}\n文件：${r.to.path}` +
+      (r.resume_command ? '\n续聊命令：'+r.resume_command : '') + '\n' + (r.notes||[]).join('\n');
+    result.appendChild(details);
+    const button = document.createElement('button');
+    button.className = 'btn';
+    button.textContent = '查看 Ubuntu 会话';
+    button.onclick = async()=>{
+      try{
+        state.source = r.to.source;
+        await loadSources();
+        buildTabs();
+        await loadSessions();
+        const row = state.sessions.find(s=>s.id===r.to.id);
+        if(row) await openSession(row);
+        else toast('请在 Ubuntu 来源中按会话 ID 搜索',true);
+      }catch(e){toast('刷新失败：'+e.message,true);}
+    };
+    result.appendChild(button);
+    result.style.display = '';
+    toast('已迁到 Ubuntu 对应软件');
+    await loadSources();
+  }catch(e){toast('导入失败：'+e.message,true);}
+  finally{
+    state.transferring = false;
+    btn.innerHTML = old;
+    updateActions();
+  }
+}
+
 async function doTransfer(){
   const btn = $('#btnGo');
   if(!state.current || btn.disabled) return;
@@ -502,6 +571,7 @@ async function doTransfer(){
   const old = btn.innerHTML;
   btn.innerHTML = '<span class="spinner"></span> 迁移中…';
   btn.disabled = true;
+  updateActions();
   const payload = {
     source: state.current.source,
     id: state.current.id,

@@ -51,6 +51,21 @@ def cmd_windows_users(args):
     print('选择用户： python3 app/cli.py windows-use "/media/用户名/分区/Users/Windows用户名"')
 
 
+def cmd_import_windows(args):
+    from relay.native_import import import_windows
+    result = import_windows(args.agent, args.id, args.cwd, session_id=args.session_id,
+                            dsh_compression=args.dsh_compression)
+    if args.json:
+        _print_json(result)
+        return
+    print(f"✓ 已导入 Ubuntu {bootstrap.SOURCES[result['to']['source']][0]}")
+    print(f"  新文件: {result['to']['path']}\n  原生会话 ID: {result['to']['native_id']}")
+    if result["resume_command"]:
+        print(f"  续聊命令: {result['resume_command']}")
+    for note in result["notes"]:
+        print(f"  · {note}")
+
+
 def cmd_windows_use(args):
     from relay.windows import PROFILE_ENV
     import platform
@@ -292,9 +307,17 @@ def build_parser():
     p9.add_argument("path", nargs="?")
     p9.add_argument("--clear", action="store_true")
     p9.set_defaults(func=cmd_windows_use)
+    p10 = sub.add_parser("import-windows", help="Windows 会话迁到 Ubuntu 对应软件，保留原生记录")
+    p10.add_argument("agent", choices=READ_AGENTS)
+    p10.add_argument("id", help="Windows 来源列表中的完整会话 ID")
+    p10.add_argument("--cwd", required=True, help="存在的 Ubuntu 项目目录")
+    p10.add_argument("--session-id", help="可选新 ID；默认保留 Windows 原生 ID，已有目标不会覆盖")
+    p10.add_argument("--dsh-compression", choices=["zstd", "none"], default="zstd")
+    p10.add_argument("--json", action="store_true")
+    p10.set_defaults(func=cmd_import_windows)
     # Per-command override can be passed through the Linux launcher. Choices
     # are built before parsing, so recognize Windows source names explicitly.
-    for command in (p1, p2, p3, p4, p5, p6, p7):
+    for command in (p1, p2, p3, p4, p5, p6, p7, p10):
         command.add_argument("--windows-user", help="临时选择 Windows 用户目录，不保存配置")
 
     return p
