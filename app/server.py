@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import sys
@@ -26,6 +27,9 @@ MAX_BODY = 4 * 1024 * 1024
 class RelayServer(ThreadingHTTPServer):
     # Preserve in-flight writes when the user stops the service.
     daemon_threads = False
+    # Windows SO_REUSEADDR permits a second live listener on the same port.
+    allow_reuse_address = sys.platform != "win32"
+    allow_reuse_port = False
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -266,10 +270,24 @@ class Handler(BaseHTTPRequestHandler):
             return self._error(str(e), 500)
 
 
-def run(host: str = "127.0.0.1", port: int = 8745, open_browser: bool = True):
+def create_server(host: str, port: int):
     if host not in ("127.0.0.1", "localhost"):
         raise ValueError("服务只支持本机地址 127.0.0.1 或 localhost")
-    srv = RelayServer((host, port), Handler)
+    if not 0 <= port <= 65535:
+        raise ValueError("端口必须在 0 到 65535 之间")
+    for candidate in range(port, min(port + 6, 65536)):
+        try:
+            return RelayServer((host, candidate), Handler)
+        except OSError as exc:
+            if exc.errno != errno.EADDRINUSE and getattr(exc, "winerror", None) != 10048:
+                raise
+    raise OSError(errno.EADDRINUSE, f"端口 {port} 及后续端口均被占用，请先在旧页面点击「退出服务」后重试")
+
+
+def run(host: str = "127.0.0.1", port: int = 8745, open_browser: bool = True):
+    srv = create_server(host, port)
+    if port and srv.server_address[1] != port:
+        print(f"端口 {port} 已被占用，自动改用 {srv.server_address[1]}")
     url = f"http://{host}:{srv.server_address[1]}/"
     print(f"AgentRelay Web 已启动: {url}")
     print("点击网页右上角「退出服务」或按 Ctrl+C 停止")

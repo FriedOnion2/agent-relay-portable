@@ -211,3 +211,31 @@ class ShutdownTests(unittest.TestCase):
             closer.join(timeout=3)
             serving.join(timeout=3)
         self.assertTrue(closed.is_set())
+
+
+class PortTests(unittest.TestCase):
+    def test_occupied_port_uses_next_free_port_without_stopping_old_server(self):
+        old = server.create_server("127.0.0.1", 0)
+        new = None
+        try:
+            if old.server_port == 65535:
+                self.skipTest("No next port")
+            new = server.create_server("127.0.0.1", old.server_port)
+            self.assertGreater(new.server_port, old.server_port)
+            self.assertLessEqual(new.server_port, old.server_port + 5)
+            self.assertGreaterEqual(old.fileno(), 0)
+        finally:
+            old.server_close()
+            if new:
+                new.server_close()
+
+    def test_only_address_in_use_errors_are_retried(self):
+        import errno
+        with patch.object(server, "RelayServer", side_effect=OSError(errno.EACCES, "denied")) as factory:
+            with self.assertRaises(OSError):
+                server.create_server("127.0.0.1", 8745)
+            self.assertEqual(factory.call_count, 1)
+        with patch.object(server, "RelayServer", side_effect=OSError(errno.EADDRINUSE, "busy")) as factory:
+            with self.assertRaisesRegex(OSError, "退出服务"):
+                server.create_server("127.0.0.1", 65534)
+            self.assertEqual(factory.call_count, 2)
