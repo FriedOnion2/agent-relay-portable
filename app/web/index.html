@@ -70,6 +70,8 @@
     padding:10px 11px; border-radius:var(--radius); border:1px solid transparent; cursor:pointer;
     margin-bottom:6px; background:#fff; transition:.12s;
   }
+  #list .item{position:relative;padding-left:36px}
+  #list .item > input[type="checkbox"]{position:absolute;left:10px;top:12px}
   .item:hover{border-color:var(--line); background:#fbfcfe}
   .item.on{border-color:var(--accent-line); background:var(--accent-soft)}
   .item h4{margin:0 0 5px; font-size:13px; font-weight:600; line-height:1.45;
@@ -167,6 +169,11 @@
     <div id="sourceNote" class="meta" style="padding:8px 12px;display:none"></div>
     <div class="side-tools">
       <input class="input" id="q" placeholder="搜索标题 / 目录 / id…" autocomplete="off">
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+        <label class="opt"><input type="checkbox" id="selectAllSessions">全选当前列表</label>
+        <span id="sessionSelectionCount" class="meta">已选 0 项</span>
+        <button class="btn" id="storeSessions" disabled>存储所选对话</button>
+      </div>
     </div>
     <div class="list" id="list"><div class="empty">加载中…</div></div>
   </aside>
@@ -200,7 +207,7 @@
 <div class="toast" id="toast"></div>
 <section id="storagePanel" style="display:none;position:fixed;inset:70px 24px 24px;z-index:80;background:var(--bg,#fff);padding:20px;overflow:auto;border:1px solid #bbb;border-radius:12px">
   <div class="bar"><b>跨设备对话存储</b><button class="btn" id="closeStorage">关闭</button></div>
-  <p>按 Agent 保存原生 ZIP 包。把 storage 文件夹复制到另一台设备，或填写包路径后恢复。同 ID 不覆盖，恢复到对应软件。</p>
+  <p>在左侧列表勾选对话，或全选当前列表，点击「存储所选对话」批量保存。按 Agent 保存原生 ZIP 包。把 storage 文件夹复制到另一台设备，或填写包路径后恢复。同 ID 不覆盖，恢复到对应软件。</p>
   <div class="bar">
     <input class="input" id="storageRoot" placeholder="存储目录（留空使用项目 storage/）" style="width:380px">
     <button class="btn" id="refreshStorage">刷新存储列表</button>
@@ -227,6 +234,11 @@
     <input class="input" id="skillStorageRoot" placeholder="存储目录（留空使用项目 storage/）">
     <button class="btn" id="storeSkill">存储 Skill</button>
     <button class="btn" id="refreshSkillPackages">刷新已存储 Skill</button>
+  </div>
+  <div class="bar">
+    <label class="opt"><input type="checkbox" id="selectAllSkills">全选当前列表</label>
+    <span id="skillSelectionCount" class="meta">已选 0 项</span>
+    <button class="btn" id="storeSkills" disabled>存储所选 Skill</button>
   </div>
   <div id="skillList"></div>
   <div class="bar">
@@ -255,6 +267,79 @@ async function api(url, options){
   return result;
 }
 
+function newSelection(){return {rows:[], selected:new Set(), inputs:new Map()};}
+const selections = {sessions:newSelection(), skills:newSelection()};
+const selectionUI = {
+  sessions:['#selectAllSessions','#sessionSelectionCount','#storeSessions'],
+  skills:['#selectAllSkills','#skillSelectionCount','#storeSkills']
+};
+function updateSelections(){
+  for(const [kind, group] of Object.entries(selections)){
+    const [all, count, button] = selectionUI[kind];
+    const eligible = group.rows.filter(row=>row.readable!==false && !row.truncated);
+    const eligibleKeys = new Set(eligible.map(row=>kind==='sessions'?row.id:row.path));
+    $(all).checked = eligible.length>0 && group.selected.size===eligible.length;
+    $(all).indeterminate = group.selected.size>0 && group.selected.size<eligible.length;
+    $(all).disabled = !eligible.length || state.transferring;
+    $(count).textContent = '已选 '+group.selected.size+' 项';
+    $(button).disabled = !group.selected.size || state.transferring;
+    for(const [key,input] of group.inputs){
+      input.checked = group.selected.has(key);
+      input.disabled = state.transferring || !eligibleKeys.has(key);
+    }
+  }
+}
+function selectAll(kind, checked){
+  const group = selections[kind];
+  if(state.transferring) return;
+  group.selected.clear();
+  if(checked) for(const row of group.rows){
+    if(row.readable!==false && !row.truncated) group.selected.add(kind==='sessions'?row.id:row.path);
+  }
+  updateSelections();
+}
+function selectionCheckbox(kind, row){
+  const group=selections[kind], key=kind==='sessions'?row.id:row.path;
+  const input=document.createElement('input');input.type='checkbox';input.checked=false;
+  input.setAttribute('aria-label','选择 '+(row.title||row.name||key));
+  input.onclick=e=>e.stopPropagation();
+  input.onchange=()=>{
+    if(state.transferring) return;
+    if(input.checked) group.selected.add(key);else group.selected.delete(key);
+    updateSelections();
+  };
+  group.inputs.set(key,input);
+  return input;
+}
+async function storeBatch(kind){
+  if(state.transferring) return;
+  const group=selections[kind];
+  const rows=group.rows.filter(row=>group.selected.has(kind==='sessions'?row.id:row.path));
+  if(!rows.length) return;
+  const agent=kind==='sessions'?state.source:$('#skillAgent').value;
+  const storage=$(kind==='sessions'?'#storageRoot':'#skillStorageRoot').value.trim()||null;
+  const result=$(kind==='sessions'?'#storageResult':'#skillResult');
+  if(kind==='sessions') $('#storagePanel').style.display='';
+  state.transferring=true;updateActions();
+  const lines=[];let succeeded=0, completed=0;
+  try{
+    for(const row of rows){
+      const key=kind==='sessions'?row.id:row.path;
+      result.textContent='正在存储 '+(completed+1)+' / '+rows.length+'…';
+      try{
+        const payload=kind==='sessions'?{source:agent,id:key,storage}:{agent,path:key,storage};
+        const r=await api(kind==='sessions'?'/api/store-session':'/api/store-skill',{
+          method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+        succeeded++;lines.push('已存储 '+(row.title||row.name||key)+'：'+r.path);
+        group.selected.delete(key);
+      }catch(e){lines.push('失败 '+(row.title||row.name||key)+'：'+e.message);}
+      completed++;
+    }
+    result.textContent='完成：成功 '+succeeded+' 项，失败 '+(rows.length-succeeded)+' 项。\n'+lines.join('\n');
+    if(kind==='sessions') await refreshStorage();else await refreshSkillPackages();
+  }finally{state.transferring=false;updateActions();}
+}
+
 function nativeMode(source=state.source){
   if(source.startsWith('windows_')) return 'import-windows';
   if(source.startsWith('ubuntu_')) return 'import-ubuntu';
@@ -262,6 +347,7 @@ function nativeMode(source=state.source){
 }
 
 function updateActions(){
+  updateSelections();
   $('#btnExit').disabled = state.transferring;
   $('#btnGo').disabled = !state.current || state.current.truncated || !state.target || state.transferring;
   const mode = nativeMode();
@@ -369,6 +455,10 @@ async function exitService(){
 }
 
 function bind(){
+  $('#selectAllSessions').onchange=e=>selectAll('sessions',e.target.checked);
+  $('#selectAllSkills').onchange=e=>selectAll('skills',e.target.checked);
+  $('#storeSessions').onclick=()=>storeBatch('sessions');
+  $('#storeSkills').onclick=()=>storeBatch('skills');
   $('#btnExit').onclick = exitService;
   $('#btnSkillStorage').onclick = ()=>{
     $('#skillPanel').style.display=''; buildSkillAgents();
@@ -415,6 +505,7 @@ function bind(){
 
 /* ================= 列表 ================= */
 async function loadSessions(){
+  selections.sessions=newSelection();
   const request = ++state.listRequest;
   const source = state.source;
   ++state.sessionRequest;
@@ -438,6 +529,8 @@ async function loadSessions(){
   }
   if(request !== state.listRequest || source !== state.source) return;
   state.sessions = r.sessions || [];
+  selections.sessions.rows=state.sessions;
+  updateSelections();
   box.innerHTML = '';
   if(!state.sessions.length){
     box.innerHTML = '<div class="empty">没有会话<br><span style="font-size:12px">换一个 agent 试试</span></div>';
@@ -455,6 +548,7 @@ async function loadSessions(){
         ${s.shared_store?'<span>Claude 共享记录</span>':''}
         <span>${esc(s.size_str)}</span>
       </div>`;
+    el.appendChild(selectionCheckbox('sessions',s));
     el.title = `${s.id}\n${s.cwd||''}\n${s.path}\n${s.error||''}`;
     el.onclick = ()=>{
       document.querySelectorAll('.item.on').forEach(x=>x.classList.remove('on'));
@@ -463,6 +557,7 @@ async function loadSessions(){
     };
     box.appendChild(el);
   });
+  updateSelections();
 }
 
 /* ================= 详情 ================= */
@@ -626,21 +721,29 @@ function buildSkillAgents(){
   target.value=state.source.replace(/^(windows_|ubuntu_)/,'');
 }
 
+let skillRequest=0;
 async function loadSkills(){
+  const request=++skillRequest;
+  selections.skills=newSelection();
+  $('#skillList').innerHTML='加载中…';
+  updateSelections();
   const agent=$('#skillAgent').value;
   try{
     const r=await api('/api/skills?agent='+encodeURIComponent(agent)+'&skills_dir='+encodeURIComponent($('#skillsDir').value.trim()));
-    if(agent!==$('#skillAgent').value) return;
+    if(request!==skillRequest || agent!==$('#skillAgent').value) return;
+    selections.skills.rows=r.skills||[];
     const box=$('#skillList');box.innerHTML='';
     const note=document.createElement('div');note.className='meta';note.style.padding='10px';
     note.textContent='扫描目录：'+(r.roots||[]).join('；')+((r.errors||[]).length?'\n'+r.errors.map(x=>x.error).join('\n'):'');box.appendChild(note);
     for(const row of r.skills||[]){
       const item=document.createElement('div');item.className='meta';item.style.padding='10px';
+      item.appendChild(selectionCheckbox('skills',row));
       const label=document.createElement('div');label.textContent=row.name+'\n'+row.path+(row.error?'\n'+row.error:'');item.appendChild(label);
       const button=document.createElement('button');button.className='btn';button.textContent='选择存储';button.disabled=row.readable===false;
       button.onclick=()=>{$('#skillPath').value=row.path;};item.appendChild(button);box.appendChild(item);
     }
-  }catch(e){toast('Skill 读取失败：'+e.message,true);}
+    updateSelections();
+  }catch(e){if(request===skillRequest){$('#skillList').textContent='读取失败：'+e.message;toast('Skill 读取失败：'+e.message,true);}}
 }
 
 async function refreshSkillPackages(){
