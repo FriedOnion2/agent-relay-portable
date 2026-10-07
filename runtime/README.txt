@@ -1,3 +1,5 @@
+本文件说明源码版可选 Python。Release universal 总包已内置运行时，无需按本文安装。
+
 runtime/ —— 可选的自带 Python（放了它才算真正免安装）
 
 这个目录是留给 Python 便携版的。留空也能用：程序会自动去找目标机器上
