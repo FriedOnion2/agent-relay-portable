@@ -42,7 +42,7 @@ SDK 与 Claude Code 共用默认存储，日志不能可靠证明创建者；SDK
 
 ## Release 下载即用
 
-当前开发预览版：**v0.4.0-dev.1** · [下载三系统总包](https://github.com/FriedOnion2/agent-relay-portable/releases/download/v0.4.0-dev.1/AgentRelay-v0.4.0-dev.1-universal.zip) · [发布说明与校验文件](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v0.4.0-dev.1)
+当前开发预览版：**v0.4.0-dev.2** · [下载三系统总包](https://github.com/FriedOnion2/agent-relay-portable/releases/download/v0.4.0-dev.2/AgentRelay-v0.4.0-dev.2-universal.zip) · [发布说明与校验文件](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v0.4.0-dev.2)
 
 普通用户下载 [GitHub Releases](https://github.com/FriedOnion2/agent-relay-portable/releases) 中的
 **`AgentRelay-<版本>-universal.zip`**，完整解压后按当前设备运行启动器。一个总包同时包含
@@ -233,7 +233,7 @@ python -m unittest discover -s tests -v
 node --test tests/web.test.cjs
 ```
 
-截至 2026-10-08，第二阶段本机回归为 **140 项 Python 测试（Windows 上 4 项环境相关跳过）与 27 项网页测试**。
+截至 2026-10-08，第二阶段本机回归为 **140 项 Python 测试（Windows 上 4 项环境相关跳过）与 28 项网页测试**。
 GitHub Actions 在 Windows、Ubuntu 和 macOS 上验证 Python 3.8、3.12、3.14，共 8 组；
 macOS 不包含 Python 3.8。批量存储已用浏览器和临时样例实测，分别生成两条对话包与两个 Skill 包。
 自动测试覆盖格式转换、存储包往返、完整性与冲突保护、端口占用、退出等待、异步列表及批量部分失败。
@@ -305,7 +305,7 @@ CodeBuddy CLI and IDE appear under one source. DSH and WorkBuddy have separate n
 
 ### Download and launch
 
-Current development preview: **v0.4.0-dev.1** · [Download the universal archive](https://github.com/FriedOnion2/agent-relay-portable/releases/download/v0.4.0-dev.1/AgentRelay-v0.4.0-dev.1-universal.zip) · [Release notes and checksums](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v0.4.0-dev.1)
+Current development preview: **v0.4.0-dev.2** · [Download the universal archive](https://github.com/FriedOnion2/agent-relay-portable/releases/download/v0.4.0-dev.2/AgentRelay-v0.4.0-dev.2-universal.zip) · [Release notes and checksums](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v0.4.0-dev.2)
 
 Download **`AgentRelay-<version>-universal.zip`** from [GitHub Releases](https://github.com/FriedOnion2/agent-relay-portable/releases), extract it completely, and use the launcher for your device. GitHub's automatically generated **Source code** archives are for development.
 
@@ -433,7 +433,7 @@ python -m unittest discover -s tests -v
 node --test tests/web.test.cjs
 ```
 
-As of 2026-10-08, stage-two local regression coverage is **140 Python tests (4 environment-dependent skips on Windows) and 27 web tests**. GitHub Actions tests Python 3.8, 3.12, and 3.14 across Windows, Ubuntu, and macOS in eight combinations (macOS excludes Python 3.8). Release smoke runs exercise FTS5, Chinese queries, reasoning exclusion/purge, workflow drafts, explicit export and a relocated corpus inside every frozen runtime.
+As of 2026-10-08, stage-two local regression coverage is **140 Python tests (4 environment-dependent skips on Windows) and 28 web tests**. GitHub Actions tests Python 3.8, 3.12, and 3.14 across Windows, Ubuntu, and macOS in eight combinations (macOS excludes Python 3.8). Release smoke runs exercise FTS5, Chinese queries, reasoning exclusion/purge, workflow drafts, explicit export and a relocated corpus inside every frozen runtime.
 
 Tests cover conversion, archive round trips, integrity and conflict protection, occupied ports, shutdown waiting, asynchronous lists, and partial batch failures. They use temporary synthetic data without modifying real conversations or executing Skill scripts.
 

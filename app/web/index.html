@@ -1089,10 +1089,19 @@ async function pollCorpusJob(){
   corpusState.job=r.id;
   corpusBusy(r.status==='running');
   const p=r.result||r.progress||{};
-  const {candidates,...details}=p;
-  $('#corpusStatus').textContent=`${r.kind==='index'?'索引':'提炼'}：${r.status}\n`+JSON.stringify(details,null,2)+(r.error?'\n'+r.error:'');
+  const labels={running:'进行中',completed:'已完成',canceled:'已取消',failed:'失败'};
+  const lines=[`${r.kind==='index'?'索引':'提炼'}：${labels[r.status]||r.status}`];
+  if(p.processed!=null)lines.push(`已扫描 ${p.processed} 条`+(r.kind==='index'?`，新增/更新 ${p.indexed||0} 条，未变化 ${p.unchanged||0} 条`:`，识别 ${p.segments||0} 个任务片段`));
+  if(p.source)lines.push('当前来源：'+(p.source==='packages'?'已存储对话包':AGENTS[p.source]||p.source));
+  if(p.limited)lines.push('已达到本次处理上限；已完成的结果保留。可缩小来源范围后再更新。');
+  if(r.kind==='extract' && r.status==='completed')lines.push(`找到 ${p.candidates?.length||0} 份待审核草稿；排序分不是成功概率。`);
+  for(const warning of p.warnings||[])lines.push(warning);
+  for(const error of (p.errors||[]).slice(0,5))lines.push(`${error.source||''} ${error.id||''}：${error.error}`);
+  if((p.errors||[]).length>5)lines.push(`还有 ${p.errors.length-5} 项读取错误，请缩小来源范围查看。`);
+  if(r.error)lines.push(r.error);
+  $('#corpusStatus').textContent=lines.join('\n');
   if(r.kind==='extract' && r.status==='completed' && corpusState.rendered!==r.id){
-    renderDraftCandidates(candidates||[]);corpusState.rendered=r.id;
+    renderDraftCandidates(p.candidates||[]);corpusState.rendered=r.id;
   }
   if(r.status==='running')corpusState.timer=setTimeout(()=>pollCorpusJob().catch(e=>{corpusBusy(false);toast(e.message,true);}),650);
 }
@@ -1146,7 +1155,9 @@ function renderDraftCandidates(candidates){
     const box=document.createElement('div');box.className='session';
     const text=document.createElement('p');text.textContent=`${c.name} · ${c.evidence_count} 条独立证据 · 排序分 ${c.score}`;box.appendChild(text);
     const button=document.createElement('button');button.className='btn';button.textContent='选中并编辑这份草稿';button.onclick=()=>{
-      corpusState.selected=c.id;$('#draftMarkdown').value=c.markdown;$('#confirmDraft').checked=false;
+      corpusState.selected=c.id;
+      const origin=globalThis.location?.origin||'http://127.0.0.1:8745';
+      $('#draftMarkdown').value=c.markdown.split('http://127.0.0.1:8745/').join(origin+'/');$('#confirmDraft').checked=false;
       $('#draftResult').textContent='';$('#draftEditor').style.display='';updateDraftAction();
     };box.appendChild(button);
     for(const key of c.evidence){const evidence=document.createElement('button');evidence.className='btn';evidence.textContent='查看证据 '+key.slice(0,8);evidence.onclick=()=>openCorpusDocument(key);box.appendChild(evidence);}
