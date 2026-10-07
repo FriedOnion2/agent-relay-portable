@@ -18,12 +18,13 @@ function setup(){
   const elements = new Map();
   const requests=[];
   const document={
+    body:new Element(),
     querySelector(selector){if(!elements.has(selector)) elements.set(selector,new Element()); return elements.get(selector);},
     querySelectorAll(){return [];},
     createElement(){return new Element();},
     createTextNode(text){return {textContent:text};},
   };
-  const context = vm.createContext({document, encodeURIComponent, Blob, URL, navigator:{},
+  const context = vm.createContext({document, encodeURIComponent, Blob, URL, navigator:{}, confirm(){return true;},
     setTimeout(){return 1;}, clearTimeout(){},
     fetch(url,options){return new Promise((resolve,reject)=>requests.push({url,options,resolve,reject}));},
   });
@@ -328,4 +329,27 @@ test('a truncated conversation can be exported but cannot be migrated',async()=>
   assert.equal(t.el('#btnMd').disabled,false);
   await t.app.doTransfer();
   assert.equal(t.requests.length,1);
+});
+
+
+test('exit waits for active transfers, suppresses duplicate requests and reports failures',async()=>{
+  const t=setup();
+  t.app.bind();
+  t.app.state.transferring=true;
+  await t.el('#btnExit').onclick();
+  assert.equal(t.requests.length,0);
+  t.app.state.transferring=false;
+  const failing=t.el('#btnExit').onclick();
+  await t.el('#btnExit').onclick();
+  assert.equal(t.requests.length,1);
+  assert.equal(t.requests[0].url,'/api/shutdown');
+  assert.equal(t.requests[0].options.method,'POST');
+  t.requests[0].reject(new Error('offline'));
+  await failing;
+  assert.equal(t.el('#btnExit').disabled,false);
+  assert.match(t.el('#toast').children[0].textContent,/退出失败/);
+  const exiting=t.el('#btnExit').onclick();
+  t.response(1,{ok:true});
+  await exiting;
+  assert.equal(t.el('#btnExit').disabled,true);
 });

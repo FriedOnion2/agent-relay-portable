@@ -51,7 +51,21 @@ def main():
                         print("DSH sessions:", dsh.get("session_count"), "unreadable:", dsh.get("unreadable_count"), "error:", dsh.get("error", "none"))
                         print("Log:", log)
                         print(match.group(0))
-                        return
+                        request = urllib.request.Request(
+                            "http://127.0.0.1:%d/api/shutdown" % port,
+                            data=b"{}", headers={"Content-Type": "application/json"}, method="POST")
+                        with urllib.request.urlopen(request, timeout=3) as response:
+                            assert json.load(response)["ok"]
+                        deadline_stop = time.monotonic() + 5
+                        while time.monotonic() < deadline_stop:
+                            try:
+                                with urllib.request.urlopen("http://127.0.0.1:%d/" % port, timeout=.5):
+                                    pass
+                            except OSError:
+                                print("PASS: exit API stopped the native app service")
+                                return
+                            time.sleep(.1)
+                        raise AssertionError("Service still accepts requests after shutdown")
                     except OSError:
                         pass
             time.sleep(0.2)
