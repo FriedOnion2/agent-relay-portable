@@ -48,7 +48,7 @@ class DshWriteTests(unittest.TestCase):
                 row = next(target.discover())
                 imported = target.read(row.id)
                 self.assertEqual(imported.title, "导入 DSH")
-                self.assertEqual(imported.cwd.replace("\\", "/"), conversation().cwd.replace("\\", "/"))
+                self.assertEqual(imported.cwd.replace("\\", "/"), original.cwd.replace("\\", "/"))
                 self.assertEqual(imported.first_user_text(), "请读取文件")
                 self.assertEqual(imported.stats()["tool_call"], 1)
                 self.assertEqual(imported.stats()["tool_result"], 1)
