@@ -23,14 +23,22 @@ def store_session(agent, sid, root=None):
         raise ValueError("源会话读取不完整，不能保存原生存储包")
     roots = [Path(value).resolve() for value in getattr(adapter, "roots", [adapter.root])]
     files = {}
+    total = 0
     def add(path, data=None):
+        nonlocal total
         path = Path(path)
         root_index = next((i for i, base in enumerate(roots) if native_import._inside(path, base)), None)
         if root_index is None:
             raise ValueError("源会话文件不在 Agent 存储目录内")
         relative = path.resolve().relative_to(roots[root_index]).as_posix()
         name = "root%d/" % root_index + relative
-        files[name] = (archive.read_file(path) if data is None else data, False)
+        if name not in files and len(files) >= archive.MAX_FILES:
+            raise ValueError("会话包文件过多")
+        data = archive.read_file(path) if data is None else data
+        total += len(data) - (len(files[name][0]) if name in files else 0)
+        if total > archive.MAX_TOTAL:
+            raise ValueError("会话包原始文件总大小超过 256 MiB")
+        files[name] = (data, False)
         return name
     entry = add(conv.path)
     if native == "codebuddy" and conv.meta.get("source_format") == "codebuddy-ide-manifest":

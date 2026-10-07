@@ -103,6 +103,15 @@ class Handler(BaseHTTPRequestHandler):
                 root = (q.get("storage") or [None])[0]
                 return self._json({"ok":True, "root":str(storage_root(root)),
                        "packages":list_packages(KIND, (q.get("agent") or [None])[0], root)})
+            if path == "/api/skills":
+                from relay.skill_store import discover_skills
+                return self._json(discover_skills((q.get("agent") or [""])[0], (q.get("skills_dir") or [None])[0]))
+            if path == "/api/stored-skills":
+                from relay.archive import list_packages, storage_root
+                from relay.skill_store import KIND
+                root = (q.get("storage") or [None])[0]
+                return self._json({"ok":True, "root":str(storage_root(root)),
+                                  "packages":list_packages(KIND, (q.get("agent") or [None])[0], root)})
             if path == "/api/sessions":
                 agent = (q.get("agent") or [""])[0]
                 if not agent:
@@ -162,7 +171,7 @@ class Handler(BaseHTTPRequestHandler):
             body = json.loads(raw.decode("utf-8") or "{}")
             if not isinstance(body, dict):
                 return self._error("请求体必须是 JSON 对象")
-            for key in ("source", "id", "target", "cwd", "session_id", "title", "dsh_compression", "project_path", "storage", "package"):
+            for key in ("source", "id", "target", "cwd", "session_id", "title", "dsh_compression", "project_path", "storage", "package", "agent", "path", "skills_dir", "name"):
                 if key in body and body[key] is not None and not isinstance(body[key], str):
                     return self._error(f"{key} 必须是字符串")
             for key in ("remap_tools", "include_thinking", "include_tools"):
@@ -172,6 +181,17 @@ class Handler(BaseHTTPRequestHandler):
             return self._error(f"请求体解析失败: {e}")
 
         try:
+            if u.path == "/api/store-skill":
+                from relay.skill_store import store_skill
+                if not body.get("agent") or not body.get("path"):
+                    return self._error("缺少 Agent / Skill 目录")
+                return self._json(store_skill(body["agent"], body["path"], body.get("storage")))
+            if u.path == "/api/restore-skill":
+                from relay.skill_store import restore_skill
+                if not body.get("package"):
+                    return self._error("缺少 Skill 包路径")
+                return self._json(restore_skill(body["package"], body.get("agent") or None,
+                                                body.get("skills_dir") or None, body.get("name") or None))
             if u.path == "/api/store-session":
                 from relay.session_store import store_session
                 if not body.get("source") or not body.get("id"):

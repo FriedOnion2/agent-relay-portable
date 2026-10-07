@@ -1,6 +1,7 @@
 """Packages travel without source homes; corrupt packages never touch target stores."""
 import io
 import json
+import os
 import shutil
 import unittest
 import uuid
@@ -81,12 +82,12 @@ class SessionStoreTests(unittest.TestCase):
         with zipfile.ZipFile(package) as z:
             data = {name:z.read(name) for name in z.namelist()}
         selected = next(name for name in data if name != "manifest.json")
-        data[selected] += b"corruption"
+        data[selected] = data[selected][:1] + b"!" + data[selected][2:]
         bad = self.root / "bad.zip"
         with zipfile.ZipFile(bad, "w") as z:
             for name, raw in data.items():
                 z.writestr(name, raw)
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(ValueError, "校验失败"):
             session_store.restore_session(bad, str(self.cwd))
         self.assertFalse(Path(self.targets["codex"].home).exists())
         for name in ("../outside", "root0/../../outside", "C:/outside", "root0\\escape", "root0/CON"):
@@ -122,3 +123,12 @@ class SessionStoreTests(unittest.TestCase):
         with self.assertRaises(FileExistsError):
             archive.write_package(path, {"kind":"fixture"}, {"data":(b"new",False)})
         self.assertEqual(path.read_bytes(), original)
+
+    @unittest.skipUnless(os.name == "nt", "requires a real Windows filesystem for cwd validation")
+    def test_windows_restore_validates_native_drive_path_and_generates_powershell_resume(self):
+        source = registry.get("windows_codex")
+        package = session_store.store_session("windows_codex", next(source.discover()).id, self.root / "storage")["path"]
+        with patch.object(native_import.platform, "system", return_value="Windows"):
+            result = session_store.restore_session(package, str(self.cwd))
+        self.assertIn("Set-Location -LiteralPath", result["resume_command"])
+        self.assertEqual(result["to"]["cwd"], str(self.cwd))

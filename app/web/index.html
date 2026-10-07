@@ -29,10 +29,13 @@
     padding:0 18px; background:var(--panel); border-bottom:1px solid var(--line);
     position:sticky; top:0; z-index:20;
   }
-  .logo{display:flex;align-items:center;gap:9px;font-weight:600;font-size:15px;letter-spacing:.2px}
+  .logo{display:flex;align-items:center;gap:9px;font-weight:600;font-size:15px;letter-spacing:.2px;flex:none}
   .logo svg{flex:none}
   .tagline{color:var(--text-3);font-size:12.5px}
-  .agent-chips{display:flex;gap:6px;margin-left:auto;align-items:center}
+  .agent-chips{display:flex;gap:6px;margin-left:auto;align-items:center;min-width:0;overflow-x:auto}
+  header > .btn,.agent-chips .chip{flex:none}
+  @media(max-width:1200px){.tagline{display:none}}
+  @media(max-width:560px){header{gap:6px;padding:0 8px}.agent-chips{display:none}header > .btn{padding:7px 8px}#btnStorage{margin-left:auto}}
   .chip{
     display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;
     background:var(--line-soft); font-size:12px; color:var(--text-2); border:1px solid transparent;
@@ -154,6 +157,7 @@
   <span class="tagline">读取 WorkBuddy · DSH · CodeBuddy · Claude Code / Agent SDK · Codex 会话</span>
   <div class="agent-chips" id="chips"></div>
   <button class="btn" id="btnStorage">对话存储</button>
+  <button class="btn" id="btnSkillStorage">Skill 存储</button>
 </header>
 
 <div class="wrap">
@@ -208,6 +212,31 @@
   </div>
   <div id="storageResult" class="meta" style="white-space:pre-wrap;padding:12px"></div>
   <div id="storageList"></div>
+</section>
+<section id="skillPanel" style="display:none;position:fixed;inset:70px 24px 24px;z-index:81;background:var(--bg,#fff);padding:20px;overflow:auto;border:1px solid #bbb;border-radius:12px">
+  <div class="bar"><b>跨设备 Skill 存储</b><button class="btn" id="closeSkills">关闭</button></div>
+  <p>保存完整 SKILL.md、脚本和资源目录。复制 ZIP 到目标设备后恢复；已有同名 Skill 不覆盖，脚本不会自动执行。</p>
+  <div class="bar">
+    <select class="sel" id="skillAgent"></select>
+    <input class="input" id="skillsDir" placeholder="源 Skill 根目录（可选；未发现时填实际目录）" style="width:360px">
+    <button class="btn" id="discoverSkills">查找 Skill</button>
+  </div>
+  <div class="bar">
+    <input class="input" id="skillPath" placeholder="待保存的完整 Skill 目录，须含 SKILL.md" style="width:380px">
+    <input class="input" id="skillStorageRoot" placeholder="存储目录（留空使用项目 storage/）">
+    <button class="btn" id="storeSkill">存储 Skill</button>
+    <button class="btn" id="refreshSkillPackages">刷新已存储 Skill</button>
+  </div>
+  <div id="skillList"></div>
+  <div class="bar">
+    <input class="input" id="skillPackage" placeholder="Skill 包 .zip 路径" style="width:380px">
+    <select class="sel" id="skillTargetAgent"></select>
+    <input class="input" id="targetSkillsDir" placeholder="目标设备的实际 Skill 根目录（可选）">
+    <input class="input" id="skillName" placeholder="新目录名（可选）">
+    <button class="btn primary" id="restoreSkill">恢复 Skill</button>
+  </div>
+  <div id="skillResult" class="meta" style="white-space:pre-wrap;padding:12px"></div>
+  <div id="skillPackages"></div>
 </section>
 
 <script>
@@ -324,6 +353,17 @@ function buildTarget(){
 }
 
 function bind(){
+  $('#btnSkillStorage').onclick = ()=>{
+    $('#skillPanel').style.display=''; buildSkillAgents();
+    $('#skillStorageRoot').value=$('#storageRoot').value;
+    loadSkills(); refreshSkillPackages();
+  };
+  $('#closeSkills').onclick = ()=>{$('#skillPanel').style.display='none';};
+  $('#discoverSkills').onclick=loadSkills;
+  $('#skillAgent').onchange=loadSkills;
+  $('#storeSkill').onclick=storeSelectedSkill;
+  $('#refreshSkillPackages').onclick=refreshSkillPackages;
+  $('#restoreSkill').onclick=restoreSelectedSkill;
   $('#btnStore').onclick = storeCurrent;
   $('#btnStorage').onclick = ()=>{ $('#storagePanel').style.display=''; refreshStorage(); };
   $('#closeStorage').onclick = ()=>{ $('#storagePanel').style.display='none'; };
@@ -554,6 +594,81 @@ function renderBlock(b){
 }
 
 /* ================= 迁移 ================= */
+function buildSkillAgents(){
+  const source=$('#skillAgent'),target=$('#skillTargetAgent');
+  source.innerHTML=''; target.innerHTML='';
+  const labels={...AGENTS};
+  state.sources.filter(s=>/^(windows_|ubuntu_)/.test(s.name)).forEach(s=>{labels[s.name]=s.label||s.name;});
+  for(const [key,label] of Object.entries(labels)){
+    const option=document.createElement('option');option.value=key;option.textContent=label;source.appendChild(option);
+  }
+  for(const [key,label] of Object.entries(AGENTS)){
+    const option=document.createElement('option');option.value=key;option.textContent=label;target.appendChild(option);
+  }
+  source.value=state.source in labels ? state.source : 'codex';
+  target.value=state.source.replace(/^(windows_|ubuntu_)/,'');
+}
+
+async function loadSkills(){
+  const agent=$('#skillAgent').value;
+  try{
+    const r=await api('/api/skills?agent='+encodeURIComponent(agent)+'&skills_dir='+encodeURIComponent($('#skillsDir').value.trim()));
+    if(agent!==$('#skillAgent').value) return;
+    const box=$('#skillList');box.innerHTML='';
+    const note=document.createElement('div');note.className='meta';note.style.padding='10px';
+    note.textContent='扫描目录：'+(r.roots||[]).join('；')+((r.errors||[]).length?'\n'+r.errors.map(x=>x.error).join('\n'):'');box.appendChild(note);
+    for(const row of r.skills||[]){
+      const item=document.createElement('div');item.className='meta';item.style.padding='10px';
+      const label=document.createElement('div');label.textContent=row.name+'\n'+row.path+(row.error?'\n'+row.error:'');item.appendChild(label);
+      const button=document.createElement('button');button.className='btn';button.textContent='选择存储';button.disabled=row.readable===false;
+      button.onclick=()=>{$('#skillPath').value=row.path;};item.appendChild(button);box.appendChild(item);
+    }
+  }catch(e){toast('Skill 读取失败：'+e.message,true);}
+}
+
+async function refreshSkillPackages(){
+  try{
+    const r=await api('/api/stored-skills?storage='+encodeURIComponent($('#skillStorageRoot').value.trim()));
+    const box=$('#skillPackages');box.innerHTML='';
+    for(const row of r.packages||[]){
+      const item=document.createElement('div');item.className='meta';item.style.padding='10px';
+      const label=document.createElement('div');label.textContent=row.error ? row.path+'\n'+row.error :
+        (AGENTS[row.agent]||row.agent)+' · '+(row.skill?.name||'Skill')+'\n'+row.path;item.appendChild(label);
+      if(!row.error){const button=document.createElement('button');button.className='btn';button.textContent='选择恢复';
+        button.onclick=()=>{$('#skillPackage').value=row.path;$('#skillTargetAgent').value=row.agent;};item.appendChild(button);}
+      box.appendChild(item);
+    }
+    if(!(r.packages||[]).length) box.textContent='暂无 Skill 包。默认目录：'+r.root;
+  }catch(e){toast('Skill 存储列表读取失败：'+e.message,true);}
+}
+
+async function storeSelectedSkill(){
+  if(state.transferring) return;
+  const payload={agent:$('#skillAgent').value,path:$('#skillPath').value.trim(),storage:$('#skillStorageRoot').value.trim()||null};
+  if(!payload.path) return toast('请选择包含 SKILL.md 的 Skill 目录',true);
+  state.transferring=true;$('#storeSkill').disabled=true;updateActions();
+  try{
+    const r=await api('/api/store-skill',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    $('#skillResult').textContent='已存储 '+r.manifest.skill.name+'\n包路径：'+r.path+
+      ((r.manifest.excluded||[]).length?'\n已排除：'+r.manifest.excluded.join('、'):'');
+    await refreshSkillPackages();
+  }catch(e){toast('Skill 存储失败：'+e.message,true);}
+  finally{state.transferring=false;$('#storeSkill').disabled=false;updateActions();}
+}
+
+async function restoreSelectedSkill(){
+  if(state.transferring) return;
+  const payload={package:$('#skillPackage').value.trim(),agent:$('#skillTargetAgent').value,
+    skills_dir:$('#targetSkillsDir').value.trim()||null,name:$('#skillName').value.trim()||null};
+  if(!payload.package) return toast('填写 Skill 包路径',true);
+  state.transferring=true;$('#restoreSkill').disabled=true;updateActions();
+  try{
+    const r=await api('/api/restore-skill',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    $('#skillResult').textContent='已恢复 '+r.name+'\n目录：'+r.path+'\n'+(r.notes||[]).join('\n');
+  }catch(e){toast('Skill 恢复失败：'+e.message,true);}
+  finally{state.transferring=false;$('#restoreSkill').disabled=false;updateActions();}
+}
+
 async function storeCurrent(){
   const selected=state.current;
   if(!selected || $('#btnStore').disabled || state.transferring) return;

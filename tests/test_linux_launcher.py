@@ -102,6 +102,28 @@ class LinuxLauncherTests(unittest.TestCase):
                     self.assertEqual(native[0]["payload"]["cwd"], "D:\\project")
                     self.assertEqual(original_path.read_bytes(), original)
                     self.assertEqual(Path(imported["to"]["path"]).read_bytes(), local_bytes)
+                    def post(endpoint, payload):
+                        req = urllib.request.Request(url + endpoint, data=json.dumps(payload).encode(),
+                                                     headers={"Content-Type":"application/json"})
+                        with urllib.request.urlopen(req) as response:
+                            return json.load(response)
+                    saved = post("/api/store-session", {"source":"codex", "id":imported["to"]["id"],
+                                                         "storage":str(base / "portable-store")})
+                    restored = post("/api/restore-session", {"package":saved["path"], "cwd":str(base),
+                              "session_id":"22222222-2222-4222-8222-222222222222"})
+                    self.assertEqual(restored["to"]["source"], "codex")
+                    self.assertTrue(Path(restored["to"]["path"]).is_file())
+                    skill = base / "sample-skill"
+                    skill.mkdir()
+                    (skill / "SKILL.md").write_text("fixture instructions only", encoding="utf-8")
+                    script = b"#!/bin/sh\nprintf 'never executed'\n"
+                    (skill / "run.sh").write_bytes(script)
+                    saved_skill = post("/api/store-skill", {"agent":"codex", "path":str(skill),
+                                      "storage":str(base / "portable-store")})
+                    restored_skill = post("/api/restore-skill", {"package":saved_skill["path"],
+                                         "skills_dir":str(base / "restored-skills")})
+                    self.assertEqual((Path(restored_skill["path"]) / "run.sh").read_bytes(), script)
+                    self.assertTrue((Path(restored_skill["path"]) / "run.sh").stat().st_mode & 0o111)
                     proc.send_signal(signal.SIGINT)
                     proc.wait(timeout=8)
                     self.assertIn(proc.returncode, (0, 130))

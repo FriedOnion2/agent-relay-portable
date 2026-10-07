@@ -34,7 +34,7 @@ bash 启动_AgentRelay.sh
 
 网页同时保留 Ubuntu 来源，并新增六个 **Windows 只读来源**，可浏览、导出和迁出。
 选择 Windows 会话、填写 Ubuntu 项目目录，点击 **“迁到 Ubuntu 对应软件”** 可保留原生记录迁入同款软件。
-支持 WorkBuddy、Claude、SDK、Codex、DSH v4、CodeBuddy CLI/IDE；IDE 需先创建本机工作区。
+支持 WorkBuddy、Claude、SDK、Codex、DSH v4 / v0 seed、CodeBuddy CLI/IDE；IDE 需先创建本机工作区。
 也可运行 `python3 app/cli.py import-windows codex <会话ID> --cwd /home/你的用户/项目`。
 迁出时填写已存在的 Ubuntu 项目目录；不会自动改写历史中的 Windows 路径。
 完整步骤和挂载排查见 [Ubuntu 双系统说明](docs/ubuntu-dual-boot.md)。
@@ -55,6 +55,11 @@ GitHub 同类项目与源码差异见 [原生会话迁移调研](docs/session-mi
 复制包或整个 storage 文件夹到另一设备后，通过“对话存储”指定本机项目目录，恢复到对应软件。
 CLI 支持 `store-sessions <agent> <ID>` / `--all`、`stored-sessions`、`restore-session <包.zip> --cwd <目录>`。
 文件恢复前校验，已有 ID 不覆盖。详见 [便携存储说明](docs/portable-storage.md)。
+
+**Skill 跨设备存储：** “Skill 存储”面板保存整个技能目录到 `storage/skills/<agent>/`，
+包含 `SKILL.md`、脚本和资源；目标设备校验后恢复，已有同名 Skill 不覆盖。
+CLI 支持 `skills`、`store-skills`（含 `--all`）、`stored-skills`、`restore-skill`。
+可指定实际技能目录和新的目标目录名；不执行打包的指令或脚本。
 
 需要 Python **3.8 或更新版本**。Windows 可将完整的嵌入式 Python 解压到 `runtime/python/`。
 也可通过 `RELAY_PYTHON` 指定解释器。默认网址为 `http://127.0.0.1:8745/`。
@@ -134,8 +139,8 @@ macOS 的 Python 3.8 因 runner 架构限制不在矩阵中。
 - DSH 导出保留事件历史，不重放 surface replacement、compaction、seed 或 native resume 状态。
 - 网页及 CLI 提供 WorkBuddy、DSH、Claude、Codex 四个迁移目标；CodeBuddy、SDK 仍只读。
 - DSH 导入写入 v0 原生 Zstd 日志，兼容本机 0.1.2-rc.1，亦已通过官方 0.2.1-alpha.1 格式目录严格迁移到 v4 的验证。导入历史会关闭工具调用；缺失结果的工具调用保留为文字，不作为待执行工作。图片及非原生内容块降级为标注文本。目标工作目录必须是当前系统的绝对路径。
-- CodeBuddy/SDK 的通用转换目标限制不影响“Windows → Ubuntu 对应软件”的原生文件迁入；后者保留原生记录，
-  不合成任意来源的 DSH/CodeBuddy/SDK 日志。DSH 需完整 v4，分叉先迁父会话，子代理不单独迁入；
+- CodeBuddy/SDK 的通用转换目标限制不影响双向对应软件原生文件迁移；后者保留原生记录，
+  DSH 支持完整 v4 和可验证的 v0 seed，分叉先迁父会话，子代理不单独迁入；
   CodeBuddy IDE 需唯一匹配的已有原生工作区，并在关闭软件后导入。
 - SDK 自行保存的 stream-json 输出不是 native transcript；关闭 persistence 或仅使用外部 SessionStore 的应用可能没有默认本地历史。
 - CodeBuddy CLI/IDE 格式来自第三方消费者观测，未获得厂商原生续聊协议验证；格式依据见 [来源格式说明](docs/source-formats.md)。

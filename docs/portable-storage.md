@@ -49,3 +49,37 @@ DSH 分叉先恢复父会话并保留 ID，子代理不单独恢复。附件与�
 未声明条目和损坏包会被拒绝，不向目标目录解压整个归档。
 限制为单文件 32 MiB、每包原始文件总计 256 MiB、最多 4096 个文件；损坏或读取截断不会静默保存为完整包。
 默认 `storage/` 已从 Git 忽略，发布代码不会附带你的对话包。
+
+## Skill 跨设备存储
+
+Skill 包保存在 `storage/skills/<agent>/<包ID>.zip`，保存 `SKILL.md`、脚本、references 和资源文件。
+包的版本、SHA 校验与大小限制和会话包相同；脚本内容仅作为文件，不会执行其中的指令。
+
+网页点击“Skill 存储”，选择 Agent，点击“查找 Skill”。未找到时填写实际 Skill 根目录，或直接填写
+一个含 `SKILL.md` 的 Skill 目录，点击“存储 Skill”。复制包到目标设备后，在该面板选包、目标 Agent、
+实际 Skill 根目录，点击“恢复 Skill”。已有同名目录（包括空目录）不会覆盖，填写新目录名可以另存一份。
+
+```sh
+python app/cli.py skills codex
+python app/cli.py skills claude --skills-dir <实际Skill根目录>
+python app/cli.py store-skills codex <包含SKILL.md的目录>
+python app/cli.py store-skills claude --all --skills-dir <实际Skill根目录>
+python app/cli.py stored-skills --agent claude
+
+# 复制 ZIP 或整个 storage 后，在目标设备恢复
+python app/cli.py restore-skill <Skill包.zip> --skills-dir <目标设备Skill根目录>
+python app/cli.py restore-skill <Skill包.zip> --agent codex --skills-dir <目标Skill根目录> --name <新目录名>
+```
+
+默认扫描候选目录：Codex 的 `~/.agents/skills` 和 `~/.codex/skills`，Claude / SDK 的 `.claude/skills`，
+其余 Agent 的 `<Agent根目录>/skills`。Codex 默认恢复到 `.agents/skills`；如使用旧目录、项目级 Skill
+或插件管理位置，请通过 `--skills-dir` 指定。WorkBuddy / DSH / CodeBuddy 的目录是扫描候选，
+不保证每个厂商版本都会从那里自动加载；实际发现位置以软件配置为准。
+双系统来源支持 Windows / Ubuntu 用户目录中的相应候选路径。`--storage` 可使用同一移动盘存储目录。
+
+不会收集 `.git`、虚拟环境、node_modules、缓存以及 `.env*`、`auth.json`、credentials、SSH 私钥名、
+`.pem` / `.key` 文件；排除项在包清单和网页结果中列出。链接或 Windows reparse point 会被拒绝，
+请指定实际文件目录；隐藏的内置 `.system` 目录不会被批量扫描。
+复制时保留源脚本执行标记；带 shebang 的脚本在 Linux/macOS 恢复为可执行文件。
+空目录不打包。Skill 内的绝对路径、依赖和各 Agent 的工具差异不会自动改写，必要时在目标软件中调整。
+跨 Agent 恢复只复制标准目录内容，不保证其指令、权限、插件或工具接口兼容。

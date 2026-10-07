@@ -27,7 +27,7 @@ function setup(){
     setTimeout(){return 1;}, clearTimeout(){},
     fetch(url,options){return new Promise((resolve,reject)=>requests.push({url,options,resolve,reject}));},
   });
-  vm.runInContext(script + '\n globalThis.app={state,loadSessions,openSession,doTransfer,doImportWindows,updateActions,bind,buildTarget,buildTabs,loadSources,storeCurrent,refreshStorage,restoreStored};',context);
+  vm.runInContext(script + '\n globalThis.app={state,loadSessions,openSession,doTransfer,doImportWindows,updateActions,bind,buildTarget,buildTabs,loadSources,storeCurrent,refreshStorage,restoreStored,buildSkillAgents,loadSkills,refreshSkillPackages,storeSelectedSkill,restoreSelectedSkill};',context);
   const response = (index,body,status=200)=>requests[index].resolve({ok:status<400,status,json:async()=>body});
   return {app:context.app, elements, requests, response, el:document.querySelector};
 }
@@ -273,6 +273,39 @@ test('storing captures the selected source and package restore captures local cw
   await restoring;
   assert.equal(t.el('#restorePackage').disabled,false);
   assert.match(t.el('#toast').children[0].textContent,/checksum failure/);
+});
+
+test('skill storage captures agent, full directory and restore destination without duplicate submission',async()=>{
+  const t=setup();
+  t.app.buildSkillAgents();
+  t.el('#skillAgent').value='codex';
+  t.el('#skillPath').value='/source/skill';
+  t.el('#skillStorageRoot').value='/usb/storage';
+  const storing=t.app.storeSelectedSkill();
+  await t.app.storeSelectedSkill();
+  assert.equal(t.requests.length,1);
+  assert.equal(t.requests[0].url,'/api/store-skill');
+  assert.equal(JSON.parse(t.requests[0].options.body).path,'/source/skill');
+  t.response(0,{ok:true,path:'/usb/storage/skill.zip',manifest:{skill:{name:'sample'},excluded:['.env']}});
+  await new Promise(resolve=>setImmediate(resolve));
+  t.response(1,{ok:true,packages:[],root:'/usb/storage'});
+  await storing;
+  assert.match(t.el('#skillResult').textContent,/\.env/);
+  t.el('#skillPackage').value='/usb/storage/skill.zip';
+  t.el('#skillTargetAgent').value='claude';
+  t.el('#targetSkillsDir').value='/target/skills';
+  t.el('#skillName').value='copy';
+  const restoring=t.app.restoreSelectedSkill();
+  await t.app.restoreSelectedSkill();
+  assert.equal(t.requests.length,3);
+  const payload=JSON.parse(t.requests[2].options.body);
+  assert.equal(payload.agent,'claude');
+  assert.equal(payload.skills_dir,'/target/skills');
+  assert.equal(payload.name,'copy');
+  t.response(2,{ok:false,error:'已有同名 Skill'},409);
+  await restoring;
+  assert.equal(t.el('#restoreSkill').disabled,false);
+  assert.match(t.el('#toast').children[0].textContent,/同名/);
 });
 
 test('unreadable source rows show the error and disable export and migration',async()=>{

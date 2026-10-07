@@ -131,6 +131,20 @@ def cmd_storage(args):
     return 0 if result["ok"] else 1
 
 
+def cmd_skill_storage(args):
+    from relay import archive, skill_store
+    if args.cmd == "skills":
+        result = skill_store.discover_skills(args.agent, args.skills_dir)
+    elif args.cmd == "store-skills":
+        result = skill_store.store_skills(args.agent, args.paths, args.all, args.skills_dir, args.storage)
+    elif args.cmd == "stored-skills":
+        result = {"ok":True, "packages":archive.list_packages(skill_store.KIND, args.agent, args.storage)}
+    else:
+        result = skill_store.restore_skill(args.package, args.agent, args.skills_dir, args.name)
+    _print_json(result)
+    return 0 if result["ok"] else 1
+
+
 def cmd_sources(args):
     rows = registry.sources_info()
     if args.json:
@@ -375,9 +389,30 @@ def build_parser():
     restore.add_argument("--session-id")
     restore.add_argument("--dsh-compression", choices=["zstd", "none"], default="zstd")
     restore.set_defaults(func=cmd_storage)
+    skills = sub.add_parser("skills", help="列出 Agent 的 SKILL.md 技能目录（可指定实际路径）")
+    skills.add_argument("agent", choices=READ_AGENTS)
+    skills.add_argument("--skills-dir")
+    skills.set_defaults(func=cmd_skill_storage)
+    skill_store = sub.add_parser("store-skills", help="保存完整 Skill 目录，按 Agent 分类存储")
+    skill_store.add_argument("agent", choices=READ_AGENTS)
+    skill_store.add_argument("paths", nargs="*")
+    skill_store.add_argument("--all", action="store_true")
+    skill_store.add_argument("--skills-dir", help="配合 --all 指定实际 Skill 根目录")
+    skill_store.add_argument("--storage")
+    skill_store.set_defaults(func=cmd_skill_storage)
+    stored_skills = sub.add_parser("stored-skills", help="列出已保存的 Skill 包")
+    stored_skills.add_argument("--agent", choices=AGENTS)
+    stored_skills.add_argument("--storage")
+    stored_skills.set_defaults(func=cmd_skill_storage)
+    skill_restore = sub.add_parser("restore-skill", help="校验并恢复 Skill 包；已有同名目录不覆盖")
+    skill_restore.add_argument("package")
+    skill_restore.add_argument("--agent", choices=READ_AGENTS, help="默认对应软件；可显式改分类")
+    skill_restore.add_argument("--skills-dir", help="目标设备实际的 Skill 根目录")
+    skill_restore.add_argument("--name", help="可选新目录名，保留已有 Skill")
+    skill_restore.set_defaults(func=cmd_skill_storage)
     # Per-command override can be passed through the Linux launcher. Choices
     # are built before parsing, so recognize Windows source names explicitly.
-    for command in (p1, p2, p3, p4, p5, p6, p7, p10, store, *native_commands):
+    for command in (p1, p2, p3, p4, p5, p6, p7, p10, store, skills, skill_store, skill_restore, *native_commands):
         command.add_argument("--windows-user", help="临时选择 Windows 用户目录，不保存配置")
         command.add_argument("--ubuntu-user", help="临时选择 Windows 可访问的 Ubuntu 用户目录备份")
 

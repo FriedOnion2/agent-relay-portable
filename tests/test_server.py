@@ -131,6 +131,21 @@ class HttpTests(unittest.TestCase):
                 self.assertEqual(self.request("POST", "/api/restore-session", json.dumps(payload), headers)[0], 400)
                 restore.assert_not_called()
 
+    def test_skill_storage_routes_and_rejects_invalid_options(self):
+        headers = {"Content-Type":"application/json"}
+        payload = {"agent":"codex", "path":"/source/skill", "storage":"/portable"}
+        with patch("relay.skill_store.store_skill", return_value={"ok":True}) as store:
+            self.assertEqual(self.request("POST", "/api/store-skill", json.dumps(payload), headers)[0], 200)
+            store.assert_called_once_with("codex", "/source/skill", "/portable")
+        payload = {"package":"/portable/skill.zip", "agent":"claude", "skills_dir":"/target/skills", "name":"copy"}
+        with patch("relay.skill_store.restore_skill", return_value={"ok":True}) as restore:
+            self.assertEqual(self.request("POST", "/api/restore-skill", json.dumps(payload), headers)[0], 200)
+            restore.assert_called_once_with("/portable/skill.zip", "claude", "/target/skills", "copy")
+        for payload in ({"package":"s.zip", "name":False}, {"package":"s.zip", "skills_dir":[]}, {}):
+            with patch("relay.skill_store.restore_skill") as restore:
+                self.assertEqual(self.request("POST", "/api/restore-skill", json.dumps(payload), headers)[0], 400)
+                restore.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

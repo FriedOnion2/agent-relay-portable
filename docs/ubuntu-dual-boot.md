@@ -101,7 +101,7 @@ Ubuntu Codex，Windows SDK 会进入 Ubuntu SDK 使用的 Claude 共享存储。
 | Claude Code | 本机 `.claude/projects`，保留原生父链及其他分支；提供 `claude --resume` 命令 |
 | Claude Agent SDK | 本机 SDK 配置的 Claude 原生共享存储；由 SDK 应用使用目标会话 ID 设置 `resume` |
 | Codex | 本机 `.codex/sessions`，同时迁入对应 `session_index.jsonl` 标题条目；提供 `codex resume` 命令 |
-| DSH | 本机 `.dsh/sessions`，完整 v4 原生事件、官方项目编码、独立 Zstd header frame；旧版需先升级 |
+| DSH | 本机 `.dsh/sessions`，完整 v4 或可验证 v0 seed 原生事件、官方项目编码、独立 Zstd header frame；其他旧版需先升级 |
 | CodeBuddy CLI | 本机 `.codebuddy/projects`，保留原生 JSONL |
 | CodeBuddy IDE | 已存在的本机原生工作区，迁入 manifest / messages 并追加工作区 conversations 索引 |
 
@@ -131,7 +131,7 @@ DSH 默认输出 Zstd，目标 DSH 配置为 `compression: none` 时使用 `--ds
 python3 app/cli.py transfer windows_codex <完整会话ID> --to claude --cwd /home/alice/project
 ```
 
-通用转换的目标仍为 WorkBuddy、Claude、Codex。对应软件原生迁入另有独立入口，不开放任意内容写入 DSH/CodeBuddy/SDK。
+通用转换的目标为 WorkBuddy、DSH、Claude、Codex；DSH 转换生成关闭的 v0 历史。对应软件原生迁移另有独立入口，CodeBuddy/SDK 不作为通用 IR 写入目标。
 这里转换的是会话所属的项目目录；历史工具参数、正文中的 `C:\…` 或其他盘符不会自动替换，
 续聊前需自行确认对应文件和工具在 Ubuntu 上可用。
 项目目录也可以是 Ubuntu 中已挂载的共享项目路径；不要填写 Windows 盘符路径。
@@ -169,7 +169,7 @@ python3 app/cli.py export-windows codex <Ubuntu会话ID> \
 ```
 
 两个路径的分区对应关系由用户明确指定，程序只验证挂载项目可访问与 Windows 路径格式，不猜盘符。
-支持相同六来源及 CodeBuddy CLI/IDE；DSH 的 v4、父会话限制仍适用。
+支持相同六来源及 CodeBuddy CLI/IDE；DSH 的 v4 / v0 seed、父会话限制仍适用。
 CodeBuddy IDE 先在 **Windows** 目标项目创建一条会话并关闭软件，以复用已有原生工作区；
 Linux 中仅读到的目标 Windows IDE 工作区须记录 Windows 的盘符路径，不能用挂载路径替代。
 Ubuntu→Windows 与 Windows→Ubuntu 都是保留原文件的搬迁，**不提供同 ID 增量合并**。

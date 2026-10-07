@@ -33,9 +33,15 @@ def safe_name(name):
     return name
 
 
+def is_link(path):
+    path = Path(path)
+    info = path.lstat()
+    return stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_file_attributes", 0) & 0x400)
+
+
 def read_file(path):
     path = Path(path)
-    if path.is_symlink() or not path.is_file():
+    if is_link(path) or not path.is_file():
         raise ValueError("仅打包普通文件，不包含符号链接")
     with path.open("rb") as stream:
         data = stream.read(MAX_FILE + 1)
