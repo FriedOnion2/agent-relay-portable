@@ -12,6 +12,7 @@
 - DSH 会话 id 可直接作为命令行参数；没有任何轮次的源会话不再被迁移。
 
 ### Added
+- 会话对比：`relay diff <agent> <id> <agent2> <id2>`（API `/api/diff`）按顺序对齐正文与工具调用，迁移后核对有没有丢内容；有差异时退出码为 1。
 =======
 - CI 增加 mypy 类型检查与覆盖率统计（下限 75%），ruff 规则加入 bugbear 等。
 - `relay --version`；推送 `v*` tag 自动构建并发布 Release，说明取自本文件，附构建来源证明。

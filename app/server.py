@@ -310,6 +310,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(import_windows(body["source"], body["id"], body["cwd"],
                                   session_id=body.get("session_id") or None,
                                   dsh_compression=body.get("dsh_compression") or "zstd", preview_token=body.get('preview_token')))
+            if u.path == "/api/diff":
+                from relay import diff
+                for key in ("source", "id", "source2", "id2"):
+                    if not isinstance(body.get(key), str) or not body.get(key):
+                        return self._error("缺少 source / id / source2 / id2")
+                return self._json(diff.compare(registry.read_conversation(body["source"], body["id"]),
+                                               registry.read_conversation(body["source2"], body["id2"])))
             if u.path == "/api/transfer":
                 source = body.get("source")
                 sid = body.get("id")

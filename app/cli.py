@@ -221,6 +221,29 @@ def cmd_show(args):
             break
 
 
+def cmd_diff(args):
+    from relay import diff
+    res = diff.compare(registry.read_conversation(args.agent, args.id), registry.read_conversation(args.agent2, args.id2))
+    if args.json:
+        _print_json(res)
+    else:
+        a, b = res["a"], res["b"]
+        print("A: %s %s（%d 项）\nB: %s %s（%d 项）" % (a["source"], a["id"], a["items"], b["source"], b["id"], b["items"]))
+        print("一致 %d 项，仅 A 有 %d 项，仅 B 有 %d 项，相似度 %.1f%%" % (res["matched"], res["only_in_a"], res["only_in_b"], res["ratio"] * 100))
+        for row in res["changed"][:args.max]:
+            print("  改动  A: [%s/%s] %s\n        B: [%s/%s] %s" % (row["before"]["role"], row["before"]["kind"], row["before"]["text"],
+                                                                row["after"]["role"], row["after"]["kind"], row["after"]["text"]))
+        for label, key in (("仅 A", "only_in_a_samples"), ("仅 B", "only_in_b_samples")):
+            for row in res[key][:args.max]:
+                print("  %s  [%s/%s] %s" % (label, row["role"], row["kind"], row["text"]))
+        delta = {k: v for k, v in res["stats_delta"].items() if v}
+        if delta:
+            print("数量差（B−A）：" + "，".join("%s %+d" % kv for kv in delta.items()))
+        print("两份会话内容一致。" if res["identical"] else "存在差异。")
+    if not res["identical"]:
+        sys.exit(1)
+
+
 def cmd_export(args):
     md = registry.export_markdown(
         args.agent, args.id,
@@ -426,6 +449,15 @@ def build_parser():
     p4.add_argument("--no-tools", action="store_true", help="不包含工具调用")
     p4.add_argument("--max-chars", type=int, default=0, help="单段文本最大长度，0=不限")
     p4.set_defaults(func=cmd_export)
+
+    pd = sub.add_parser("diff", help="比较两个会话（迁移后核对有没有丢内容）")
+    pd.add_argument("agent", choices=read_agents)
+    pd.add_argument("id")
+    pd.add_argument("agent2", choices=read_agents)
+    pd.add_argument("id2")
+    pd.add_argument("--max", type=int, default=20, help="最多显示多少条差异样例")
+    pd.add_argument("--json", action="store_true")
+    pd.set_defaults(func=cmd_diff)
 
     p5 = sub.add_parser("transfer", help="迁移会话到另一个 agent")
     p5.add_argument("agent", choices=read_agents, help="来源 agent")

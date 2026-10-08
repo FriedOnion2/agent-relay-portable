@@ -80,3 +80,11 @@ Windows 中也可用 `python app/cli.py ubuntu-use "D:\UbuntuBackup\alice"` 选�
 用户目录备份，再用 `import-ubuntu codex <会话ID> --cwd "D:\project"` 导入。Windows 不会直接读取 ext4。
 双向搬迁保留源文件、拒绝覆盖同 ID，不自动合并两边继续后的历史；新 ID 可保留另一份。
 GitHub 同类项目与源码差异见 [原生会话迁移调研](session-migration-alternatives.md)。
+
+## 迁移后核对：会话对比
+
+```bash
+python app/cli.py diff claude <源会话id> codex <迁移后的会话id>
+```
+
+按顺序对齐两个会话里用户 / 助手的正文、工具调用参数和工具结果（空白差异忽略；工具名不参与比较，因为迁移时会按目标软件改名；系统上下文和思考只在数量差里体现）。输出一致项数、仅一侧有的内容样例、被改动的条目、各类数量差和相似度；完全一致退出码为 0，否则为 1。迁移时选了「不含思考」或「脱敏」，对应位置自然会显示为差异或改动，这是预期。
