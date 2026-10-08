@@ -1,6 +1,7 @@
 name: Real client compatibility
-# Imports a synthetic conversation with AgentRelay and opens it with the real, latest client releases.
-# Catches vendor format drift that the synthetic format-health samples cannot.
+# Imports a synthetic conversation with AgentRelay and opens it with the real, latest client releases on
+# Linux, macOS and Windows. Clients that cannot be installed or driven headlessly are reported as skipped,
+# and the run summary shows one support table (software x system).
 on:
   schedule:
     - cron: '0 5 * * 1'
@@ -11,20 +12,16 @@ on:
 permissions:
   contents: read
 jobs:
-  codex:
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-      - run: npm install -g @openai/codex
-      - run: python scripts/smoke_codex_resume.py
-  dsh:
-    runs-on: ubuntu-22.04
+  smoke:
+    name: smoke (${{ matrix.os_name }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os_name: Linux, runner: ubuntu-22.04}
+          - {os_name: macOS, runner: macos-latest}
+          - {os_name: Windows, runner: windows-latest}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -34,5 +31,33 @@ jobs:
         with:
           node-version: '22'
       - run: python -m pip install -r requirements-optional.txt
-      - run: npm install -g @deepseek-ai/dsh
-      - run: python scripts/smoke_dsh_native.py
+      # A client that fails to install on this system is reported as a skip by smoke_all.py, not as a failure.
+      - name: Install Codex
+        continue-on-error: true
+        run: npm install -g @openai/codex
+      - name: Install DSH
+        continue-on-error: true
+        run: npm install -g @deepseek-ai/dsh
+      - name: Run smoke tests
+        env:
+          PYTHONIOENCODING: utf-8
+        run: python scripts/smoke_all.py --json smoke-${{ matrix.os_name }}.json
+      - if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: smoke-${{ matrix.os_name }}
+          path: smoke-${{ matrix.os_name }}.json
+          if-no-files-found: ignore
+  summary:
+    needs: smoke
+    if: always()
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          path: results
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: python scripts/smoke_table.py results >> "$GITHUB_STEP_SUMMARY"

@@ -31,5 +31,16 @@ python scripts/smoke_dsh_native.py     # 需要 dsh + node + zstandard：用 DSH
 ```
 
 未安装对应客户端时脚本以退出码 77 跳过，`python -m unittest discover -s tests` 中对应测试也会跳过。
-GitHub Actions 的「Real client compatibility」工作流每周一并在相关代码变动时安装最新版 Codex 与 DSH 运行它们，用来尽早发现厂商格式变化。
-这两项都不发送模型请求、不需要登录。
+`python scripts/smoke_all.py` 会依次运行所有冒烟测试，并把每个软件标记为通过、失败或跳过（附原因）。
+GitHub Actions 的「Real client compatibility」工作流每周一并在相关代码变动时，在 Linux、macOS、Windows 上安装最新版 Codex 与 DSH 运行它们，用来尽早发现厂商格式变化；
+运行摘要里会汇总出「软件 × 系统」支持表。这些测试都不发送模型请求、不需要登录。
+
+| 软件 | 冒烟测试 | 说明 |
+|---|---|---|
+| Codex | 有（Linux / macOS / Windows） | 真实 `codex app-server` 的 `thread/resume` |
+| DSH | 有（Linux / macOS / Windows） | DSH 自带会话包列出、迁移与恢复 |
+| Claude Code | 跳过 | 续聊需要登录，无法无头驱动 |
+| CodeBuddy | 跳过 | AgentRelay 只读取它，没有写入路径可测 |
+| WorkBuddy | 跳过 | 桌面应用，无法在无界面环境启动 |
+
+实际每个系统的通过情况以最近一次工作流运行摘要为准。
