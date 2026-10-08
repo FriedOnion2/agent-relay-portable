@@ -8,11 +8,12 @@ its items. Needs the ``codex`` CLI on PATH (no login, no network, no model call)
 """
 import json
 import os
-import select
+import queue
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -37,10 +38,18 @@ def synthetic():
 
 class AppServer:
     def __init__(self, home, cwd):
-        self.proc = subprocess.Popen(['codex', 'app-server', '--listen', 'stdio://'], stdin=subprocess.PIPE,
-                                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, bufsize=1,
+        self.proc = subprocess.Popen([shutil.which('codex'), 'app-server', '--listen', 'stdio://'], stdin=subprocess.PIPE,
+                                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, encoding='utf-8', bufsize=1,
                                      env=dict(os.environ, CODEX_HOME=home), cwd=cwd)
         self.next_id = 0
+        # select() does not work on pipes on Windows, so a reader thread feeds a queue instead.
+        self.lines = queue.Queue()
+        threading.Thread(target=self._pump, daemon=True).start()
+
+    def _pump(self):
+        for line in self.proc.stdout:
+            self.lines.put(line)
+        self.lines.put(None)
 
     def call(self, method, params, timeout=60):
         self.next_id += 1
@@ -49,11 +58,11 @@ class AppServer:
         self.proc.stdin.flush()
         end = time.time() + timeout
         while time.time() < end:
-            ready, _, _ = select.select([self.proc.stdout], [], [], 1)
-            if not ready:
+            try:
+                line = self.lines.get(timeout=1)
+            except queue.Empty:
                 continue
-            line = self.proc.stdout.readline()
-            if not line:
+            if line is None:
                 break
             try:
                 message = json.loads(line)
@@ -75,7 +84,7 @@ def main():
     if not shutil.which('codex'):
         print('skip: codex CLI not found on PATH')
         return 77
-    version = subprocess.run(['codex', '--version'], capture_output=True, text=True).stdout.strip()
+    version = subprocess.run([shutil.which('codex'), '--version'], capture_output=True, text=True).stdout.strip()
     with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as cwd:
         CodexAdapter(home=home).write(synthetic(), session_id=SESSION_ID, cwd=cwd)
         server = AppServer(home, cwd)
