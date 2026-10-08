@@ -9,18 +9,16 @@
 - 批量迁移：`relay batch`（API `/api/batch`）按条件或 ID 列表批量转换，默认只预演，`--yes` 才写入；目标 ID 确定性派生，重复执行自动识别已迁移的会话（`--on-conflict skip|new|fail`），单条失败不拖垮整批，输出逐条进度与汇总。
 - 敏感信息扫描：预览会提示会话里疑似的 API 密钥、令牌、私钥和口令（只显示掩码）；`relay scan` 单独扫描；迁移与导出支持 `--redact-secrets`（API：`redact_secrets`），写入时替换为 `[REDACTED:类型]`。
 - 敏感信息扫描：预览会提示会话里疑似的 API 密钥、令牌、私钥和口令（只显示类型、位置和长度）；`relay scan` 单独扫描；迁移与导出支持 `--redact-secrets`（API：`redact_secrets`），写入时替换为 `[REDACTED:类型]`。
+- CI 增加 mypy 类型检查与覆盖率统计（下限 75%），ruff 规则加入 bugbear 等。
+- `relay --version`；推送 `v*` tag 自动构建并发布 Release，说明取自本文件，附构建来源证明。
+- LICENSE（MIT）、SECURITY、CONTRIBUTING、CODE_OF_CONDUCT、CODEOWNERS、issue / PR 模板。
+- ruff、CodeQL、Dependabot。
 
 ### Fixed
 - 迁移到 Codex 的会话在真实 Codex 中重建出完整 items（session_meta 补 `history_mode: paginated`）。
 - 迁移到 Codex 的会话可在真实 Codex 中续聊（正确的 `model_provider` 与 turn 事件）。
 - 迁移到 DSH 的会话保留原始时间戳。
 - DSH 会话 id 可直接作为命令行参数；没有任何轮次的源会话不再被迁移。
-
-### Added
-- CI 增加 mypy 类型检查与覆盖率统计（下限 75%），ruff 规则加入 bugbear 等。
-- `relay --version`；推送 `v*` tag 自动构建并发布 Release，说明取自本文件，附构建来源证明。
-- LICENSE（MIT）、SECURITY、CONTRIBUTING、CODE_OF_CONDUCT、CODEOWNERS、issue / PR 模板。
-- ruff、CodeQL、Dependabot。
 
 ## [0.4.0-dev.2] - 2026-10-08
 
