@@ -79,7 +79,7 @@ class PreviewIntegrationTests(unittest.TestCase):
     def test_report_warns_and_token_changes_with_redaction(self):
         self.write_source()
         plain = preview.conversion('claude', 'sec', 'codex', cwd=str(self.cwd))
-        self.assertEqual(plain['secrets']['total'], 1)
+        self.assertEqual(plain['findings']['total'], 1)
         self.assertTrue(any('疑似敏感信息' in w for w in plain['warnings']))
         self.assertNotIn(GITHUB, str(plain))
         redacted = preview.conversion('claude', 'sec', 'codex', cwd=str(self.cwd), redact_secrets=True)
