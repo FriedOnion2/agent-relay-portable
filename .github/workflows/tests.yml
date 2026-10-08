@@ -59,3 +59,24 @@ jobs:
         with:
           name: coverage-xml
           path: coverage.xml
+  package:
+    name: pip install (wheel)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Build and install the wheel into a clean venv
+        shell: bash
+        run: |
+          python -m venv "$RUNNER_TEMP/pkg"
+          BIN="$RUNNER_TEMP/pkg/bin"; [ -d "$BIN" ] || BIN="$RUNNER_TEMP/pkg/Scripts"
+          "$BIN/python" -m pip install .
+          "$BIN/relay" --version
+          "$BIN/agent-relay" --version
+          "$BIN/python" -c "import relay_web, os; p = list(relay_web.__path__)[0]; assert os.path.isfile(os.path.join(p, 'index.html')), p"

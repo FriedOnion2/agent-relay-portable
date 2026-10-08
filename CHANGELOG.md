@@ -12,6 +12,7 @@
 - DSH 会话 id 可直接作为命令行参数；没有任何轮次的源会话不再被迁移。
 
 ### Added
+- 可用 `pipx install` / `pip install` 安装，提供 `relay` / `agent-relay` 命令；安装后的数据放在每用户目录（`RELAY_PORTABLE_ROOT` 可改），不写进 site-packages；CI 在三个系统上验证 wheel 安装。
 =======
 - CI 增加 mypy 类型检查与覆盖率统计（下限 75%），ruff 规则加入 bugbear 等。
 - `relay --version`；推送 `v*` tag 自动构建并发布 Release，说明取自本文件，附构建来源证明。
