@@ -104,6 +104,9 @@ def report(conv, target, options, destination, native=False):
                 elif b.kind not in (ir.TEXT, ir.TOOL_CALL, ir.TOOL_RESULT):
                     category, label = 'unknown', '未知块 ' + b.kind
                 counts[category][label] += 1
+        enc = (conv.meta or {}).get('encrypted_reasoning', 0)
+        if enc:
+            counts['dropped']['加密思考（来源已加密，无法读取）'] += enc
         counts['unknown']['fork / subagent、厂商隐藏状态与原生续聊兼容性'] = 1
         warnings += ['预览描述文件转换效果，不会安装工具或执行历史调用。', '工具名映射不代表工具参数与接口兼容。']
         if target == 'codex':

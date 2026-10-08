@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 
 import bootstrap
 import cli
-from relay import ir, paths, registry
+from relay import ir, paths, preview, registry
 from relay.adapters.base import _norm_cwd, BaseAdapter, SessionInfo
 from relay.adapters.claude import ClaudeAdapter
 from relay.adapters.codex import CodexAdapter
@@ -149,6 +149,52 @@ class TransferTests(unittest.TestCase):
             path = adapter.write(conv, session_id="provider-kept")
             first = json.loads(Path(path).read_text(encoding="utf-8").splitlines()[0])
             self.assertEqual(first["payload"]["model_provider"], "azure")
+
+    def test_codex_roundtrip_keeps_triple_newlines_title_and_turn_count(self):
+        conv = sample()
+        conv.turns[4].blocks[2] = ir.Block.tool_result("call-2", "a\n\n\nb")
+        with tempfile.TemporaryDirectory() as root:
+            adapter = CodexAdapter(home=root)
+            sid = "title-and-newlines"
+            adapter.write(conv, session_id=sid)
+            back = adapter.read(sid)
+            outputs = [b.output for t in back.turns for b in t.blocks if b.kind == ir.TOOL_RESULT]
+            self.assertIn("a\n\n\nb", outputs)
+            self.assertEqual(back.title, "中文迁移回归")
+            info = [row for row in adapter.discover() if row.id == sid][0]
+            self.assertEqual(info.title, "中文迁移回归")
+            self.assertEqual(info.turns, back.stats()["turns"])
+
+    def test_codex_without_index_falls_back_to_first_user_title(self):
+        conv = sample()
+        conv.title = ""
+        with tempfile.TemporaryDirectory() as root:
+            adapter = CodexAdapter(home=root)
+            adapter.write(conv, session_id="no-title")
+            self.assertTrue(adapter.read("no-title").title.startswith("需求："))
+            self.assertFalse(os.path.exists(adapter.index_path))
+
+    def test_encrypted_codex_reasoning_is_listed_as_dropped(self):
+        with tempfile.TemporaryDirectory() as src_home, tempfile.TemporaryDirectory() as dst_home:
+            sid = "11111111-2222-7333-8444-555555555560"
+            day = Path(src_home) / "sessions" / "2026" / "10" / "08"
+            day.mkdir(parents=True)
+            recs = [
+                {"type": "session_meta", "timestamp": "2026-10-08T00:00:00Z", "payload": {"id": sid, "cwd": "/tmp"}},
+                {"type": "response_item", "timestamp": "2026-10-08T00:00:01Z",
+                 "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "你好"}]}},
+                {"type": "response_item", "timestamp": "2026-10-08T00:00:02Z",
+                 "payload": {"type": "reasoning", "summary": [], "encrypted_content": "xxx"}},
+                {"type": "response_item", "timestamp": "2026-10-08T00:00:03Z",
+                 "payload": {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "好"}]}},
+            ]
+            (day / f"rollout-2026-10-08T00-00-00-{sid}.jsonl").write_text(
+                "\n".join(json.dumps(r) for r in recs) + "\n", encoding="utf-8")
+            source, target = CodexAdapter(home=src_home), WorkBuddyAdapter(home=dst_home)
+            with patch.dict(registry._CACHE, {"codex": source, "workbuddy": target}, clear=True):
+                plan = preview.conversion("codex", sid, "workbuddy")
+            labels = [row["item"] for row in plan["dropped"]]
+            self.assertIn("加密思考（来源已加密，无法读取）", labels)
 
     def test_dsh_style_session_ids_parse_as_positionals(self):
         import cli
