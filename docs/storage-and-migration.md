@@ -101,7 +101,7 @@ python app/cli.py undo <操作ID>      # 撤销
 历史会话里常混着粘贴过的 API 密钥、令牌或口令，迁移会把它们原样复制到另一个软件的目录。预览现在会统计并提示：
 
 - 识别：OpenAI / Anthropic / GitHub / AWS / Google / Slack / Stripe / 腾讯云 / 阿里云密钥、JWT、私钥块、`Bearer` 令牌、URL 里的 `user:pass@`，以及 `password=`、`api_key:`、`密码：` 这类带真实值的赋值（`${VAR}`、`<your-key>`、`xxxx`、环境变量读取等占位写法会被忽略）。
-- 报告永远只显示掩码（如 `sk-…yZ`），预览 JSON 的 `secrets` 字段含按类型的计数与位置。
+- 报告里只有类型、位置（第几轮第几块的哪个字段）和长度，**不包含密钥的任何片段**，连掩码也不给，避免扫描结果本身被写进日志或截图。预览 JSON 的 `findings` 字段含按类型的计数与位置。
 - 单独扫描：`python app/cli.py scan <agent> <id>`，发现时退出码为 2，可接入脚本。
 - 脱敏：`transfer` / `export` 加 `--redact-secrets`，API 传 `redact_secrets: true`。命中内容被替换为 `[REDACTED:类型]`；该选项参与预览令牌，改选项后必须重新预览。默认不脱敏，行为与之前一致。
 

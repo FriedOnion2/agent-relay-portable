@@ -232,7 +232,7 @@ def cmd_scan(args):
         return
     print("发现 %d 处疑似敏感信息：%s" % (result["total"], sensitive.summary_line(result)))
     for row in result["locations"][:50]:
-        print("  第 %d 轮 块 %d %s  %s  %s" % (row["turn"] + 1, row["block"] + 1, row["field"], row["kind"], row["masked"]))
+        print("  第 %d 轮 块 %d %s  %s  长度 %d" % (row["turn"] + 1, row["block"] + 1, row["field"], row["kind"], row["length"]))
     print("迁移/导出时加 --redact-secrets 可将其替换为 [REDACTED:类型]。")
     sys.exit(2)
 
@@ -526,7 +526,7 @@ def build_parser():
     p4.add_argument("--redact-secrets", action="store_true", help="把疑似密钥/口令替换为 [REDACTED:类型]")
     p4.set_defaults(func=cmd_export)
 
-    p4b = sub.add_parser("scan", help="扫描会话里的疑似密钥、令牌和口令（只显示掩码）")
+    p4b = sub.add_parser("scan", help="扫描会话里的疑似密钥、令牌和口令（只显示类型、位置和长度）")
     p4b.add_argument("agent", choices=read_agents)
     p4b.add_argument("id")
     p4b.add_argument("--json", action="store_true")
