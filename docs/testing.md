@@ -44,3 +44,12 @@ GitHub Actions 的「Real client compatibility」工作流每周一并在相关�
 | WorkBuddy | 跳过 | 桌面应用，无法在无界面环境启动 |
 
 实际每个系统的通过情况以最近一次工作流运行摘要为准。
+
+## 格式漂移告警
+
+两个计划任务（每日的 `format-health`、每周的 `real-clients`）失败时，`alert` 作业会调用 `scripts/drift_issue.py`：
+
+- 只在 **定时触发** 且上游作业失败时执行；手动触发和 push 触发由发起人自己看结果。
+- 用标签 `format-drift` 找同名的未关闭 issue：没有就新建（`real-clients` 会附上软件×系统支持表），已有就追加评论，不会每周刷出新 issue。
+- 问题修复后手动关闭该 issue；下次再失败会重新建一个。
+- 需要工作流的 `issues: write` 权限（作业里已声明），不使用任何额外密钥。
