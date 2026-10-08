@@ -6,11 +6,13 @@
 ## [Unreleased]
 
 ### Fixed
+- 迁移到 Codex 的会话在真实 Codex 中重建出完整 items（session_meta 补 `history_mode: paginated`）。
 - 迁移到 Codex 的会话可在真实 Codex 中续聊（正确的 `model_provider` 与 turn 事件）。
 - 迁移到 DSH 的会话保留原始时间戳。
 - DSH 会话 id 可直接作为命令行参数；没有任何轮次的源会话不再被迁移。
 
 ### Added
+- 真实客户端冒烟测试（Codex 续聊、DSH 打开）及每周 CI：`scripts/smoke_codex_resume.py`、`scripts/smoke_dsh_native.py`。
 - `relay --version`；推送 `v*` tag 自动构建并发布 Release，说明取自本文件，附构建来源证明。
 - LICENSE（MIT）、SECURITY、CONTRIBUTING、CODE_OF_CONDUCT、CODEOWNERS、issue / PR 模板。
 - ruff、CodeQL、Dependabot。

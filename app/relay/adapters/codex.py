@@ -326,6 +326,8 @@ class CodexAdapter(BaseAdapter):
                 "cli_version": "imported",
                 "source": "external-import",
                 "thread_source": "user",
+                # 与 Codex 自己写出的会话一致；缺少它时 thread/resume 重建出的 turn 没有 items
+                "history_mode": "paginated",
                 "model_provider": conv.meta.get("model_provider") or DEFAULT_MODEL_PROVIDER,
             },
         }, ensure_ascii=False))
