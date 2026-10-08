@@ -21,6 +21,8 @@ from ..paths import iso, read_jsonl, safe_ms, atomic_write, uuid7, now_ms, valid
 from .base import BaseAdapter, SessionInfo, ToolNameMap
 
 MAX_SCAN_BYTES = 32 * 1024 * 1024
+# Codex 只认识配置里存在的 provider；写入未知值会让 thread/resume 直接报错。
+DEFAULT_MODEL_PROVIDER = "openai"
 
 
 def _content_to_text(items: Any) -> str:
@@ -305,17 +307,29 @@ class CodexAdapter(BaseAdapter):
                 "cli_version": "imported",
                 "source": "external-import",
                 "thread_source": "user",
-                "model_provider": conv.meta.get("model_provider") or "unknown",
+                "model_provider": conv.meta.get("model_provider") or DEFAULT_MODEL_PROVIDER,
             },
         }, ensure_ascii=False))
         ordinal += 1
 
-        lines.append(json.dumps({
-            "timestamp": iso(base),
-            "ordinal": ordinal,
-            "type": "turn_context",
-            "payload": {
-                "turn_id": uuid7(base),
+        def emit(ts_ms: int, kind: str, payload: Dict[str, Any]) -> None:
+            nonlocal ordinal
+            lines.append(json.dumps({"timestamp": iso(ts_ms), "ordinal": ordinal,
+                                     "type": kind, "payload": payload}, ensure_ascii=False))
+            ordinal += 1
+
+        # Codex 按 task_started / item_completed / task_complete 重建对话轮次；
+        # 只有 response_item 时 thread/read 读不到任何 turn。
+        current_turn: Optional[str] = None
+        last_ts = base
+
+        def open_turn(ts_ms: int) -> str:
+            tid = uuid7(ts_ms)
+            emit(ts_ms, "event_msg", {"type": "task_started", "turn_id": tid, "root_turn_id": tid,
+                                      "started_at": ts_ms // 1000, "collaboration_mode_kind": "default"})
+            emit(ts_ms, "turn_context", {
+                "turn_id": tid,
+                "root_turn_id": tid,
                 "cwd": target_cwd,
                 "workspace_roots": [target_cwd],
                 "current_date": now.strftime("%Y-%m-%d"),
@@ -324,9 +338,23 @@ class CodexAdapter(BaseAdapter):
                 "approvals_reviewer": "user",
                 "sandbox_policy": {"type": "workspace-write"},
                 "model": conv.model or "unknown",
-            },
-        }, ensure_ascii=False))
-        ordinal += 1
+            })
+            return tid
+
+        def close_turn(ts_ms: int, last_message: Optional[str]) -> None:
+            nonlocal current_turn
+            if current_turn:
+                emit(ts_ms, "event_msg", {"type": "task_complete", "turn_id": current_turn,
+                                          "last_agent_message": last_message,
+                                          "started_at": ts_ms // 1000, "completed_at": ts_ms // 1000})
+                current_turn = None
+
+        def item_completed(ts_ms: int, item: Dict[str, Any]) -> None:
+            emit(ts_ms, "event_msg", {"type": "item_completed", "thread_id": sid,
+                                      "turn_id": current_turn, "item": item,
+                                      "started_at_ms": ts_ms, "completed_at_ms": ts_ms})
+
+        last_assistant_text: Optional[str] = None
 
         for turn in conv.turns:
             ts = safe_ms(turn.ts) or (base + ordinal)
@@ -335,21 +363,28 @@ class CodexAdapter(BaseAdapter):
                 texts = [b.text for b in turn.blocks if b.kind in (ir.TEXT, ir.IMAGE) and b.text]
                 if not texts:
                     continue
-                lines.append(json.dumps({
-                    "timestamp": iso(ts), "ordinal": ordinal, "type": "response_item",
-                    "payload": {
-                        "type": "message", "id": f"msg_{uuid7(ts)}", "role": ir.USER,
-                        "content": [{"type": "input_text", "text": "\n".join(texts)}],
-                    },
-                }, ensure_ascii=False))
-                ordinal += 1
+                close_turn(last_ts, last_assistant_text)
+                last_assistant_text = None
+                last_ts = ts
+                current_turn = open_turn(ts)
+                user_text = "\n".join(texts)
+                emit(ts, "response_item", {
+                    "type": "message", "id": f"msg_{uuid7(ts)}", "role": ir.USER,
+                    "content": [{"type": "input_text", "text": user_text}],
+                })
+                item_completed(ts, {"type": "UserMessage", "id": uuid7(ts),
+                                    "content": [{"type": "text", "text": user_text, "text_elements": []}]})
                 continue
 
             if turn.role != ir.ASSISTANT:
                 continue
+            if current_turn is None:
+                last_ts = ts
+                current_turn = open_turn(ts)
 
             for b in turn.blocks:
                 ts_b = ts + (ordinal % 1000)
+                last_ts = max(last_ts, ts_b)
                 if b.kind == ir.THINKING and include_thinking:
                     lines.append(json.dumps({
                         "timestamp": iso(ts_b), "ordinal": ordinal, "type": "response_item",
@@ -366,6 +401,10 @@ class CodexAdapter(BaseAdapter):
                                     "content": [{"type": "output_text", "text": b.text}]},
                     }, ensure_ascii=False))
                     ordinal += 1
+                    item_completed(ts_b, {"type": "AgentMessage", "id": uuid7(ts_b),
+                                          "content": [{"type": "Text", "text": b.text}],
+                                          "phase": "final_answer"})
+                    last_assistant_text = b.text
                 elif b.kind == ir.TOOL_CALL:
                     name = ToolNameMap.convert(b.name, "codex", remap_tools)
                     lines.append(json.dumps({
@@ -386,5 +425,6 @@ class CodexAdapter(BaseAdapter):
                     }, ensure_ascii=False))
                     ordinal += 1
 
+        close_turn(last_ts, last_assistant_text)
         atomic_write(out_path, lines, overwrite=False)
         return out_path
