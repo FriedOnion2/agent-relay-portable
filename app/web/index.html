@@ -140,6 +140,21 @@
   }
   .toast.show{opacity:1;transform:translate(-50%,0)}
   .toast.bad{background:#8f2d2d}
+  dialog.confirm{border:1px solid var(--line); border-radius:var(--radius); box-shadow:0 12px 40px rgba(16,24,40,.25); padding:0; width:min(560px,92vw); color:var(--text)}
+  dialog.confirm::backdrop{background:rgba(16,24,40,.45)}
+  dialog.confirm form{margin:0; display:flex; flex-direction:column; max-height:80vh}
+  dialog.confirm h3{margin:0; padding:16px 20px; border-bottom:1px solid var(--line-soft); font-size:15px}
+  dialog.confirm .confirm-body{padding:14px 20px; overflow:auto; display:flex; flex-direction:column; gap:12px; font-size:13px}
+  dialog.confirm .confirm-meta{color:var(--text-2); line-height:1.7; word-break:break-all}
+  dialog.confirm .confirm-group{border:1px solid var(--line-soft); border-radius:8px; overflow:hidden}
+  dialog.confirm .confirm-group > .label{padding:6px 12px; font-weight:600; font-size:12px; display:flex; justify-content:space-between}
+  dialog.confirm .confirm-group ul{margin:0; padding:6px 12px 8px 28px; line-height:1.7}
+  dialog.confirm .g-preserved > .label{background:var(--green-soft); color:var(--green)}
+  dialog.confirm .g-degraded > .label{background:var(--amber-soft); color:var(--amber)}
+  dialog.confirm .g-dropped > .label{background:#fdeaea; color:#a12b2b}
+  dialog.confirm .g-unknown > .label{background:var(--line-soft); color:var(--text-2)}
+  dialog.confirm .confirm-warn{color:var(--text-2); font-size:12px; line-height:1.7}
+  dialog.confirm .confirm-actions{display:flex; justify-content:flex-end; gap:8px; padding:12px 20px; border-top:1px solid var(--line-soft)}
   .toast button{background:rgba(255,255,255,.16);border:0;color:#fff;padding:4px 9px;border-radius:6px;cursor:pointer}
   .spinner{
     width:13px;height:13px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;
@@ -150,6 +165,16 @@
 </style>
 </head>
 <body>
+<dialog class="confirm" id="confirmDialog" aria-labelledby="confirmTitle">
+  <form method="dialog">
+    <h3 id="confirmTitle"></h3>
+    <div class="confirm-body" id="confirmBody"></div>
+    <div class="confirm-actions">
+      <button class="btn" id="confirmCancel" value="cancel">取消</button>
+      <button class="btn primary" id="confirmOk" value="ok">确认</button>
+    </div>
+  </form>
+</dialog>
 
 <header>
   <div class="logo">
@@ -496,18 +521,22 @@ function buildTarget(){
   updateActions();
 }
 
+let exitPending=false;
 async function exitService(){
   const btn = $('#btnExit');
-  if(state.transferring || btn.disabled) return;
-  if(!confirm('停止当前 AgentRelay 服务？其他使用此服务的页面也会断开。')) return;
-  btn.disabled = true;
+  if(state.transferring || btn.disabled || exitPending) return;
+  exitPending = true;
   try{
-    await api('/api/shutdown', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
-    document.body.innerHTML = '<main style="padding:40px"><h2>AgentRelay 正在退出</h2><p>服务将在正在执行的请求结束后停止。可以关闭此页面；再次使用请重新运行启动器。</p></main>';
-  }catch(e){
-    toast('退出失败：'+e.message, true);
-    btn.disabled = false;
-  }
+    if(!await askConfirm('停止服务',[{meta:'停止当前 AgentRelay 服务？其他使用此服务的页面也会断开。'}],'停止当前 AgentRelay 服务？其他使用此服务的页面也会断开。','停止服务')) return;
+    btn.disabled = true;
+    try{
+      await api('/api/shutdown', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
+      document.body.innerHTML = '<main style="padding:40px"><h2>AgentRelay 正在退出</h2><p>服务将在正在执行的请求结束后停止。可以关闭此页面；再次使用请重新运行启动器。</p></main>';
+    }catch(e){
+      toast('退出失败：'+e.message, true);
+      btn.disabled = false;
+    }
+  }finally{ exitPending = false; }
 }
 
 function bind(){
@@ -818,14 +847,50 @@ async function runHealth(){
   }catch(e){$('#healthResult').textContent='自检失败：'+e.message;}
   finally{button.disabled=false;}
 }
+// 页面内确认对话框；浏览器不支持 <dialog> 时退回原生 confirm(plainText)。
+// sections: [{meta:'说明文字'} | {group:'preserved|degraded|dropped|unknown', label, rows:['项（数量）']} | {warn:'提示'}]
+function askConfirm(title,sections,plainText,okLabel='确认'){
+  const dialog=$('#confirmDialog');
+  if(!dialog||typeof dialog.showModal!=='function') return Promise.resolve(confirm(plainText));
+  $('#confirmTitle').textContent=title;
+  const body=$('#confirmBody');body.innerHTML='';
+  for(const section of sections){
+    if(section.group){
+      const box=document.createElement('div');box.className='confirm-group g-'+section.group;
+      const head=document.createElement('div');head.className='label';
+      const name=document.createElement('span');name.textContent=section.label;
+      const count=document.createElement('span');count.textContent=section.rows.length+' 项';
+      head.appendChild(name);head.appendChild(count);box.appendChild(head);
+      const list=document.createElement('ul');
+      for(const row of section.rows){const li=document.createElement('li');li.textContent=row;list.appendChild(li);}
+      box.appendChild(list);body.appendChild(box);
+    }else{
+      const p=document.createElement('div');p.className=section.warn?'confirm-warn':'confirm-meta';
+      p.textContent=section.warn||section.meta;body.appendChild(p);
+    }
+  }
+  $('#confirmOk').textContent=okLabel;
+  dialog.returnValue='';
+  return new Promise(resolve=>{
+    dialog.onclose=()=>{dialog.onclose=null;resolve(dialog.returnValue==='ok');};
+    dialog.showModal();
+  });
+}
 async function confirmMigration(payload,mode='convert'){
   const r=await api('/api/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...payload,mode})});
   const labels={preserved:'保留',degraded:'降级',dropped:'丢弃',unknown:'未知 / 需核对'};
-  const lines=['迁移保真度预览','目标：'+(AGENTS[r.target]||state.sources.find(s=>s.name===r.target)?.label||r.target),'项目：'+(r.target_cwd||'沿用来源')];
-  for(const [key,label] of Object.entries(labels)) for(const row of r[key]||[]) lines.push(label+'：'+row.item+'（'+row.count+'）');
+  const targetName=AGENTS[r.target]||state.sources.find(s=>s.name===r.target)?.label||r.target;
+  const lines=['迁移保真度预览','目标：'+targetName,'项目：'+(r.target_cwd||'沿用来源')];
+  const sections=[{meta:'目标：'+targetName+'\n项目：'+(r.target_cwd||'沿用来源')}];
+  for(const [key,label] of Object.entries(labels)){
+    const rows=(r[key]||[]).map(row=>row.item+'（'+row.count+'）');
+    for(const row of rows) lines.push(label+'：'+row);
+    if(rows.length) sections.push({group:key,label,rows});
+  }
   lines.push(...(r.warnings||[]));
+  for(const warning of r.warnings||[]) sections.push({warn:warning});
   if((r.blockers||[]).length){toast('迁移不可执行：'+r.blockers.join('；'),true);return null;}
-  return confirm(lines.join('\n')+'\n\n确认执行此迁移？') ? r.token : null;
+  return (await askConfirm('迁移保真度预览',sections,lines.join('\n')+'\n\n确认执行此迁移？','确认执行迁移')) ? r.token : null;
 }
 function buildSkillAgents(){
   const source=$('#skillAgent'),target=$('#skillTargetAgent');
