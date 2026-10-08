@@ -117,6 +117,8 @@ def report(conv, target, options, destination, native=False):
     if secrets['total']:
         if options.get('redact_secrets'):
             warnings.append('检测到 %d 处疑似敏感信息（%s），写入时将替换为 [REDACTED:类型]。' % (secrets['total'], sensitive.summary_line(secrets)))
+        elif native:
+            warnings.append('检测到 %d 处疑似敏感信息（%s）：原生迁移原样复制会话文件，不支持脱敏。' % (secrets['total'], sensitive.summary_line(secrets)))
         else:
             warnings.append('检测到 %d 处疑似敏感信息（%s）：迁移会原样复制到目标软件。可勾选「脱敏」或加 --redact-secrets。' % (secrets['total'], sensitive.summary_line(secrets)))
     evidence = conv.to_dict()
