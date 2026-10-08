@@ -4,7 +4,7 @@
 [![Lint](https://github.com/FriedOnion2/agent-relay-portable/actions/workflows/lint.yml/badge.svg)](https://github.com/FriedOnion2/agent-relay-portable/actions/workflows/lint.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/FriedOnion2/agent-relay-portable?include_prereleases)](https://github.com/FriedOnion2/agent-relay-portable/releases)
-![Platforms](https://img.shields.io/badge/平台-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
+![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 
 **中文** | [English](README.en.md)
 
