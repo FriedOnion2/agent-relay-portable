@@ -1,18 +1,31 @@
-name: Build universal dev release
+name: Build and publish release
 on:
+  push:
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing version tag (e.g. v0.2.0-dev.1)
+        description: Existing version tag (e.g. v0.5.0)
         required: true
         type: string
 permissions:
   contents: read
 concurrency:
-  group: release-${{ inputs.tag }}
+  group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 jobs:
+  verify-tag:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+      - name: Tag matches __version__ and CHANGELOG has release notes
+        run: python3 scripts/release_notes.py --tag "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --output "$RUNNER_TEMP/notes.md"
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
   build:
+    needs: verify-tag
     strategy:
       fail-fast: false
       matrix:
@@ -27,11 +40,11 @@ jobs:
             target: macos-x64
     runs-on: ${{ matrix.os }}
     env:
-      RELEASE_TAG: ${{ inputs.tag }}
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ inputs.tag || github.ref_name }}
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -54,12 +67,12 @@ jobs:
     needs: build
     runs-on: macos-14
     env:
-      RELEASE_TAG: ${{ inputs.tag }}
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ inputs.tag || github.ref_name }}
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -95,7 +108,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ inputs.tag || github.ref_name }}
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -111,17 +124,27 @@ jobs:
     runs-on: ubuntu-22.04
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     env:
-      RELEASE_TAG: ${{ inputs.tag }}
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ inputs.tag || github.ref_name }}
       - uses: actions/download-artifact@v7
         with:
           name: universal-release
           path: universal-assets
-      - name: Publish dev prerelease only after every platform passes
+      - name: Render release notes from CHANGELOG
+        run: python3 scripts/release_notes.py --tag "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --output "$RUNNER_TEMP/notes.md"
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: universal-assets/*.zip
+      - name: Publish release only after every platform passes
         run: |
-          gh release create "$RELEASE_TAG" universal-assets/*.zip universal-assets/SHA256SUMS.txt --verify-tag --prerelease --title "AgentRelay $RELEASE_TAG · 跨设备总包" --notes-file .github/release-notes-dev.md
+          flags=()
+          case "$RELEASE_TAG" in *-*) flags+=(--prerelease);; esac
+          gh release create "$RELEASE_TAG" universal-assets/*.zip universal-assets/SHA256SUMS.txt --verify-tag "${flags[@]}" --title "AgentRelay $RELEASE_TAG" --notes-file "$RUNNER_TEMP/notes.md"
