@@ -16,7 +16,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 from .. import ir
 from ..clean import strip_scaffolding
-from ..paths import iso, read_jsonl, safe_ms, slug_for, atomic_write, uuid7, now_ms, validate_session_id
+from ..paths import iso, read_jsonl, safe_ms, atomic_write, uuid7, now_ms, validate_session_id
 from .base import BaseAdapter, SessionInfo, ToolNameMap
 
 MAX_SCAN_BYTES = 32 * 1024 * 1024

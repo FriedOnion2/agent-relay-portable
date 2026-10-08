@@ -1,0 +1,15 @@
+name: 新格式 / 格式变化
+description: 某个软件的会话格式更新或需要新的适配器
+labels: [enhancement, documentation]
+body:
+  - type: input
+    id: software
+    attributes:
+      label: 软件与版本
+    validations: {required: true}
+  - type: textarea
+    id: layout
+    attributes:
+      label: 存储位置与格式观察
+      description: 请只提供**合成/脱敏**的最小样例，不要附真实会话。
+    validations: {required: true}

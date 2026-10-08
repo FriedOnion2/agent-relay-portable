@@ -3,7 +3,6 @@ import json
 import http.client
 import os
 import platform
-import shutil
 import socket
 import subprocess
 import sys
