@@ -106,3 +106,20 @@ python app/cli.py undo <操作ID>      # 撤销
 - 脱敏：`transfer` / `export` 加 `--redact-secrets`，API 传 `redact_secrets: true`。命中内容被替换为 `[REDACTED:类型]`；该选项参与预览令牌，改选项后必须重新预览。默认不脱敏，行为与之前一致。
 
 扫描基于规则，只覆盖正文、思考、工具参数与工具结果，不保证发现全部敏感信息，不能代替安全审计。已泄露的密钥请直接作废轮换。
+
+## 批量迁移与重复迁移
+
+```bash
+# 预演：看会迁移哪些、哪些会被跳过（不写入）
+python app/cli.py batch claude --to codex --filter myproject
+# 确认无误后实际执行
+python app/cli.py batch claude --to codex --filter myproject --yes
+# 指定会话、统一落到某个项目目录、顺便脱敏
+python app/cli.py batch claude --to codex --ids a1,b2 --cwd ~/work/app --redact-secrets --yes
+```
+
+- 默认只预演；必须加 `--yes` 才写入。一次最多处理 500 条（`--limit`）。
+- 目标会话 ID 由「来源 + 源会话 ID + 目标」确定性派生，所以重复执行同一条命令是幂等的：已迁移的会话会按 `--on-conflict` 处理——`skip`（默认）跳过；`new` 另建一个新 ID 的副本；`fail` 遇到即停止。
+- 单条失败（源不可读、内容为空等）只记录，不影响其余；加 `--stop-on-error` 可改为遇错即停。退出码：全部成功 0，存在失败 1。
+- 与单条迁移不同，批量没有逐条的预览令牌：先预演、再 `--yes` 的两步就是确认流程。需要逐条核对保真度时仍用 `transfer --dry-run`。
+- 只对「转换迁移」（`transfer` 同款）生效；原生迁移（保留原始格式）仍逐条进行。

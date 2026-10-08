@@ -320,6 +320,23 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(import_windows(body["source"], body["id"], body["cwd"],
                                   session_id=body.get("session_id") or None,
                                   dsh_compression=body.get("dsh_compression") or "zstd", preview_token=body.get('preview_token')))
+            if u.path == "/api/batch":
+                from relay import batch
+                if not (body.get("source") and body.get("target")):
+                    return self._error("缺少 source / target")
+                ids = body.get("ids") or []
+                if not isinstance(ids, list) or any(not isinstance(x, str) for x in ids):
+                    return self._error("ids 必须是字符串数组")
+                try:
+                    limit = int(body.get("limit") or 100)
+                except (TypeError, ValueError):
+                    return self._error("limit 必须是整数")
+                return self._json(batch.run(
+                    body["source"], body["target"], ids=ids, keyword=str(body.get("keyword") or ""), limit=limit,
+                    cwd=body.get("cwd") or None, on_conflict=body.get("on_conflict") or "skip",
+                    redact_secrets=bool(body.get("redact_secrets", False)),
+                    remap_tools=bool(body.get("remap_tools", True)), include_thinking=bool(body.get("include_thinking", True)),
+                    dry_run=body.get("dry_run", True) is not False, stop_on_error=bool(body.get("stop_on_error", False))))
             if u.path == "/api/transfer":
                 source = body.get("source")
                 sid = body.get("id")
