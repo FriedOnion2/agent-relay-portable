@@ -150,6 +150,34 @@ class TransferTests(unittest.TestCase):
             first = json.loads(Path(path).read_text(encoding="utf-8").splitlines()[0])
             self.assertEqual(first["payload"]["model_provider"], "azure")
 
+    def test_dsh_style_session_ids_parse_as_positionals(self):
+        import cli
+        parser = cli.build_parser()
+        sid = "--home-me-project--/session-2ef6d666-6b91-42ad-be23-96d79f23dd12"
+        for argv in (["show", "dsh", sid], ["export", "dsh", sid, "-o", "x.md"],
+                     ["transfer", "dsh", "--to", "codex", sid]):
+            with self.subTest(argv=argv):
+                self.assertEqual(parser.parse_args(argv).id, sid)
+        with self.assertRaises(SystemExit):
+            parser.parse_args(["export", "dsh", "--bogus", "x"])
+
+    def test_source_without_turns_is_not_transferred(self):
+        with tempfile.TemporaryDirectory() as src_home, tempfile.TemporaryDirectory() as dst_home:
+            day = Path(src_home) / "sessions" / "2026" / "10" / "08"
+            day.mkdir(parents=True)
+            ids = ["11111111-2222-7333-8444-555555555550", "11111111-2222-7333-8444-555555555551"]
+            for sid in ids:
+                meta = {"type": "session_meta", "timestamp": "2026-10-08T00:00:00Z",
+                        "payload": {"id": sid, "cwd": "/tmp"}}
+                (day / f"rollout-2026-10-08T00-00-00-{sid}.jsonl").write_text(
+                    json.dumps(meta) + "\n", encoding="utf-8")
+            source, target = CodexAdapter(home=src_home), WorkBuddyAdapter(home=dst_home)
+            with patch.dict(registry._CACHE, {"codex": source, "workbuddy": target}, clear=True):
+                for sid in ids:
+                    with self.subTest(sid=sid), self.assertRaises(ValueError):
+                        registry.transfer("codex", sid, "workbuddy")
+            self.assertEqual(list(Path(dst_home).rglob("*.jsonl")), [])
+
     def test_claude_mixed_user_message_keeps_result_and_text(self):
         with tempfile.TemporaryDirectory() as root:
             path = Path(root) / "mixed.jsonl"

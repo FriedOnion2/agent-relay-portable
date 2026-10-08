@@ -10,10 +10,9 @@ import fnmatch
 import os
 import ntpath
 import posixpath
-import time
 from dataclasses import dataclass, asdict, replace
 from collections import OrderedDict
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, Optional
 
 from .. import ir
 from ..paths import human_size, local_str, read_jsonl, slug_for, is_windows_path

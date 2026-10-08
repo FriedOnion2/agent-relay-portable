@@ -2,7 +2,6 @@
 import io
 import json
 import os
-import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -10,7 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import test_native_import
-from relay import archive, skill_store, registry
+from relay import archive, skill_store
 import cli
 
 

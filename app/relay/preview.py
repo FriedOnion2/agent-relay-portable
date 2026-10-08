@@ -57,6 +57,8 @@ def report(conv, target, options, destination, native=False):
     blockers = []
     if conv.truncated:
         blockers.append('源会话不完整，不能迁移')
+    if not conv.turns and not native:
+        blockers.append('源会话没有可迁移的内容（文件为空或无法解析）')
     if native:
         counts['preserved']['原生记录（保留原始格式）'] = len(conv.turns)
         counts['degraded']['当前项目元数据映射到新目录'] = 1

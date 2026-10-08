@@ -1,7 +1,6 @@
 """Same-agent Windows imports preserve native artifacts, using synthetic stores."""
 import io
 import json
-import os
 import sys
 import unittest
 from pathlib import Path

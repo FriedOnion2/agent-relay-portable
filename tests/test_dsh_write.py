@@ -81,6 +81,27 @@ class DshWriteTests(unittest.TestCase):
             result = next(b for t in imported.turns for b in t.blocks if b.kind == ir.TOOL_RESULT)
             self.assertTrue(result.is_error)
 
+    @unittest.skipUnless(zstandard, "install requirements-optional.txt for DSH write tests")
+    def test_source_timestamps_survive_when_conversation_has_no_created_at(self):
+        """Sources without created_at must not flatten every event to the import time."""
+        base = 1_700_000_000_000
+        original = conversation()
+        original.created_at = None
+        for index, turn in enumerate(original.turns):
+            turn.ts = base + index * 60_000
+        with tempfile.TemporaryDirectory() as root:
+            target = DshAdapter(home=root)
+            path = target.write(original, session_id="keep-time")
+            rows = read_records(path)
+            self.assertEqual(rows[0]["createdAt"], base)
+            times = {row["time"] for row in rows[1:]}
+            self.assertGreater(len(times), 1)
+            self.assertEqual(min(times), base)
+            self.assertEqual(max(times), base + 3 * 60_000)
+            users = [row["time"] for row in rows[1:] if row["type"] == "user/message"]
+            self.assertEqual(users, [base, base + 3 * 60_000])
+            self.assertEqual([row["time"] for row in rows[1:]], sorted(row["time"] for row in rows[1:]))
+
     def test_invalid_ids_and_missing_decoder_do_not_create_sessions(self):
         with tempfile.TemporaryDirectory() as root:
             target = DshAdapter(home=root)

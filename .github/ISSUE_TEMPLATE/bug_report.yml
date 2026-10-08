@@ -1,0 +1,56 @@
+name: Bug 报告 / Bug report
+description: 导出、迁移、恢复或界面出现问题
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: 请**不要**粘贴真实对话内容或凭据，必要时先脱敏。
+  - type: dropdown
+    id: area
+    attributes:
+      label: 涉及的功能
+      options: [列表/预览, 导出 Markdown, 跨软件迁移, 原生会话包存储/恢复, Skill 存储, 搜索/提炼, 网页界面, 命令行, 启动器/安装, 其他]
+    validations: {required: true}
+  - type: dropdown
+    id: source
+    attributes:
+      label: 来源软件
+      multiple: true
+      options: [WorkBuddy, DSH, CodeBuddy, Claude Code, Claude Agent SDK, Codex, 其他]
+  - type: dropdown
+    id: target
+    attributes:
+      label: 目标软件（迁移时）
+      multiple: true
+      options: [WorkBuddy, DSH, Claude Code, Codex, 无]
+  - type: input
+    id: os
+    attributes:
+      label: 系统与版本
+      placeholder: Ubuntu 22.04 / Windows 11 / macOS 15
+    validations: {required: true}
+  - type: input
+    id: version
+    attributes:
+      label: AgentRelay 版本（Release 或 commit）
+    validations: {required: true}
+  - type: input
+    id: client
+    attributes:
+      label: 来源/目标软件版本
+      placeholder: Codex 0.161.0
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+    validations: {required: true}
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望与实际结果
+    validations: {required: true}
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志 / 报错（已脱敏）
+      render: shell
