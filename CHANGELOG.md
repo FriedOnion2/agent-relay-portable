@@ -6,6 +6,7 @@
 ## [Unreleased]
 
 ### Added
+- 批量迁移：`relay batch`（API `/api/batch`）按条件或 ID 列表批量转换，默认只预演，`--yes` 才写入；目标 ID 确定性派生，重复执行自动识别已迁移的会话（`--on-conflict skip|new|fail`），单条失败不拖垮整批，输出逐条进度与汇总。
 - 敏感信息扫描：预览会提示会话里疑似的 API 密钥、令牌、私钥和口令（只显示掩码）；`relay scan` 单独扫描；迁移与导出支持 `--redact-secrets`（API：`redact_secrets`），写入时替换为 `[REDACTED:类型]`。
 
 ### Fixed
