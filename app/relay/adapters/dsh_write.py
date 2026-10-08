@@ -142,7 +142,10 @@ def write_native(home, conv, cwd, session_id, remap_tools, include_thinking):
         import zstandard as zstd
     except ImportError:
         raise ValueError("导入 DSH 需要 zstandard；Mac 请运行 Mac安装依赖.command，其他系统安装 requirements-optional.txt") from None
-    created = safe_ms(conv.created_at, now_ms())
+    # Start from the source's own clock. Falling back to "now" first would make
+    # the max() in history_events() flatten every event to the import time.
+    stamps = [safe_ms(t.ts) for t in conv.turns if safe_ms(t.ts)]
+    created = safe_ms(conv.created_at) or (min(stamps) if stamps else now_ms())
     events = history_events(conv, include_thinking, remap_tools, created)
     header = {"type":"session", "version":0, "id":sid, "createdAt":created,
               "cwd":target_cwd, "delegationDepth":0, "seedLength":len(events) - 1}
