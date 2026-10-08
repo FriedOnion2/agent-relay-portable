@@ -46,6 +46,10 @@ def _content_to_text(items: Any) -> str:
     return ""
 
 
+_ASSISTANT_ITEMS = ("agent_message", "function_call", "function_call_output", "custom_tool_call",
+                    "custom_tool_call_output", "web_search_call")
+
+
 class CodexAdapter(BaseAdapter):
     name = "codex"
     label = "OpenAI Codex"
@@ -92,6 +96,7 @@ class CodexAdapter(BaseAdapter):
         created_ms = None
         updated_ms = None
         turns = 0
+        last_role = None
         first_user = ""
         for rec, _trunc in read_jsonl(path, MAX_SCAN_BYTES):
             rt = rec.get("type")
@@ -104,18 +109,28 @@ class CodexAdapter(BaseAdapter):
                 title = names.get(str(sid), {}).get("name", "")
             elif rt == "turn_context":
                 cwd = cwd or pl.get("cwd") or ""
-            elif rt == "response_item" and pl.get("type") == "message":
-                role = pl.get("role")
-                if role == ir.USER and not first_user:
-                    t = _content_to_text(pl.get("content"))
-                    if self.clean:
-                        t = strip_scaffolding(t)
-                    if t and not looks_like_system_prompt(t):
-                        first_user = ir.summarize_line(t, 60)
-                if role == ir.ASSISTANT:
-                    turns += 1
-            elif rt == "event_msg" and pl.get("type") == "task_started":
-                turns += 1
+            elif rt == "response_item":
+                ptype = pl.get("type")
+                if ptype == "message":
+                    role = pl.get("role")
+                    if role == ir.USER:
+                        t = _content_to_text(pl.get("content"))
+                        if self.clean:
+                            t = strip_scaffolding(t)
+                        if t and not looks_like_system_prompt(t):
+                            turns += 1
+                            last_role = ir.USER
+                            if not first_user:
+                                first_user = ir.summarize_line(t, 60)
+                    elif role == ir.ASSISTANT and _content_to_text(pl.get("content")):
+                        if last_role != ir.ASSISTANT:
+                            turns += 1
+                        last_role = ir.ASSISTANT
+                elif ptype in _ASSISTANT_ITEMS:
+                    # 与 _parse 一致：连续的助手内容（含工具往返）合并为一轮
+                    if last_role != ir.ASSISTANT:
+                        turns += 1
+                    last_role = ir.ASSISTANT
             if ts is not None:
                 created_ms = ts if created_ms is None else min(created_ms, ts)
                 updated_ms = ts if updated_ms is None else max(updated_ms, ts)
@@ -224,6 +239,8 @@ class CodexAdapter(BaseAdapter):
                     if text:
                         ensure_assistant(ts)
                         pending_assistant.blocks.append(ir.Block.thinking_block(text))
+                    elif pl.get("encrypted_content"):
+                        conv.meta["encrypted_reasoning"] = conv.meta.get("encrypted_reasoning", 0) + 1
 
                 elif ptype == "function_call":
                     cid = pl.get("call_id") or pl.get("id") or ""
@@ -269,6 +286,8 @@ class CodexAdapter(BaseAdapter):
         flush()
         if not conv.id:
             conv.id = os.path.splitext(os.path.basename(path))[0]
+        if not conv.title:
+            conv.title = conv.first_user_text(60)
         return conv
 
     # ---------------- 写入 ----------------
@@ -427,4 +446,9 @@ class CodexAdapter(BaseAdapter):
 
         close_turn(last_ts, last_assistant_text)
         atomic_write(out_path, lines, overwrite=False)
+        if conv.title:
+            # Codex 的会话名放在 session_index.jsonl（thread_name）；追加一行，不改动已有记录
+            with open(self.index_path, "a", encoding="utf-8") as fh:
+                fh.write(json.dumps({"id": sid, "thread_name": conv.title, "updated_at": iso(base)},
+                                    ensure_ascii=False) + "\n")
         return out_path
