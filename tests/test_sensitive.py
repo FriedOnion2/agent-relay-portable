@@ -31,10 +31,11 @@ class ScanTextTests(unittest.TestCase):
                          'password=${DB_PASSWORD}', 'secret_key = None', 'the token budget is large']:
             self.assertEqual(self.kinds(harmless), [], harmless)
 
-    def test_masking_never_exposes_the_full_value(self):
+    def test_reports_never_expose_any_part_of_the_value(self):
         row = sensitive.scan_text('key ' + OPENAI)[0]
-        self.assertNotIn(OPENAI, str(row))
-        self.assertTrue(row['masked'].startswith('sk-'))
+        self.assertEqual(row['length'], len(OPENAI))
+        for start in range(0, len(OPENAI) - 4):
+            self.assertNotIn(OPENAI[start:start + 5], str(row))
 
     def test_redact_text_replaces_only_the_secret_value(self):
         out = sensitive.redact_text('password=Zx81QwErTy99 and ' + GITHUB + ' ok')
@@ -55,7 +56,8 @@ class ConversationTests(unittest.TestCase):
         self.assertEqual({row['kind']: row['count'] for row in result['kinds']},
                          {'aws-access-key': 2, 'openai-key': 1, 'bearer-token': 1})
         self.assertEqual(result['total'], 4)
-        self.assertNotIn(OPENAI, str(result))
+        for start in range(0, len(OPENAI) - 4):
+            self.assertNotIn(OPENAI[start:start + 5], str(result))
 
     def test_redact_conversation_does_not_mutate_the_original(self):
         original = conversation()

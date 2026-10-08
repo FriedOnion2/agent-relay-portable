@@ -1,7 +1,7 @@
 """敏感信息扫描与脱敏：在迁移、导出前发现会话里混入的密钥、令牌和口令。
 
 只看文本，不联网、不调用模型。规则偏保守（高置信的厂商密钥格式 + 明确的「名称=值」赋值），
-找到的内容永远只以掩码形式出现在报告里；脱敏会把命中的内容替换成 [REDACTED:类型]。
+报告里只有类型、位置和长度，不包含密钥本身的任何片段；脱敏会把命中的内容替换成 [REDACTED:类型]。
 扫描不能保证发现全部敏感信息，也不应被当作安全审计。
 """
 
@@ -44,12 +44,8 @@ def _looks_real(value: str) -> bool:
     return len(set(value)) >= 4          # 全是同一个或两三个字符的多半是示例
 
 
-def mask(value: str) -> str:
-    return "***" if len(value) <= 8 else value[:3] + "…" + value[-2:]
-
-
 def scan_text(text: str) -> List[Dict[str, Any]]:
-    """返回不重叠的命中：{kind, label, start, end（被取值的范围）, masked}。"""
+    """返回不重叠的命中：{kind, label, start, end（被取值的范围）, length}。不返回任何取值片段（连掩码也不给）。"""
     if not text or len(text) < 8:
         return []
     found: List[Dict[str, Any]] = []
@@ -65,7 +61,7 @@ def scan_text(text: str) -> List[Dict[str, Any]]:
             if any(start < b and a < end for a, b in taken):
                 continue
             taken.append((start, end))
-            found.append({"kind": kind, "label": label, "start": start, "end": end, "masked": mask(value)})
+            found.append({"kind": kind, "label": label, "start": start, "end": end, "length": end - start})
     found.sort(key=lambda row: row["start"])
     return found
 
@@ -96,7 +92,7 @@ def scan_conversation(conv: ir.Conversation) -> Dict[str, Any]:
                     entry["count"] += 1
                     if len(locations) < 200:
                         locations.append({"turn": turn_index, "block": block_index, "field": field_name,
-                                          "kind": row["kind"], "masked": row["masked"]})
+                                          "kind": row["kind"], "length": row["length"]})
     ordered = sorted(kinds.values(), key=lambda row: -row["count"])
     return {"total": sum(row["count"] for row in ordered), "kinds": ordered, "locations": locations}
 
