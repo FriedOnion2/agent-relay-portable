@@ -1,5 +1,9 @@
 # AgentRelay Portable
 
+[![Tests](https://github.com/FriedOnion2/agent-relay-portable/actions/workflows/tests.yml/badge.svg)](https://github.com/FriedOnion2/agent-relay-portable/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/FriedOnion2/agent-relay-portable?include_prereleases)](https://github.com/FriedOnion2/agent-relay-portable/releases)
+
 [中文](#中文) | [English](#english)
 
 ## 中文
@@ -463,3 +467,10 @@ Release builds validate bundled dependencies with an empty `PATH`, DSH import, s
 - [Ubuntu dual boot](docs/ubuntu-dual-boot.md): mounting and native migration in both directions.
 - [Source formats](docs/source-formats.md): format references and official sources.
 - [Native migration research](docs/session-migration-alternatives.md): related projects and implementation differences.
+
+## 贡献与许可 / Contributing & License
+
+欢迎贡献，请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)；安全问题见 [SECURITY.md](SECURITY.md)；版本变更见 [CHANGELOG.md](CHANGELOG.md)。
+本项目以 [MIT License](LICENSE) 发布。
+
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md) and [CHANGELOG.md](CHANGELOG.md). Released under the [MIT License](LICENSE).
