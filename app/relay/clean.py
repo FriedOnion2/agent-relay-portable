@@ -97,7 +97,9 @@ def strip_scaffolding(text: str) -> str:
         cur = _OPEN_RE.sub("", cur)
         if cur == prev:
             break
-    cur = re.sub(r"\n{3,}", "\n\n", cur)
+    if cur != text:
+        # 只在确实剥掉了注入块之后才整理空行；没有脚手架的正文（含工具输出）原样保留
+        cur = re.sub(r"\n{3,}", "\n\n", cur)
     return cur.strip()
 
 
