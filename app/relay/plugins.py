@@ -17,8 +17,8 @@ from .runtime import project_root
 API_VERSION = 1
 MAX_OUTPUT = 32 * 1024 * 1024
 TIMEOUT = 15
-entries = {}
-errors = []
+entries: dict = {}
+errors: list = []
 
 
 def configure(rows):

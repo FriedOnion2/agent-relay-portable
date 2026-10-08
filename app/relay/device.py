@@ -12,8 +12,8 @@ from pathlib import Path
 
 from .runtime import project_root
 
-warnings = []
-blocked_homes = {}
+warnings: list = []
+blocked_homes: dict = {}
 
 
 def identity():
@@ -56,7 +56,7 @@ def read():
     value = json.loads(path.read_text(encoding='utf-8-sig'))
     if not isinstance(value, dict) or not isinstance(value.get('agent_homes', {}), dict):
         raise ValueError('本机配置必须是对象，agent_homes 必须是对象')
-    for key, home in value.get('agent_homes', {}).items():
+    for home in value.get('agent_homes', {}).values():
         if not isinstance(home, str):
             raise ValueError('本机 Agent 目录必须是字符串')
     for key in ('windows_user_home', 'ubuntu_user_home'):
