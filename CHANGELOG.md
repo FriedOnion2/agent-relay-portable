@@ -12,7 +12,8 @@
 - DSH 会话 id 可直接作为命令行参数；没有任何轮次的源会话不再被迁移。
 
 ### Added
-- 真实客户端冒烟测试（Codex 续聊、DSH 打开）及每周 CI：`scripts/smoke_codex_resume.py`、`scripts/smoke_dsh_native.py`。
+=======
+- CI 增加 mypy 类型检查与覆盖率统计（下限 75%），ruff 规则加入 bugbear 等。
 - `relay --version`；推送 `v*` tag 自动构建并发布 Release，说明取自本文件，附构建来源证明。
 - LICENSE（MIT）、SECURITY、CONTRIBUTING、CODE_OF_CONDUCT、CODEOWNERS、issue / PR 模板。
 - ruff、CodeQL、Dependabot。

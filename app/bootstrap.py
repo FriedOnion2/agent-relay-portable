@@ -255,7 +255,7 @@ def load_config() -> dict:
         return result
 
 
-_APPLIED_ENV = {}
+_APPLIED_ENV: dict = {}
 
 
 def apply_config(cfg: dict | None = None) -> list[str]:

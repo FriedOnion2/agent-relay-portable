@@ -16,5 +16,29 @@ line-length = 120
 extend-exclude = ["runtime", "build", "dist", "storage", "index", "devices"]
 
 [tool.ruff.lint]
-# 先只启用确定的错误类（语法错误、未使用/未定义名称），再逐步收紧。
-select = ["E9", "F"]
+# 逐步收紧：语法错误、未使用/未定义名称、bugbear 中的真实隐患、典型比较/裸 except 问题。
+select = ["E9", "F", "B", "E711", "E712", "E721", "E722"]
+ignore = [
+    "B008",  # 默认参数里的函数调用
+    "B011",
+    "B017",  # 测试里的 assertRaises(Exception)
+]
+
+[tool.mypy]
+files = ["app"]
+ignore_missing_imports = true
+# 基线：下面这些错误码在历史代码里仍有存量（主要是 Optional 收窄），暂时关闭，
+# 其余错误码（未定义名称、参数个数、返回值等）已强制检查。逐步清理后从这里删除。
+disable_error_code = [
+    "union-attr", "arg-type", "assignment", "call-overload", "misc",
+    "has-type", "attr-defined", "type-var", "dict-item", "no-redef", "return-value",
+]
+
+[tool.coverage.run]
+source = ["app"]
+branch = false
+
+[tool.coverage.report]
+fail_under = 75
+skip_empty = true
+exclude_lines = ["pragma: no cover", "if __name__ == .__main__.:"]
