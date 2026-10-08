@@ -5,6 +5,9 @@
 
 ## [Unreleased]
 
+### Added
+- 敏感信息扫描：预览会提示会话里疑似的 API 密钥、令牌、私钥和口令（只显示掩码）；`relay scan` 单独扫描；迁移与导出支持 `--redact-secrets`（API：`redact_secrets`），写入时替换为 `[REDACTED:类型]`。
+
 ### Fixed
 - 迁移到 Codex 的会话在真实 Codex 中重建出完整 items（session_meta 补 `history_mode: paginated`）。
 - 迁移到 Codex 的会话可在真实 Codex 中续聊（正确的 `model_provider` 与 turn 事件）。
