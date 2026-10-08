@@ -111,6 +111,45 @@ class TransferTests(unittest.TestCase):
                 self.assertEqual(result.stats()["thinking"], 0)
                 self.assertEqual(result.stats()["tool_result"], 2)
 
+    def test_codex_import_is_resumable_and_has_turn_events(self):
+        """Codex needs a known provider and task_started/task_complete boundaries."""
+        with tempfile.TemporaryDirectory() as root:
+            adapter = CodexAdapter(home=root)
+            path = adapter.write(sample(), session_id="resumable")
+            rows = [json.loads(line) for line in Path(path).read_text(encoding="utf-8").splitlines()]
+            self.assertEqual(rows[0]["payload"]["model_provider"], "openai")
+            events = [r["payload"] for r in rows if r["type"] == "event_msg"]
+            kinds = [e["type"] for e in events]
+            # sample() has two user messages, so two turns
+            self.assertEqual(kinds.count("task_started"), 2)
+            self.assertEqual(kinds.count("task_complete"), 2)
+            started = [e["turn_id"] for e in events if e["type"] == "task_started"]
+            completed = [e["turn_id"] for e in events if e["type"] == "task_complete"]
+            self.assertEqual(started, completed)
+            contexts = [r["payload"]["turn_id"] for r in rows if r["type"] == "turn_context"]
+            self.assertEqual(contexts, started)
+            items = [e["item"]["type"] for e in events if e["type"] == "item_completed"]
+            self.assertEqual(items.count("UserMessage"), 2)
+            self.assertEqual(items.count("AgentMessage"), 2)
+            # every event sits inside its own turn: started comes before its items
+            order = [(e["type"], e.get("turn_id")) for e in events]
+            self.assertEqual(order[0][0], "task_started")
+            self.assertEqual(order[-1][0], "task_complete")
+            # the reader still sees the same conversation (events are not double counted)
+            result = adapter.read("resumable")
+            self.assertEqual(result.stats()["user"], 2)
+            self.assertEqual(result.stats()["tool_call"], 2)
+            self.assertEqual(result.stats()["tool_result"], 2)
+
+    def test_codex_import_keeps_known_source_provider(self):
+        conv = sample()
+        conv.meta["model_provider"] = "azure"
+        with tempfile.TemporaryDirectory() as root:
+            adapter = CodexAdapter(home=root)
+            path = adapter.write(conv, session_id="provider-kept")
+            first = json.loads(Path(path).read_text(encoding="utf-8").splitlines()[0])
+            self.assertEqual(first["payload"]["model_provider"], "azure")
+
     def test_dsh_style_session_ids_parse_as_positionals(self):
         import cli
         parser = cli.build_parser()
