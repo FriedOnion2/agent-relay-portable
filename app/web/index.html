@@ -189,6 +189,7 @@
   <button class="btn" id="btnCorpus">搜索与提炼</button>
   <button class="btn" id="btnSkillStorage">Skill 存储</button>
   <button class="btn" id="btnEnvironment">环境与兼容</button>
+  <button class="btn" id="btnHistory">操作记录</button>
   <button class="btn" id="btnLang" title="Switch language / 切换语言" aria-label="Switch language / 切换语言">English</button>
   <button class="btn" id="btnExit" title="停止当前后台服务">退出服务</button>
 </header>
@@ -203,6 +204,7 @@
         <label class="opt"><input type="checkbox" id="selectAllSessions">全选当前列表</label>
         <span id="sessionSelectionCount" class="meta">已选 0 项</span>
         <button class="btn" id="storeSessions" disabled>存储所选对话</button>
+        <button class="btn" id="batchMigrate" disabled>批量迁移所选</button>
       </div>
     </div>
     <div class="list" id="list"><div class="empty">加载中…</div></div>
@@ -217,6 +219,7 @@
       <button class="btn" id="btnNewId" style="display:none">生成新 ID</button>
       <label class="opt"><input type="checkbox" id="remap" checked>工具名适配</label>
       <label class="opt"><input type="checkbox" id="think" checked>保留思考</label>
+      <label class="opt" title="迁移前把疑似密钥、令牌和口令替换为 [REDACTED:类型]"><input type="checkbox" id="redact">脱敏密钥</label>
       <div class="spacer"></div>
       <button class="btn" id="btnMd" disabled>导出 Markdown</button>
       <button class="btn" id="btnStore" disabled>存储此会话</button>
@@ -250,6 +253,12 @@
   </div>
   <div id="storageResult" class="meta" style="white-space:pre-wrap;padding:12px"></div>
   <div id="storageList"></div>
+</section>
+<section id="historyPanel" style="display:none;position:fixed;inset:70px 24px 24px;z-index:82;background:var(--bg,#fff);padding:20px;overflow:auto;border:1px solid #bbb;border-radius:12px">
+  <div class="bar"><b>操作记录</b><button class="btn" id="refreshHistory">刷新</button><button class="btn" id="closeHistory">关闭</button></div>
+  <p>每次写入目标软件的迁移都会记录下来。撤销只删除这次新建的文件、并把被追加的索引截回原长度；写入后又被修改的文件（例如已经在目标软件里续聊）默认保留。</p>
+  <div id="historyResult" class="meta" style="white-space:pre-wrap;padding:8px 12px"></div>
+  <div id="historyList"></div>
 </section>
 <section id="skillPanel" style="display:none;position:fixed;inset:70px 24px 24px;z-index:81;background:var(--bg,#fff);padding:20px;overflow:auto;border:1px solid #bbb;border-radius:12px">
   <div class="bar"><b>跨设备 Skill 存储</b><button class="btn" id="closeSkills">关闭</button></div>
@@ -453,6 +462,23 @@ const EN = {
   '没有匹配会话。':'No matching sessions.','尚未建立索引。':'No index yet.','存储包':'stored package','本机记录':'local record','（离线缓存）':' (offline cache)',' · 部分内容':' · partial','查看会话':'View session','打开本机原会话':'Open the local original session',
   '没有找到至少三条独立会话支持的重复流程。':'No repeated workflow backed by at least three independent sessions was found.',
   '{name} · {count} 条独立证据 · 排序分 {score}':'{name} · {count} independent evidence · ranking score {score}','选中并编辑这份草稿':'Select and edit this draft','查看证据 {key}':'View evidence {key}',
+  // —— 批量迁移、操作记录、脱敏 ——
+  '操作记录':'History','批量迁移所选':'Migrate selected','脱敏密钥':'Redact secrets','刷新':'Refresh',
+  '每次写入目标软件的迁移都会记录下来。撤销只删除这次新建的文件、并把被追加的索引截回原长度；写入后又被修改的文件（例如已经在目标软件里续聊）默认保留。':'Every migration written to a target app is recorded. Undo only deletes the files that migration created and truncates the indexes it appended to; files modified afterwards (for example because you kept chatting in the target app) are kept by default.',
+  '迁移前把疑似密钥、令牌和口令替换为 [REDACTED:类型]':'Replace suspected keys, tokens and passwords with [REDACTED:type] before migrating',
+  '…另有 {n} 项':'…and {n} more','所选会话都已迁移过，没有需要处理的':'All selected sessions were already migrated; nothing to do','没有可迁移的会话':'No sessions can be migrated',
+  '将迁移':'Will migrate','已迁移过，跳过':'Already migrated, skipped','无法迁移':'Cannot migrate',
+  '批量迁移不逐条预览保真度；需要核对单个会话时请先单独预览。每次写入都可在「操作记录」里撤销。':'Batch migration does not preview fidelity one by one; preview a single session first if you need to check it. Every write can be undone from History.',
+  '批量迁移 {n} 个会话到 {name}？':'Migrate {n} sessions to {name}?','批量迁移预览':'Batch migration preview','确认批量迁移':'Confirm batch migration',
+  '批量迁移完成：成功 {ok} 项，跳过 {skip} 项，失败 {bad} 项。':'Batch migration finished: {ok} migrated, {skip} skipped, {bad} failed.','批量迁移失败：{error}':'Batch migration failed: {error}',
+  '转换迁移':'Converted migration','Windows → Ubuntu 原生迁移':'Windows → Ubuntu native migration','Ubuntu → Windows 原生迁移':'Ubuntu → Windows native migration',
+  '读取操作记录失败：{error}':'Failed to read the history: {error}','暂无操作记录':'No operations recorded yet','状态：{status}':'Status: {status}',
+  '新建 {n} 个文件，追加 {m} 个文件':'{n} file(s) created, {m} appended to','已于 {time} 撤销':'Undone at {time}','不能自动撤销：{reason}':'Cannot be undone automatically: {reason}',
+  '撤销这次迁移':'Undo this migration','撤销会删除这次新建的文件，并把被追加的索引截回原长度；写入后又被修改的文件会保留。':'Undo deletes the files this migration created and truncates the indexes it appended to; files modified afterwards are kept.',
+  '将删除的文件':'Files to delete','将截回的索引':'Indexes to truncate','撤销这次迁移？':'Undo this migration?','撤销迁移':'Undo migration','确认撤销':'Confirm undo',
+  '部分文件被保留':'Some files were kept','下列文件在写入后又被修改，默认没有删除。强制撤销会丢失其中的新内容，确定吗？':'These files were modified after the migration and were not deleted. Forcing the undo loses their new content. Continue?',
+  '已保留的文件':'Kept files','强制删除这些已修改的文件？':'Force-delete these modified files?','强制撤销':'Force undo',
+  '撤销完成：删除 {n} 个文件，截回 {m} 个索引，保留 {k} 个文件。':'Undo finished: {n} file(s) deleted, {m} index(es) truncated, {k} file(s) kept.','撤销失败：{error}':'Undo failed: {error}',
   '草稿已导出：{path}':'Draft exported: {path}','加载失败：{error}':'Failed to load: {error}',
 };
 // 服务端返回的固定消息（预览项、警告、错误）。按原文精确匹配；带变量的用 EN_PATTERNS，其余保持中文原样。
@@ -509,6 +535,9 @@ const EN_PATTERNS = [
   [/^请求体解析失败: (.+)$/, 'Failed to parse the request body: $1'],
   [/^配置的 (.+) 目录不可访问：(.+)；请在环境与兼容面板重新选择，或启用本机自动探测$/, 'The configured $1 directory is not accessible: $2; pick again in the Environment panel or enable local auto-detection'],
   [/^社区：(.+)$/, 'Community: $1'],
+  [/^检测到 (\d+) 处疑似敏感信息（(.+)）：迁移会原样复制到目标软件。可勾选「脱敏密钥」或加 --redact-secrets。$/, 'Found $1 suspected secrets ($2): the migration copies them to the target as-is. Tick “Redact secrets” or use --redact-secrets.'],
+  [/^检测到 (\d+) 处疑似敏感信息（(.+)），写入时将替换为 \[REDACTED:类型\]。$/, 'Found $1 suspected secrets ($2); they will be replaced with [REDACTED:type] when written.'],
+  [/^检测到 (\d+) 处疑似敏感信息（(.+)）：原生迁移原样复制会话文件，不支持脱敏。$/, 'Found $1 suspected secrets ($2): a native migration copies the session files as-is and cannot redact them.'],
 ];
 const LANG_KEY = 'agentrelay.lang';
 function detectLang(){
@@ -611,6 +640,7 @@ function updateSelections(){
     $(all).disabled = !eligible.length || state.transferring;
     $(count).textContent = tr('已选 {n} 项',{n:group.selected.size});
     $(button).disabled = !group.selected.size || state.transferring;
+    if(kind==='sessions') $('#batchMigrate').disabled = !group.selected.size || state.transferring || !state.target || !!community;
     for(const [key,input] of group.inputs){
       input.checked = group.selected.has(key);
       input.disabled = state.transferring || !eligibleKeys.has(key);
@@ -821,6 +851,10 @@ function bind(){
   $('#selectAllSessions').onchange=e=>selectAll('sessions',e.target.checked);
   $('#selectAllSkills').onchange=e=>selectAll('skills',e.target.checked);
   $('#storeSessions').onclick=()=>storeBatch('sessions');
+  $('#batchMigrate').onclick=doBatch;
+  $('#btnHistory').onclick=openHistory;
+  $('#refreshHistory').onclick=refreshHistory;
+  $('#closeHistory').onclick=()=>{$('#historyPanel').style.display='none';};
   $('#storeSkills').onclick=()=>storeBatch('skills');
   $('#btnExit').onclick = exitService;
   $('#btnLang').onclick = ()=>setLang(lang === 'en' ? 'zh' : 'en');
@@ -1366,6 +1400,7 @@ async function doTransfer(){
     cwd: (nativeMode(state.current.source)==='export-windows' ? $('#projectPath').value : $('#cwd').value).trim() || null,
     remap_tools: $('#remap').checked,
     include_thinking: $('#think').checked,
+    redact_secrets: $('#redact').checked,
   };
   let r;
   try{
@@ -1387,6 +1422,113 @@ async function doTransfer(){
     fn:()=>{ navigator.clipboard?.writeText(p).then(()=>toast(tr('路径已复制')),()=>{}); }
   });
   loadSources().catch(e=>toast(tr('刷新失败：{error}',{error:e.message}), true));
+}
+
+/* ---------- 批量迁移 ---------- */
+async function doBatch(){
+  if(state.transferring) return;
+  const ids=[...selections.sessions.selected];
+  if(!ids.length || !state.target) return;
+  const payload={source:state.source,target:state.target,ids,cwd:$('#cwd').value.trim()||null,
+    remap_tools:$('#remap').checked,include_thinking:$('#think').checked,redact_secrets:$('#redact').checked,
+    on_conflict:'skip',dry_run:true};
+  const post=body=>api('/api/batch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  state.transferring=true;updateActions();
+  try{
+    const plan=await post(payload);
+    const names=rows=>{
+      const shown=rows.slice(0,15).map(item=>item.title||item.id);
+      if(rows.length>15) shown.push(tr('…另有 {n} 项',{n:rows.length-15}));
+      return shown;
+    };
+    const by=status=>plan.items.filter(item=>item.status===status);
+    const go=by('would-migrate'),skip=by('skipped'),bad=by('failed');
+    if(!go.length){
+      toast(skip.length&&!bad.length?tr('所选会话都已迁移过，没有需要处理的'):tr('没有可迁移的会话'),true);
+      return;
+    }
+    const targetName=AGENTS[state.target]||state.target;
+    const sections=[{meta:tr('目标：{name}',{name:targetName})+'\n'+tr('项目：{cwd}',{cwd:payload.cwd||tr('沿用来源')})}];
+    sections.push({group:'preserved',label:tr('将迁移'),rows:names(go)});
+    if(skip.length) sections.push({group:'degraded',label:tr('已迁移过，跳过'),rows:names(skip)});
+    if(bad.length) sections.push({group:'dropped',label:tr('无法迁移'),rows:bad.slice(0,15).map(item=>(item.title||item.id)+'：'+ts(item.error||''))});
+    sections.push({warn:tr('批量迁移不逐条预览保真度；需要核对单个会话时请先单独预览。每次写入都可在「操作记录」里撤销。')});
+    const plain=tr('批量迁移 {n} 个会话到 {name}？',{n:go.length,name:targetName});
+    if(!(await askConfirm(tr('批量迁移预览'),sections,plain,tr('确认批量迁移')))) return;
+    const done=await post({...payload,dry_run:false});
+    const lines=[tr('批量迁移完成：成功 {ok} 项，跳过 {skip} 项，失败 {bad} 项。',{ok:done.migrated,skip:done.skipped,bad:done.failed})];
+    for(const item of done.items) if(item.status==='failed') lines.push(tr('失败 {name}：{error}',{name:item.title||item.id,error:ts(item.error||'')}));
+    const box=$('#importResult');box.textContent=lines.join('\n');box.style.display='';
+    toast(lines[0],done.failed>0);
+    selections.sessions.selected.clear();
+    await loadSources();
+  }catch(e){toast(tr('批量迁移失败：{error}',{error:e.message}),true);}
+  finally{state.transferring=false;updateActions();}
+}
+
+/* ---------- 操作记录与撤销 ---------- */
+function historyTime(iso){
+  const date=new Date(iso);
+  return isNaN(date.getTime())?String(iso||'').replace('T',' ').slice(0,19):date.toLocaleString(lang==='en'?'en-GB':'zh-CN',{hour12:false});
+}
+function historyKind(kind){
+  return {transfer:tr('转换迁移'),'import-windows':tr('Windows → Ubuntu 原生迁移'),'import-ubuntu':tr('Ubuntu → Windows 原生迁移'),
+          'export-windows':tr('Ubuntu → Windows 原生迁移')}[kind]||kind||'';
+}
+async function openHistory(){
+  $('#historyPanel').style.display='';
+  await refreshHistory();
+}
+async function refreshHistory(){
+  try{
+    const r=await api('/api/operations?limit=100');
+    renderHistory(r.operations||[]);
+  }catch(e){toast(tr('读取操作记录失败：{error}',{error:e.message}),true);}
+}
+function renderHistory(rows){
+  const box=$('#historyList');box.innerHTML='';
+  if(!rows.length){box.textContent=tr('暂无操作记录');return;}
+  for(const row of rows){
+    const item=document.createElement('div');item.className='meta';item.style.padding='10px';
+    const details=document.createElement('div');details.style.whiteSpace='pre-wrap';
+    const lines=[historyTime(row.time)+' · '+historyKind(row.kind)+' · '+(AGENTS[row.source]||row.source||'?')+' → '+(AGENTS[row.target]||row.target||'?'),
+                 row.title||row.session||''];
+    if(row.status && row.status!=='ok') lines.push(tr('状态：{status}',{status:row.status})+(row.error?'  '+ts(row.error):''));
+    lines.push(tr('新建 {n} 个文件，追加 {m} 个文件',{n:(row.created||[]).length,m:(row.appended||[]).length}));
+    if(row.undone) lines.push(tr('已于 {time} 撤销',{time:historyTime(row.undone.time)}));
+    else if(!row.undoable && row.undo_blocked) lines.push(tr('不能自动撤销：{reason}',{reason:ts(row.undo_blocked)}));
+    details.textContent=lines.filter(Boolean).join('\n');
+    item.appendChild(details);
+    if(row.undoable){
+      const button=document.createElement('button');button.className='btn';button.textContent=tr('撤销这次迁移');
+      button.onclick=()=>undoOperation(row);item.appendChild(button);
+    }
+    box.appendChild(item);
+  }
+}
+async function undoOperation(row){
+  if(state.transferring) return;
+  const sections=[{meta:tr('撤销会删除这次新建的文件，并把被追加的索引截回原长度；写入后又被修改的文件会保留。')}];
+  if((row.created||[]).length) sections.push({group:'dropped',label:tr('将删除的文件'),rows:row.created});
+  if((row.appended||[]).length) sections.push({group:'degraded',label:tr('将截回的索引'),rows:row.appended});
+  const plain=tr('撤销这次迁移？')+'\n'+[...(row.created||[]),...(row.appended||[])].join('\n');
+  if(!(await askConfirm(tr('撤销迁移'),sections,plain,tr('确认撤销')))) return;
+  state.transferring=true;updateActions();
+  const post=body=>api('/api/undo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  try{
+    let r=await post({id:row.id});
+    if((r.kept||[]).length){
+      const kept=r.kept.map(k=>k.path+'：'+ts(k.reason));
+      const force=await askConfirm(tr('部分文件被保留'),[{meta:tr('下列文件在写入后又被修改，默认没有删除。强制撤销会丢失其中的新内容，确定吗？')},{group:'dropped',label:tr('已保留的文件'),rows:kept}],
+        tr('强制删除这些已修改的文件？')+'\n'+kept.join('\n'),tr('强制撤销'));
+      if(force) r=await post({id:row.id,force:true});
+    }
+    $('#historyResult').textContent=tr('撤销完成：删除 {n} 个文件，截回 {m} 个索引，保留 {k} 个文件。',
+      {n:(r.removed||[]).length,m:(r.truncated||[]).length,k:(r.kept||[]).length});
+    await refreshHistory();
+    await loadSources();
+  }catch(e){toast(tr('撤销失败：{error}',{error:e.message}),true);}
+  finally{state.transferring=false;updateActions();}
 }
 
 const corpusState={request:0,documentRequest:0,offset:0,job:null,busy:false,timer:null,rendered:null,selected:null,exporting:false};

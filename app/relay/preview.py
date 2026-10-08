@@ -120,7 +120,7 @@ def report(conv, target, options, destination, native=False):
         elif native:
             warnings.append('检测到 %d 处疑似敏感信息（%s）：原生迁移原样复制会话文件，不支持脱敏。' % (secrets['total'], sensitive.summary_line(secrets)))
         else:
-            warnings.append('检测到 %d 处疑似敏感信息（%s）：迁移会原样复制到目标软件。可勾选「脱敏」或加 --redact-secrets。' % (secrets['total'], sensitive.summary_line(secrets)))
+            warnings.append('检测到 %d 处疑似敏感信息（%s）：迁移会原样复制到目标软件。可勾选「脱敏密钥」或加 --redact-secrets。' % (secrets['total'], sensitive.summary_line(secrets)))
     evidence = conv.to_dict()
     return dict(ok=True, mode='native' if native else 'convert', source=conv.source, id=conv.id, target=target,
                 title=conv.title, secrets=secrets, target_cwd=options.get('cwd') or conv.cwd, blockers=blockers,

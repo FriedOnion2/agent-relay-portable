@@ -92,7 +92,7 @@ function setup({automaticPreview=true,confirmed=true}={}){
       return new Promise((resolve,reject)=>requests.push({url,options,resolve,reject}));
     },
   });
-  vm.runInContext(script + '\n globalThis.app={selections,selectAll,storeBatch,state,loadSessions,openSession,doTransfer,doImportWindows,updateActions,bind,buildTarget,buildTabs,loadSources,storeCurrent,refreshStorage,restoreStored,buildSkillAgents,loadSkills,refreshSkillPackages,storeSelectedSkill,restoreSelectedSkill,corpusState,searchCorpus,openCorpusDocument,renderDraftCandidates,exportDraft,updateDraftAction,startCorpusJob,pollCorpusJob,cancelCorpusJob,setLang,tr,ts,applyStatic,renderChips,renderList,renderDetail,EN,EN_SERVER,getLang:()=>lang};',context);
+  vm.runInContext(script + '\n globalThis.app={selections,selectAll,storeBatch,state,loadSessions,openSession,doTransfer,doImportWindows,updateActions,bind,buildTarget,buildTabs,loadSources,storeCurrent,refreshStorage,restoreStored,buildSkillAgents,loadSkills,refreshSkillPackages,storeSelectedSkill,restoreSelectedSkill,corpusState,searchCorpus,openCorpusDocument,renderDraftCandidates,exportDraft,updateDraftAction,startCorpusJob,pollCorpusJob,cancelCorpusJob,setLang,tr,ts,applyStatic,renderChips,renderList,renderDetail,EN,EN_SERVER,doBatch,openHistory,refreshHistory,renderHistory,undoOperation,getLang:()=>lang};',context);
   const response = (index,body,status=200)=>requests[index].resolve({ok:status<400,status,json:async()=>body});
   return {app:context.app, elements, requests, previews, response, document, el:document.querySelector};
 }
@@ -608,4 +608,106 @@ test('static page text and attributes are translated and restored from the remem
   t.app.setLang('zh');
   assert.equal(text.nodeValue, '  对话存储 ');
   assert.equal(input.attrs.placeholder, '搜索标题 / 目录 / id…');
+});
+
+// ---------- 批量迁移 / 操作记录 / 脱敏 ----------
+const flush=()=>new Promise(resolve=>setImmediate(resolve));
+
+test('batch migration previews first, executes only after confirmation and sends the chosen options', async () => {
+  const t = setup({confirmed: true});
+  t.app.state.source = 'claude'; t.app.state.target = 'codex';
+  t.app.selections.sessions.selected.add('a'); t.app.selections.sessions.selected.add('b');
+  t.el('#redact').checked = true; t.el('#think').checked = false; t.el('#cwd').value = ' /work ';
+  const run = t.app.doBatch();
+  const dry = JSON.parse(t.requests[0].options.body);
+  assert.equal(t.requests[0].url, '/api/batch');
+  assert.deepEqual([dry.dry_run, dry.ids, dry.redact_secrets, dry.include_thinking, dry.cwd, dry.on_conflict], [true, ['a', 'b'], true, false, '/work', 'skip']);
+  t.response(0, {ok: true, items: [{id: 'a', title: 'A', status: 'would-migrate'}, {id: 'b', title: 'B', status: 'skipped'}]});
+  await flush();
+  const live = JSON.parse(t.requests[1].options.body);
+  assert.equal(live.dry_run, false);
+  t.response(1, {ok: true, migrated: 1, skipped: 1, failed: 1, items: [{id: 'a', status: 'migrated'}, {id: 'c', title: 'C', status: 'failed', error: 'boom'}]});
+  await flush();
+  assert.equal(t.requests[2].url, '/api/sources');       // the source list is refreshed after writing
+  t.response(2, {ok: true, sources: []});
+  await run;
+  assert.match(t.el('#importResult').textContent, /成功 1 项，跳过 1 项，失败 1 项/);
+  assert.match(t.el('#importResult').textContent, /失败 C：boom/);
+  assert.equal(t.app.selections.sessions.selected.size, 0);
+  assert.equal(t.app.state.transferring, false);
+});
+
+test('declining the batch preview never writes, and nothing-to-do stops after the preview', async () => {
+  let t = setup({confirmed: false});
+  t.app.state.source = 'claude'; t.app.state.target = 'codex';
+  t.app.selections.sessions.selected.add('a');
+  let run = t.app.doBatch();
+  t.response(0, {ok: true, items: [{id: 'a', title: 'A', status: 'would-migrate'}]});
+  await run;
+  assert.equal(t.requests.length, 1);
+  assert.equal(t.app.state.transferring, false);
+  t = setup({confirmed: true});
+  t.app.state.source = 'claude'; t.app.state.target = 'codex';
+  t.app.selections.sessions.selected.add('a');
+  run = t.app.doBatch();
+  t.response(0, {ok: true, items: [{id: 'a', status: 'skipped'}]});
+  await run;
+  assert.equal(t.requests.length, 1);
+});
+
+test('single transfer carries the redact option', async () => {
+  const t = setup();
+  t.app.state.current = {source: 'codex', id: 's'}; t.app.state.target = 'claude';
+  t.el('#redact').checked = true;
+  const pending = t.app.doTransfer();
+  await flush();
+  const body = JSON.parse(t.requests[0].options.body);
+  assert.equal(body.redact_secrets, true);
+  t.response(0, {ok: true, to: {source: 'claude', path: '/p'}});
+  await pending;
+});
+
+test('history lists operations and undo asks for confirmation, then offers force only for kept files', async () => {
+  const t = setup({confirmed: true});
+  const refresh = t.app.refreshHistory();
+  t.response(0, {ok: true, operations: [
+    {id: 'op-1', time: '2026-10-09T01:02:03Z', kind: 'transfer', source: 'claude', target: 'codex', title: 'T', created: ['/a'], appended: [], undoable: true},
+    {id: 'op-0', time: '2026-10-08T01:02:03Z', kind: 'transfer', source: 'claude', target: 'codex', title: 'old', created: ['/b'], appended: [], undoable: false, undone: {time: '2026-10-08T02:00:00Z'}}]});
+  await refresh;
+  const rows = t.el('#historyList').children;
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].children.length, 2);              // text + undo button
+  assert.match(rows[1].children[0].textContent, /已于 .* 撤销/);
+  assert.equal(rows[1].children.length, 1);              // already undone: no button
+  const undo = rows[0].children[1].onclick();
+  await flush();
+  assert.equal(t.requests[1].url, '/api/undo');
+  assert.deepEqual(JSON.parse(t.requests[1].options.body), {id: 'op-1'});
+  t.response(1, {ok: true, removed: [], truncated: [], kept: [{path: '/a', reason: 'changed'}]});
+  await flush();
+  assert.deepEqual(JSON.parse(t.requests[2].options.body), {id: 'op-1', force: true});
+  t.response(2, {ok: true, removed: ['/a'], truncated: [], kept: []});
+  await flush();
+  t.response(3, {ok: true, operations: []});
+  await flush();
+  t.response(4, {ok: true, sources: []});
+  await undo;
+  assert.match(t.el('#historyResult').textContent, /删除 1 个文件/);
+});
+
+test('history text uses textContent so session titles cannot inject markup', () => {
+  const t = setup();
+  t.app.renderHistory([{id: 'x', time: '2026-10-09T00:00:00Z', kind: 'transfer', source: 'claude', target: 'codex', title: '<img src=x onerror=alert(1)>', created: [], appended: []}]);
+  const row = t.el('#historyList').children[0];
+  assert.equal(row.children[0].textContent.includes('<img'), true);
+  assert.equal(row.innerHTML, '');
+});
+
+test('secret-scan warnings from the server are translated', () => {
+  const t = setup();
+  const zh = '检测到 2 处疑似敏感信息（私钥 2 处）：迁移会原样复制到目标软件。可勾选「脱敏密钥」或加 --redact-secrets。';
+  t.app.setLang('en');
+  assert.match(t.app.ts(zh), /^Found 2 suspected secrets/);
+  assert.match(t.app.ts('检测到 1 处疑似敏感信息（JWT 1 处），写入时将替换为 [REDACTED:类型]。'), /replaced with \[REDACTED:type\]/);
+  assert.match(t.app.ts('检测到 1 处疑似敏感信息（JWT 1 处）：原生迁移原样复制会话文件，不支持脱敏。'), /native migration copies/);
 });
