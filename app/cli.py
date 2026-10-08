@@ -221,12 +221,29 @@ def cmd_show(args):
             break
 
 
+def cmd_scan(args):
+    from relay import sensitive
+    result = sensitive.scan_conversation(registry.read_conversation(args.agent, args.id))
+    if args.json:
+        _print_json(result)
+        return
+    if not result["total"]:
+        print("未发现疑似敏感信息（扫描不保证发现全部）。")
+        return
+    print("发现 %d 处疑似敏感信息：%s" % (result["total"], sensitive.summary_line(result)))
+    for row in result["locations"][:50]:
+        print("  第 %d 轮 块 %d %s  %s  %s" % (row["turn"] + 1, row["block"] + 1, row["field"], row["kind"], row["masked"]))
+    print("迁移/导出时加 --redact-secrets 可将其替换为 [REDACTED:类型]。")
+    sys.exit(2)
+
+
 def cmd_export(args):
     md = registry.export_markdown(
         args.agent, args.id,
         include_thinking=not args.no_thinking,
         include_tools=not args.no_tools,
         max_text=args.max_chars,
+        redact_secrets=args.redact_secrets,
     )
     if args.output:
         out = os.path.abspath(args.output)
@@ -242,7 +259,7 @@ def cmd_transfer(args):
     if args.dry_run:
         from relay import preview
         _print_json(preview.conversion(args.agent, args.id, args.to, args.cwd, args.session_id,
-                                       not args.keep_tool_names, not args.no_thinking, args.title))
+                                       not args.keep_tool_names, not args.no_thinking, args.title, args.redact_secrets))
         return
     res = registry.transfer(
         args.agent, args.id, args.to,
@@ -251,6 +268,7 @@ def cmd_transfer(args):
         include_thinking=not args.no_thinking,
         new_title=args.title,
         preview_token=args.preview_token,
+        redact_secrets=args.redact_secrets,
     )
     if args.json:
         _print_json(res)
@@ -454,7 +472,14 @@ def build_parser():
     p4.add_argument("--no-thinking", action="store_true", help="不包含思考过程")
     p4.add_argument("--no-tools", action="store_true", help="不包含工具调用")
     p4.add_argument("--max-chars", type=int, default=0, help="单段文本最大长度，0=不限")
+    p4.add_argument("--redact-secrets", action="store_true", help="把疑似密钥/口令替换为 [REDACTED:类型]")
     p4.set_defaults(func=cmd_export)
+
+    p4b = sub.add_parser("scan", help="扫描会话里的疑似密钥、令牌和口令（只显示掩码）")
+    p4b.add_argument("agent", choices=read_agents)
+    p4b.add_argument("id")
+    p4b.add_argument("--json", action="store_true")
+    p4b.set_defaults(func=cmd_scan)
 
     p5 = sub.add_parser("transfer", help="迁移会话到另一个 agent")
     p5.add_argument("agent", choices=read_agents, help="来源 agent")
@@ -465,6 +490,7 @@ def build_parser():
     p5.add_argument("--title", help="覆盖标题")
     p5.add_argument("--keep-tool-names", action="store_true", help="不做工具名互译")
     p5.add_argument("--no-thinking", action="store_true", help="不迁移思考过程")
+    p5.add_argument("--redact-secrets", action="store_true", help="写入前把疑似密钥/口令替换为 [REDACTED:类型]")
     p5.add_argument("--json", action="store_true")
     p5.add_argument('--dry-run', action='store_true', help='只预览保真度，不写入文件')
     p5.add_argument('--preview-token', help='执行已确认的预览；内容变化则拒绝')
