@@ -128,6 +128,8 @@ def transfer(source: str, sid: str, target: str, cwd: str | None = None,
     conv = src.read(sid)
     if conv.truncated:
         raise ValueError("源会话超过读取限制，迁移已停止；可导出已读取的部分内容")
+    if not conv.turns:
+        raise ValueError("源会话没有可迁移的内容（文件为空或无法解析），迁移已停止")
     from . import preview
     options = dict(cwd=cwd, session_id=session_id, remap_tools=remap_tools, include_thinking=include_thinking, new_title=new_title)
     plan = preview.report(conv, target, options, dst.home)
