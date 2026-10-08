@@ -370,6 +370,8 @@ def build_parser():
         description="读取 WorkBuddy / DeepSeek Harness / CodeBuddy / Claude Code / Claude Agent SDK / Codex 会话",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    from relay import __version__
+    p.add_argument("--version", action="version", version="%(prog)s " + __version__)
     sub = p.add_subparsers(dest="cmd", required=True)
     index = sub.add_parser('index', help='更新便携全文索引；默认不保存思考内容')
     index.add_argument('--source', action='append', choices=read_agents)
