@@ -20,6 +20,7 @@
 - 页面内迁移保真度预览对话框。
 - 真实客户端冒烟测试（Codex / DSH）在 Linux、macOS、Windows 上每周运行，并生成支持表。
 - 操作记录与撤销：每次写入目标软件的迁移 / 恢复都会记录新建与追加的文件；`history` 查看，`undo` 撤销（只动仍和写入时一致的文件，续聊过的会话会保留）。
+- 会话对比：`relay diff <agent> <id> <agent2> <id2>`（API `/api/diff`）按顺序对齐正文与工具调用，迁移后核对有没有丢内容；有差异时退出码为 1。
 - CI 增加 mypy 类型检查与覆盖率统计（下限 75%），ruff 规则加入 bugbear 等。
 - `relay --version`；推送 `v*` tag 自动构建并发布 Release，说明取自本文件，附构建来源证明。
 - LICENSE（MIT）、SECURITY、CONTRIBUTING、CODE_OF_CONDUCT、CODEOWNERS、issue / PR 模板。
@@ -36,8 +37,11 @@
 - WorkBuddy 空工具返回被当成非空 JSON 的读取问题；目录枚举权限错误明确报告，不再误判为删除。
 
 ## [0.4.0-dev.1] - 2026-10-07
+
 ## [0.3.0-dev.1] - 2026-10-07
+
 ## [0.2.0-dev.2] - 2026-10-07
+
 ## [0.2.0-dev.1] - 2026-10-07
 
 早期开发版本，详见对应的 Release 页面。
