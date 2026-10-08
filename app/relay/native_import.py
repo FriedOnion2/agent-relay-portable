@@ -304,7 +304,7 @@ def _native_dsh(source, target, conv, cwd, requested_id, compression):
             # The exclusively created session directory is owned by this
             # import. FAT/exFAT can publish by rename when links are unavailable.
             if path.exists():
-                raise FileExistsError(str(path))
+                raise FileExistsError(str(path)) from None
             os.rename(str(temporary), str(path))
     except BaseException:
         if temporary.exists():

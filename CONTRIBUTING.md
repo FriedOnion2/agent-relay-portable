@@ -21,7 +21,7 @@ Ubuntu 也可以直接运行 `Ubuntu首次准备.sh` 建立隔离环境。
 
 1. **不要使用真实会话测试。** 用合成样本；测试写入请用 `RELAY_<AGENT>_HOME` / `RELAY_STORAGE_HOME` 指向临时目录，避免改动你自己的 `~/.claude`、`~/.codex` 等。
 2. 新行为配套测试；修复 bug 的测试应当在旧代码上失败。
-3. 本地测试全部通过，`ruff check .` 无报错。
+3. 本地测试全部通过，`ruff check .` 与 `mypy` 无报错（`pip install ruff mypy`）；覆盖率可用 `python -m coverage run -m unittest discover -s tests && python -m coverage report` 查看，CI 要求不低于 75%。
 4. 不提交 `config.json`、`storage/`、`index/`、日志或任何真实对话内容。
 
 ## 分支与 PR
