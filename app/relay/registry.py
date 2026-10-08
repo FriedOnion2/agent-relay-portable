@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import os
-import json
-from dataclasses import replace
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from . import ir
 from .adapters.claude import ClaudeAdapter
