@@ -12,7 +12,9 @@
 - DSH 会话 id 可直接作为命令行参数；没有任何轮次的源会话不再被迁移。
 
 ### Added
-=======
+- 网页界面支持中文 / English 切换（右上角按钮；记住选择，按浏览器语言自动选择，`?lang=en` 可强制）。服务端返回的已知提示一并翻译，未收录的保持原文。
+- 页面内迁移保真度预览对话框。
+- 真实客户端冒烟测试（Codex / DSH）在 Linux、macOS、Windows 上每周运行，并生成支持表。
 - CI 增加 mypy 类型检查与覆盖率统计（下限 75%），ruff 规则加入 bugbear 等。
 - `relay --version`；推送 `v*` tag 自动构建并发布 Release，说明取自本文件，附构建来源证明。
 - LICENSE（MIT）、SECURITY、CONTRIBUTING、CODE_OF_CONDUCT、CODEOWNERS、issue / PR 模板。
