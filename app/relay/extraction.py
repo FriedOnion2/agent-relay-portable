@@ -168,8 +168,8 @@ def export_draft(markdown, directory, confirmed=False):
         if value.startswith('"'):
             try:
                 value = json.loads(value)
-            except ValueError:
-                raise ValueError('frontmatter 引号无效')
+            except ValueError as exc:
+                raise ValueError('frontmatter 引号无效') from exc
         elif value.startswith("'") and value.endswith("'"):
             value = value[1:-1].replace("''", "'")
         elif any(c in value for c in ':#{}[]&*!|>@`'):

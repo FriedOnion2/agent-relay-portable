@@ -149,7 +149,7 @@ class DshAdapter(BaseAdapter):
 
     def discover(self):
         for path, error in self._candidates():
-            yield self._peek(path, error) if error else self._cached_summary(path, lambda:self._peek(path))
+            yield self._peek(path, error) if error else self._cached_summary(path, lambda path=path: self._peek(path))
 
     def _peek(self, path, error=""):
         st = self._stat(path)

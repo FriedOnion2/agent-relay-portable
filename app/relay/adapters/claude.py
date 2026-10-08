@@ -116,7 +116,7 @@ class ClaudeAdapter(BaseAdapter):
     def discover(self) -> Iterable[SessionInfo]:
         for path in self._iter_files(self.home, "*.jsonl"):
             try:
-                info = self._cached_summary(path, lambda:self._peek(path))
+                info = self._cached_summary(path, lambda path=path: self._peek(path))
             except ValueError as exc:
                 st = self._stat(path)
                 info = SessionInfo(self.name, os.path.splitext(os.path.basename(path))[0],
@@ -234,7 +234,7 @@ class ClaudeAdapter(BaseAdapter):
             # 工具结果在 Claude 中存为 user；在 IR 中属于助手动作。
             # 混合消息按连续角色分组，保留工具结果和真实用户文字的顺序。
             default_role = role if role in (ir.USER, ir.ASSISTANT, ir.SYSTEM) else ir.USER
-            grouped = []
+            grouped: list = []
             for block in blocks:
                 block_role = ir.ASSISTANT if block.kind == ir.TOOL_RESULT else default_role
                 if grouped and grouped[-1].role == block_role:
@@ -311,11 +311,11 @@ class ClaudeAdapter(BaseAdapter):
                 if not content:
                     return
                 assistant_id = rid()
-                rec = base_record(assistant_id, parent, ts)
+                rec = base_record(assistant_id, parent, ts)  # noqa: B023 - called within the same loop iteration
                 rec["type"] = "assistant"
                 rec["message"] = {
                     "role": ir.ASSISTANT,
-                    "model": turn.model or conv.model or "unknown",
+                    "model": turn.model or conv.model or "unknown",  # noqa: B023
                     "id": f"msg_{assistant_id}", "type": "message", "content": content,
                     "stop_reason": "tool_use" if content[-1]["type"] == "tool_use" else "end_turn",
                     "stop_sequence": None,
