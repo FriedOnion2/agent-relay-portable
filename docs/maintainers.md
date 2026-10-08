@@ -12,10 +12,13 @@
 
 ## 发布流程
 
-1. 更新 `CHANGELOG.md`，把 `[Unreleased]` 改为新版本与日期。
-2. 打 tag（如 `v0.5.0-dev.1`）并推送。
-3. 在 Actions 手动运行 “Build universal dev release”，输入该 tag，产物自动发布为 Release。
-4. 校验 Release 附带的总包可在 Windows / macOS / Ubuntu 上启动。
+1. 把 `app/relay/__init__.py` 的 `__version__` 改为新版本（如 `0.5.0`、`0.5.0-dev.1`），在 `CHANGELOG.md` 中把 `[Unreleased]` 的内容移到 `## [0.5.0] - YYYY-MM-DD`，合并到 `main`。
+2. 在 `main` 上打 tag 并推送：`git tag v0.5.0 && git push origin v0.5.0`。
+3. `Build and publish release` 工作流自动运行：校验 tag 与 `__version__`、CHANGELOG 一致 → 四平台构建与测试 → 组装总包并在四类设备上验证 → 生成构建来源证明 → 创建 Release（版本号含 `-` 的标为 Pre-release；说明取自 CHANGELOG 与 `.github/release-notes-template.md`）。
+4. 工作流失败时 tag 不会产生 Release；修复后删除并重打 tag，或在 Actions 里手动运行并填入 tag。
+5. 发布后核对 Release 页面，并用 `gh attestation verify` 抽查总包。
+
+本地预览说明：`python3 scripts/release_notes.py --tag v0.5.0 --output /tmp/notes.md`。
 
 ## 日常
 
