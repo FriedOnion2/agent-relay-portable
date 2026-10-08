@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -350,9 +351,21 @@ def cmd_corpus(args):
     return 0 if result.get('ok',True) else 1
 
 
+# DSH session ids are "<encoded project dir>/<session>" and the project dir is
+# wrapped in "--...--", so argparse would take the id for an option.
+DSH_ID_RE = re.compile(r"^--[^\s/]*--/\S+$")
+
+
+class RelayParser(argparse.ArgumentParser):
+    def _parse_optional(self, arg_string):
+        if DSH_ID_RE.match(arg_string):
+            return None
+        return super()._parse_optional(arg_string)
+
+
 def build_parser():
     read_agents = READ_AGENTS + list(plugins.entries)
-    p = argparse.ArgumentParser(
+    p = RelayParser(
         prog="relay",
         description="读取 WorkBuddy / DeepSeek Harness / CodeBuddy / Claude Code / Claude Agent SDK / Codex 会话",
         formatter_class=argparse.RawDescriptionHelpFormatter,
