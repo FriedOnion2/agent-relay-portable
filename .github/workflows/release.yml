@@ -29,13 +29,13 @@ jobs:
     env:
       RELEASE_TAG: ${{ inputs.tag }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag }}
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v6
         with:
           node-version: '22'
       - run: python -m pip install -r requirements-release.txt
@@ -44,7 +44,7 @@ jobs:
       - name: Build and test standalone runtime
         shell: bash
         run: python scripts/build_release.py --tag "$RELEASE_TAG"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: runtime-${{ matrix.target }}
           path: dist/release/*
@@ -57,13 +57,13 @@ jobs:
       RELEASE_TAG: ${{ inputs.tag }}
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag }}
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           pattern: runtime-*
           path: runtime-assets
@@ -77,7 +77,7 @@ jobs:
           bash -n dist/universal/AgentRelay-*/AgentRelay.app/Contents/MacOS/AgentRelay
       - name: Validate universal Mac launcher and shared storage
         run: python scripts/smoke_universal.py dist/universal/AgentRelay-*-universal.zip
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: universal-release
           path: |
@@ -93,13 +93,13 @@ jobs:
         os: [windows-latest, ubuntu-22.04, macos-14, macos-15-intel]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag }}
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: universal-release
           path: universal-assets
@@ -115,10 +115,10 @@ jobs:
       RELEASE_TAG: ${{ inputs.tag }}
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag }}
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: universal-release
           path: universal-assets
