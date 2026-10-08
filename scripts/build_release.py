@@ -1,6 +1,5 @@
 """Build a standalone user package; source/tests/developer docs are never copied."""
 import argparse
-import json
 import os
 import platform
 import plistlib

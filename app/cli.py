@@ -257,7 +257,7 @@ def cmd_transfer(args):
     f = res["from"]
     t = res["to"]
     st = res["stats"]
-    print(f"✓ 已迁移")
+    print("✓ 已迁移")
     print(f"  来源: {f['source']}  {f['title'] or f['id']}")
     print(f"  目标: {t['source']}")
     print(f"  内容: {st['turns']} 轮 / 工具调用 {st['tool_call']} / 思考 {st['thinking']}")

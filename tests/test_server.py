@@ -6,7 +6,6 @@ import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
-from http.server import ThreadingHTTPServer
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 import server
