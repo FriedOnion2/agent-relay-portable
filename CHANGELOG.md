@@ -6,11 +6,13 @@
 ## [Unreleased]
 
 ### Fixed
+- 迁移到 Codex 的会话在真实 Codex 中重建出完整 items（session_meta 补 `history_mode: paginated`）。
 - 迁移到 Codex 的会话可在真实 Codex 中续聊（正确的 `model_provider` 与 turn 事件）。
 - 迁移到 DSH 的会话保留原始时间戳。
 - DSH 会话 id 可直接作为命令行参数；没有任何轮次的源会话不再被迁移。
 
 ### Added
+=======
 - CI 增加 mypy 类型检查与覆盖率统计（下限 75%），ruff 规则加入 bugbear 等。
 - `relay --version`；推送 `v*` tag 自动构建并发布 Release，说明取自本文件，附构建来源证明。
 - LICENSE（MIT）、SECURITY、CONTRIBUTING、CODE_OF_CONDUCT、CODEOWNERS、issue / PR 模板。

@@ -118,6 +118,7 @@ class TransferTests(unittest.TestCase):
             path = adapter.write(sample(), session_id="resumable")
             rows = [json.loads(line) for line in Path(path).read_text(encoding="utf-8").splitlines()]
             self.assertEqual(rows[0]["payload"]["model_provider"], "openai")
+            self.assertEqual(rows[0]["payload"]["history_mode"], "paginated")
             events = [r["payload"] for r in rows if r["type"] == "event_msg"]
             kinds = [e["type"] for e in events]
             # sample() has two user messages, so two turns

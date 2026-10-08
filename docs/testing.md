@@ -20,3 +20,16 @@ macOS 不包含 Python 3.8。批量存储已用浏览器和临时样例实测，
 验证 HTTP 和退出接口后停止本次服务。DSH 官方原生验证可使用 `tests/dsh_native_smoke.mjs` / `tests/dsh_catalog_smoke.mjs`；运行参数见脚本头部。
 Release 构建还在四类设备上验证内置依赖、DSH 导入、共享存储根目录、端口重试、HTTP 与退出，再发布同一个总包。
 跨平台 CI 验证的是项目行为，厂商原生续聊、设备权限和挂载仍需在目标环境确认。
+
+## 真实客户端冒烟测试
+
+合成样本只能证明“我们自己能读回”。下面两个脚本用**真实客户端**检验导入结果，使用一次性临时目录，不触碰你自己的会话：
+
+```sh
+python scripts/smoke_codex_resume.py   # 需要 PATH 中有 codex：导入会话后用 codex app-server 的 thread/resume 重建 turn 与 items
+python scripts/smoke_dsh_native.py     # 需要 dsh + node + zstandard：用 DSH 自带的会话持久化包列出、迁移（v0→v4）并恢复
+```
+
+未安装对应客户端时脚本以退出码 77 跳过，`python -m unittest discover -s tests` 中对应测试也会跳过。
+GitHub Actions 的「Real client compatibility」工作流每周一并在相关代码变动时安装最新版 Codex 与 DSH 运行它们，用来尽早发现厂商格式变化。
+这两项都不发送模型请求、不需要登录。
