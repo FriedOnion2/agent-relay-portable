@@ -1,0 +1,20 @@
+[project]
+name = "agent-relay-portable"
+description = "Local conversation migration and portable conversation/Skill storage for AI coding assistants."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.8"
+dynamic = ["version"]
+
+[project.optional-dependencies]
+dsh = ["zstandard>=0.23.0,<1"]
+
+# 项目以源码目录 + 启动器方式分发，不作为 pip 包发布；此文件只承载元数据与工具配置。
+[tool.ruff]
+target-version = "py38"
+line-length = 120
+extend-exclude = ["runtime", "build", "dist", "storage", "index", "devices"]
+
+[tool.ruff.lint]
+# 先只启用确定的错误类（语法错误、未使用/未定义名称），再逐步收紧。
+select = ["E9", "F"]
