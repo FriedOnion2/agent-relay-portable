@@ -25,7 +25,14 @@ def dsh_modules():
     if not dsh:
         return None
     package = Path(os.path.realpath(dsh)).parent.parent
-    for candidate in (package / 'node_modules', package.parent.parent / 'node_modules'):
+    candidates = [package / 'node_modules', package.parent.parent / 'node_modules']
+    # Windows / some prefixes put the shim next to a global node_modules instead of under lib/.
+    npm = shutil.which('npm')
+    if npm:
+        root = subprocess.run([npm, 'root', '-g'], capture_output=True, text=True).stdout.strip()
+        if root:
+            candidates += [Path(root) / '@deepseek-ai' / 'dsh' / 'node_modules', Path(root)]
+    for candidate in candidates:
         if (candidate / '@deepseek-ai' / 'dsh-session').is_dir():
             return candidate
     return None
@@ -43,7 +50,7 @@ def main():
         return 77
     from relay.adapters.dsh import DshAdapter
     from test_dsh_write import conversation
-    version = subprocess.run(['dsh', '--version'], capture_output=True, text=True).stdout.strip()
+    version = subprocess.run([shutil.which('dsh'), '--version'], capture_output=True, text=True).stdout.strip()
     with tempfile.TemporaryDirectory() as home:
         adapter = DshAdapter(home=home)
         adapter.write(conversation(), session_id=SESSION_ID, remap_tools=False)
