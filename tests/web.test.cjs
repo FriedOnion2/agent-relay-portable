@@ -454,6 +454,7 @@ test('exit waits for active transfers, suppresses duplicate requests and reports
   assert.equal(t.el('#btnExit').disabled,false);
   assert.match(t.el('#toast').children[0].textContent,/退出失败/);
   const exiting=t.el('#btnExit').onclick();
+  await new Promise(resolve=>setImmediate(resolve));
   t.response(1,{ok:true});
   await exiting;
   assert.equal(t.el('#btnExit').disabled,true);
