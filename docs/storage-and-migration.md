@@ -80,3 +80,18 @@ Windows 中也可用 `python app/cli.py ubuntu-use "D:\UbuntuBackup\alice"` 选�
 用户目录备份，再用 `import-ubuntu codex <会话ID> --cwd "D:\project"` 导入。Windows 不会直接读取 ext4。
 双向搬迁保留源文件、拒绝覆盖同 ID，不自动合并两边继续后的历史；新 ID 可保留另一份。
 GitHub 同类项目与源码差异见 [原生会话迁移调研](session-migration-alternatives.md)。
+
+## 操作记录与撤销
+
+每次写入目标软件的迁移或恢复（跨软件迁移、Windows ↔ Ubuntu 原生迁移、存储包恢复）都会在 `logs/operations.jsonl` 记一条：来源、目标、会话、写入了哪些文件。
+日志目录可用环境变量 `RELAY_LOG_HOME` 修改；写日志失败不会影响迁移本身。
+
+```sh
+python app/cli.py history            # 查看最近的操作，--json 输出机器可读结果
+python app/cli.py undo <操作ID>      # 撤销
+```
+
+撤销做三件事：删除这次**新建**的会话文件；把被**追加**内容的索引文件（例如 Codex 的 `session_index.jsonl`）截回原长度；删除因此变空的新建目录。
+它只动「仍和写入时一模一样」的文件：如果你在目标软件里已经续聊、文件被改过，这个文件会被**保留**并说明原因，
+确认可以丢弃再加 `--force`。索引之外被改写（不是追加）的已有文件、或目标目录文件过多（超过 30 万个）时，这条操作会标为不可自动撤销。
+撤销只处理记录里的路径，并且路径必须在记录的目标目录之内。同时进行两次写入时，记录可能互相混入，请逐次操作。
