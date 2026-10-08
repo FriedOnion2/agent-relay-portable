@@ -1,0 +1,38 @@
+name: Real client compatibility
+# Imports a synthetic conversation with AgentRelay and opens it with the real, latest client releases.
+# Catches vendor format drift that the synthetic format-health samples cannot.
+on:
+  schedule:
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['app/relay/adapters/codex.py', 'app/relay/adapters/dsh*.py', 'scripts/smoke_*.py', 'tests/dsh_native_smoke.mjs', '.github/workflows/real-clients.yml']
+permissions:
+  contents: read
+jobs:
+  codex:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - run: npm install -g @openai/codex
+      - run: python scripts/smoke_codex_resume.py
+  dsh:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - run: python -m pip install -r requirements-optional.txt
+      - run: npm install -g @deepseek-ai/dsh
+      - run: python scripts/smoke_dsh_native.py

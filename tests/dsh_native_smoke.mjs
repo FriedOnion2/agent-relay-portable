@@ -13,8 +13,23 @@ const {default:Persistence} = await load('dsh-session-persistence-jsonl');
 const ctx = new Context();
 await ctx.plugin(Store);
 await ctx.plugin(Persistence, {root:join(home, 'sessions'), compression:'zstd'});
+if (typeof ctx.sessionPersistence.prepare !== 'function') {
+  // DSH >= 0.2 moved session restore to ctx.sessions.prepare() and returns data folds instead of a Session,
+  // so only check that DSH lists, migrates (v0 -> v4) and restores the imported session.
+  try {
+    assert((await ctx.sessionPersistence.list()).some(entry => (entry.header ?? entry).id === id));
+    const stat = await ctx.sessionPersistence.stat(id);
+    assert.equal(stat.header.version, 4, 'DSH should migrate the imported v0 log to v4');
+    const prepared = await ctx.sessions.prepare(id);
+    assert.equal(prepared.header.id, id);
+    console.log('PASS: native DSH (>=0.2) list, v0->v4 migration and restore');
+  } finally {
+    await ctx.fiber.dispose();
+  }
+  process.exit(0);
+}
 try {
-  assert((await ctx.sessionPersistence.list()).some(header => header.id === id));
+  assert((await ctx.sessionPersistence.list()).some(entry => (entry.header ?? entry).id === id)); // 0.2 wraps the header in {header, revision}
   const prepared = await ctx.sessionPersistence.prepare(id);
   const session = prepared.session;
   const messages = session.deriveMessages();
