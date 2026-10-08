@@ -113,17 +113,17 @@ def report(conv, target, options, destination, native=False):
             warnings.append('不会更新 Codex Desktop SQLite 索引。')
         if target == 'claude':
             warnings.append('思考签名、计费信息和客户端隐藏字段不会原生保真。')
-    secrets = sensitive.scan_conversation(conv)
-    if secrets['total']:
+    findings = sensitive.scan_conversation(conv)
+    if findings['total']:
         if options.get('redact_secrets'):
-            warnings.append('检测到 %d 处疑似敏感信息（%s），写入时将替换为 [REDACTED:类型]。' % (secrets['total'], sensitive.summary_line(secrets)))
+            warnings.append('检测到 %d 处疑似敏感信息（%s），写入时将替换为 [REDACTED:类型]。' % (findings['total'], sensitive.summary_line(findings)))
         elif native:
-            warnings.append('检测到 %d 处疑似敏感信息（%s）：原生迁移原样复制会话文件，不支持脱敏。' % (secrets['total'], sensitive.summary_line(secrets)))
+            warnings.append('检测到 %d 处疑似敏感信息（%s）：原生迁移原样复制会话文件，不支持脱敏。' % (findings['total'], sensitive.summary_line(findings)))
         else:
-            warnings.append('检测到 %d 处疑似敏感信息（%s）：迁移会原样复制到目标软件。可勾选「脱敏」或加 --redact-secrets。' % (secrets['total'], sensitive.summary_line(secrets)))
+            warnings.append('检测到 %d 处疑似敏感信息（%s）：迁移会原样复制到目标软件。可勾选「脱敏密钥」或加 --redact-secrets。' % (findings['total'], sensitive.summary_line(findings)))
     evidence = conv.to_dict()
     return dict(ok=True, mode='native' if native else 'convert', source=conv.source, id=conv.id, target=target,
-                title=conv.title, secrets=secrets, target_cwd=options.get('cwd') or conv.cwd, blockers=blockers,
+                title=conv.title, findings=findings, target_cwd=options.get('cwd') or conv.cwd, blockers=blockers,
                 token=fingerprint({'conversation':evidence, 'files':source_files(conv), 'options':options, 'target':target, 'destination':destination}),
                 warnings=list(dict.fromkeys(warnings)),
                 **{key:[{'item':label, 'count':count} for label,count in values.items()] for key,values in counts.items()})
