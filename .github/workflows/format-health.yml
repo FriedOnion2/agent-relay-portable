@@ -29,3 +29,15 @@ jobs:
           path: health-output/
           if-no-files-found: error
           retention-days: 30
+  alert:
+    needs: health
+    if: always() && github.event_name == 'schedule' && needs.health.result == 'failure'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/drift_issue.py --workflow "Format health (synthetic fixtures)" --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
