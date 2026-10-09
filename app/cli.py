@@ -221,12 +221,57 @@ def cmd_show(args):
             break
 
 
+def cmd_scan(args):
+    from relay import sensitive
+    result = sensitive.scan_conversation(registry.read_conversation(args.agent, args.id))
+    if args.json:
+        _print_json(result)
+        return
+    if not result["total"]:
+        print("未发现疑似敏感信息（扫描不保证发现全部）。")
+        return
+    print("发现 %d 处疑似敏感信息：%s" % (result["total"], sensitive.summary_line(result)))
+    for row in result["locations"][:50]:
+        print("  第 %d 轮 块 %d %s  %s  长度 %d" % (row["turn"] + 1, row["block"] + 1, row["field"], row["kind"], row["length"]))
+    print("迁移/导出时加 --redact-secrets 可将其替换为 [REDACTED:类型]。")
+    sys.exit(2)
+
+
+def cmd_batch(args):
+    from relay import batch
+
+    def show(index, total, item):
+        if not args.json:
+            print("[%d/%d] %-13s %s %s" % (index, total, item["status"], item["id"][:36], item.get("title", "")[:40]), flush=True)
+
+    ids = [x for x in re.split(r"[,\s]+", args.ids or "") if x]
+    res = batch.run(args.agent, args.to, ids=ids, keyword=args.filter, limit=args.limit, cwd=args.cwd,
+                    on_conflict=args.on_conflict, redact_secrets=args.redact_secrets,
+                    remap_tools=not args.keep_tool_names, include_thinking=not args.no_thinking,
+                    dry_run=not args.yes, stop_on_error=args.stop_on_error, progress=show)
+    if args.json:
+        _print_json(res)
+    else:
+        label = "预演（未写入）" if res["dry_run"] else "完成"
+        print("\n批量迁移%s：选中 %d，已迁移 %d，将迁移 %d，跳过 %d，失败 %d%s" % (
+            label, res["selected"], res["migrated"], res["would-migrate"], res["skipped"], res["failed"],
+            "，已提前停止" if res["stopped_early"] else ""))
+        for item in res["items"]:
+            if item["status"] == "failed":
+                print("  失败 %s: %s" % (item["id"], item["error"]))
+        if res["dry_run"]:
+            print("确认无误后加 --yes 实际执行。")
+    if not res["ok"]:
+        sys.exit(1)
+
+
 def cmd_export(args):
     md = registry.export_markdown(
         args.agent, args.id,
         include_thinking=not args.no_thinking,
         include_tools=not args.no_tools,
         max_text=args.max_chars,
+        redact_secrets=args.redact_secrets,
     )
     if args.output:
         out = os.path.abspath(args.output)
@@ -242,7 +287,7 @@ def cmd_transfer(args):
     if args.dry_run:
         from relay import preview
         _print_json(preview.conversion(args.agent, args.id, args.to, args.cwd, args.session_id,
-                                       not args.keep_tool_names, not args.no_thinking, args.title))
+                                       not args.keep_tool_names, not args.no_thinking, args.title, args.redact_secrets))
         return
     res = registry.transfer(
         args.agent, args.id, args.to,
@@ -251,6 +296,7 @@ def cmd_transfer(args):
         include_thinking=not args.no_thinking,
         new_title=args.title,
         preview_token=args.preview_token,
+        redact_secrets=args.redact_secrets,
     )
     if args.json:
         _print_json(res)
@@ -454,7 +500,14 @@ def build_parser():
     p4.add_argument("--no-thinking", action="store_true", help="不包含思考过程")
     p4.add_argument("--no-tools", action="store_true", help="不包含工具调用")
     p4.add_argument("--max-chars", type=int, default=0, help="单段文本最大长度，0=不限")
+    p4.add_argument("--redact-secrets", action="store_true", help="把疑似密钥/口令替换为 [REDACTED:类型]")
     p4.set_defaults(func=cmd_export)
+
+    p4b = sub.add_parser("scan", help="扫描会话里的疑似密钥、令牌和口令（只显示类型、位置和长度）")
+    p4b.add_argument("agent", choices=read_agents)
+    p4b.add_argument("id")
+    p4b.add_argument("--json", action="store_true")
+    p4b.set_defaults(func=cmd_scan)
 
     p5 = sub.add_parser("transfer", help="迁移会话到另一个 agent")
     p5.add_argument("agent", choices=read_agents, help="来源 agent")
@@ -465,10 +518,28 @@ def build_parser():
     p5.add_argument("--title", help="覆盖标题")
     p5.add_argument("--keep-tool-names", action="store_true", help="不做工具名互译")
     p5.add_argument("--no-thinking", action="store_true", help="不迁移思考过程")
+    p5.add_argument("--redact-secrets", action="store_true", help="写入前把疑似密钥/口令替换为 [REDACTED:类型]")
     p5.add_argument("--json", action="store_true")
     p5.add_argument('--dry-run', action='store_true', help='只预览保真度，不写入文件')
     p5.add_argument('--preview-token', help='执行已确认的预览；内容变化则拒绝')
     p5.set_defaults(func=cmd_transfer)
+
+    pb = sub.add_parser("batch", help="批量迁移多个会话（默认只预演，加 --yes 才写入）")
+    pb.add_argument("agent", choices=read_agents, help="来源 agent")
+    pb.add_argument("--to", "-t", required=True, choices=registry.writable_keys(), help="支持写入的目标 agent")
+    pb.add_argument("--ids", help="会话 id，逗号分隔；省略则按 --filter 选取")
+    pb.add_argument("--filter", default="", help="按标题 / 目录 / id 关键字筛选")
+    pb.add_argument("--limit", type=int, default=100, help="最多处理多少条（上限 500）")
+    pb.add_argument("--cwd", help="统一写入到哪个工作目录（默认沿用各会话原目录）")
+    pb.add_argument("--on-conflict", choices=("skip", "new", "fail"), default="skip",
+                    help="目标里已有同一来源的迁移结果时：skip 跳过（默认）/ new 另建新 ID / fail 立即停止")
+    pb.add_argument("--redact-secrets", action="store_true", help="写入前脱敏疑似密钥/口令")
+    pb.add_argument("--keep-tool-names", action="store_true", help="不做工具名互译")
+    pb.add_argument("--no-thinking", action="store_true", help="不迁移思考过程")
+    pb.add_argument("--stop-on-error", action="store_true", help="任一条失败即停止")
+    pb.add_argument("--yes", action="store_true", help="实际写入；不加则只预演")
+    pb.add_argument("--json", action="store_true")
+    pb.set_defaults(func=cmd_batch)
 
     history = sub.add_parser("history", help="查看写入目标软件的操作记录")
     history.add_argument("--limit", type=int, default=20)
