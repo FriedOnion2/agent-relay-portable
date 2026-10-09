@@ -7,6 +7,36 @@ const vm = require('node:vm');
 const html = fs.readFileSync(path.join(__dirname, '../app/web/index.html'), 'utf8');
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1].split('\ninit().catch')[0];
 
+test('returning to search preserves the selected search and index sources',async()=>{
+  const t=setup();t.app.bind();
+  t.app.state.sources=[{name:'workbuddy'},{name:'codex'}];
+  for(const id of ['#indexSource','#corpusSource']){
+    const select=t.el(id);select.value='workbuddy';
+    // A real select chooses the first option when its options are replaced.
+    Object.defineProperty(select,'innerHTML',{
+      get(){return this._html;},
+      set(value){this._html=value;this.children=[];this.value='';},
+    });
+  }
+  t.app.showPage('home');
+  const opening=t.el('#btnCorpus').onclick();
+  assert.equal(t.el('#indexSource').value,'workbuddy');
+  assert.equal(t.el('#corpusSource').value,'workbuddy');
+  t.response(0,{ok:true,exists:false,documents:0});
+  await new Promise(resolve=>setImmediate(resolve));
+  t.response(1,{ok:true,status:'idle'});await opening;
+});
+
+test('returning to search clears an unavailable source instead of retaining an invalid filter',async()=>{
+  const t=setup();t.app.bind();t.app.state.sources=[{name:'workbuddy'}];
+  t.el('#indexSource').value='removed-plugin';t.el('#corpusSource').value='removed-plugin';
+  const opening=t.el('#btnCorpus').onclick();
+  assert.equal(t.el('#indexSource').value,'');assert.equal(t.el('#corpusSource').value,'');
+  t.response(0,{ok:true,exists:false,documents:0});
+  await new Promise(resolve=>setImmediate(resolve));
+  t.response(1,{ok:true,status:'idle'});await opening;
+});
+
 test('late corpus search and document responses cannot replace current results',async()=>{
   const t=setup();t.el('#corpusQuery').value='旧';
   const old=t.app.searchCorpus();t.el('#corpusQuery').value='新';const latest=t.app.searchCorpus();

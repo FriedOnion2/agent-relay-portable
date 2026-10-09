@@ -1699,8 +1699,10 @@ const corpusState={request:0,documentRequest:0,offset:0,job:null,busy:false,time
 async function openCorpus(){
   showPage('corpus');
   for(const id of ['#indexSource','#corpusSource']){
-    const selector=$(id);selector.innerHTML='<option value="">'+esc(tr('全部来源'))+'</option>';
+    const selector=$(id),selected=selector.value;
+    selector.innerHTML='<option value="">'+esc(tr('全部来源'))+'</option>';
     for(const row of state.sources){const option=document.createElement('option');option.value=row.name;option.textContent=AGENTS[row.name]||row.name;selector.appendChild(option);}
+    selector.value=state.sources.some(row=>row.name===selected)?selected:'';
   }
   try{
     const r=await api('/api/corpus');
