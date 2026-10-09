@@ -24,6 +24,7 @@
 - ruff、CodeQL、Dependabot。
 
 ### Fixed
+- 操作撤销：目标目录或文件元数据读取失败时禁用撤销，避免把原有会话误判为本次新建文件；`--force` 不绕过此保护。
 - 真实客户端冒烟测试在 Windows 上等待完整退出与文件释放，明确使用 UTF-8 捕获输出；Codex 检查具体历史项、工具参数、结果与错误状态，避免只恢复正文也被判通过。
 - Codex 通用迁移保留客户端可见的思考、工具参数与结果；标题索引失败时回滚会话文件，列表与读取共用内容计数规则。
 - 迁移到 Codex 的会话在真实 Codex 中重建出完整 items（session_meta 补 `history_mode: paginated`）。
