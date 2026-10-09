@@ -1,31 +1,55 @@
 name: Build and publish release
+# 两种产物（规则见 docs/maintainers.md）：
+#   * 推送 vX.Y.Z 标签 → 正式版 Release；
+#   * 推送到 main（或手动运行且不填 tag）→ 滚动开发版：固定 tag `dev`，每次重建并替换，始终只有一个。
 on:
   push:
     tags: ['v*']
+    branches: [main]
+    paths-ignore: ['**.md', 'docs/**', '.github/ISSUE_TEMPLATE/**', 'LICENSE']
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing version tag (e.g. v0.5.0)
-        required: true
+        description: 正式版标签（如 v0.5.0）；留空则按当前分支构建滚动开发版
+        required: false
         type: string
 permissions:
   contents: read
 concurrency:
   group: release-${{ inputs.tag || github.ref_name }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.ref_type == 'branch' && inputs.tag == '' }}
 jobs:
-  verify-tag:
+  meta:
     runs-on: ubuntu-22.04
+    outputs:
+      mode: ${{ steps.meta.outputs.mode }}
+      label: ${{ steps.meta.outputs.label }}
+      ref: ${{ steps.refs.outputs.ref }}
+      sha: ${{ steps.refs.outputs.sha }}
     steps:
+      - id: refs
+        run: |
+          if [ -n "$INPUT_TAG" ]; then ref="$INPUT_TAG"
+          elif [ "$GITHUB_REF_TYPE" = tag ]; then ref="$GITHUB_REF_NAME"
+          else ref="$GITHUB_SHA"; fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.tag || github.ref_name }}
-      - name: Tag matches __version__ and CHANGELOG has release notes
-        run: python3 scripts/release_notes.py --tag "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --output "$RUNNER_TEMP/notes.md"
+          ref: ${{ steps.refs.outputs.ref }}
+      - name: Decide stable vs rolling dev; validate version and CHANGELOG notes
+        id: meta
+        run: |
+          sha="$(git rev-parse HEAD)"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          if [[ "$REF" == v* ]]; then arg=(--tag "$REF"); else arg=(--sha "$sha"); fi
+          python3 scripts/release_notes.py "${arg[@]}" --meta | tee -a "$GITHUB_OUTPUT"
+          python3 scripts/release_notes.py "${arg[@]}" --repo "$GITHUB_REPOSITORY" --output "$RUNNER_TEMP/notes.md"
         env:
-          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          REF: ${{ steps.refs.outputs.ref }}
   build:
-    needs: verify-tag
+    needs: meta
     strategy:
       fail-fast: false
       matrix:
@@ -40,11 +64,11 @@ jobs:
             target: macos-x64
     runs-on: ${{ matrix.os }}
     env:
-      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+      RELEASE_TAG: ${{ needs.meta.outputs.label }}
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.tag || github.ref_name }}
+          ref: ${{ needs.meta.outputs.sha }}
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -64,15 +88,15 @@ jobs:
           if-no-files-found: error
           retention-days: 7
   assemble:
-    needs: build
+    needs: [meta, build]
     runs-on: macos-14
     env:
-      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+      RELEASE_TAG: ${{ needs.meta.outputs.label }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.tag || github.ref_name }}
+          ref: ${{ needs.meta.outputs.sha }}
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -99,7 +123,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
   validate-universal:
-    needs: assemble
+    needs: [meta, assemble]
     strategy:
       fail-fast: false
       matrix:
@@ -108,7 +132,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.tag || github.ref_name }}
+          ref: ${{ needs.meta.outputs.sha }}
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -120,31 +144,43 @@ jobs:
         shell: bash
         run: python scripts/smoke_universal.py universal-assets/*.zip
   publish:
-    needs: validate-universal
+    needs: [meta, validate-universal]
     runs-on: ubuntu-22.04
     permissions:
       contents: write
       id-token: write
       attestations: write
     env:
-      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+      RELEASE_TAG: ${{ needs.meta.outputs.label }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.tag || github.ref_name }}
+          ref: ${{ needs.meta.outputs.sha }}
       - uses: actions/download-artifact@v7
         with:
           name: universal-release
           path: universal-assets
-      - name: Render release notes from CHANGELOG
-        run: python3 scripts/release_notes.py --tag "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --output "$RUNNER_TEMP/notes.md"
+      - name: Render release notes
+        run: |
+          if [ "$MODE" = dev ]; then arg=(--sha "$SHA"); else arg=(--tag "$RELEASE_TAG"); fi
+          python3 scripts/release_notes.py "${arg[@]}" --repo "$GITHUB_REPOSITORY" --output "$RUNNER_TEMP/notes.md"
+        env:
+          MODE: ${{ needs.meta.outputs.mode }}
+          SHA: ${{ needs.meta.outputs.sha }}
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v3
         with:
           subject-path: universal-assets/*.zip
-      - name: Publish release only after every platform passes
+      - name: Publish stable release only after every platform passes
+        if: needs.meta.outputs.mode == 'stable'
         run: |
-          flags=()
-          case "$RELEASE_TAG" in *-*) flags+=(--prerelease);; esac
-          gh release create "$RELEASE_TAG" universal-assets/*.zip universal-assets/SHA256SUMS.txt --verify-tag "${flags[@]}" --title "AgentRelay $RELEASE_TAG" --notes-file "$RUNNER_TEMP/notes.md"
+          gh release create "$RELEASE_TAG" universal-assets/*.zip universal-assets/SHA256SUMS.txt --verify-tag --latest --title "AgentRelay $RELEASE_TAG" --notes-file "$RUNNER_TEMP/notes.md"
+      - name: Replace the rolling dev release (there is only ever one)
+        if: needs.meta.outputs.mode == 'dev'
+        run: |
+          # 平台全部验证通过之后才替换；失败时保留上一个开发版
+          gh release delete dev --cleanup-tag --yes || true
+          gh release create dev universal-assets/*.zip universal-assets/SHA256SUMS.txt --target "$SHA" --prerelease --title "AgentRelay dev（滚动开发版 $RELEASE_TAG）" --notes-file "$RUNNER_TEMP/notes.md"
+        env:
+          SHA: ${{ needs.meta.outputs.sha }}
