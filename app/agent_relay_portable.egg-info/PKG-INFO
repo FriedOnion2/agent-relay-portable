@@ -1,3 +1,15 @@
+Metadata-Version: 2.4
+Name: agent-relay-portable
+Version: 0.4.0.dev2
+Summary: Local conversation migration and portable conversation/Skill storage for AI coding assistants.
+License: MIT
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Provides-Extra: dsh
+Requires-Dist: zstandard<1,>=0.23.0; extra == "dsh"
+Dynamic: license-file
+
 # AgentRelay Portable
 
 [![Tests](https://github.com/FriedOnion2/agent-relay-portable/actions/workflows/tests.yml/badge.svg)](https://github.com/FriedOnion2/agent-relay-portable/actions/workflows/tests.yml)
@@ -47,16 +59,6 @@ python app/cli.py list codex                         # 命令行：列出某来�
 python app/cli.py export codex <会话id> -o out.md    # 导出 Markdown
 python app/cli.py transfer codex <会话id> --to dsh --dry-run   # 先预览迁移
 ```
-
-**用 pip / pipx 安装**（只用命令行和网页，不需要 U 盘便携）：
-
-```sh
-pipx install git+https://github.com/FriedOnion2/agent-relay-portable   # 或 pip install .
-relay serve
-relay list codex
-```
-
-这种方式下配置、日志和存储包放在每用户数据目录（Linux `~/.local/share/agent-relay`，macOS `~/Library/Application Support/AgentRelay`，Windows `%APPDATA%\AgentRelay`），可用 `RELAY_PORTABLE_ROOT` 指定别处。
 
 Ubuntu / macOS 可用 `Ubuntu首次准备.sh` / `Mac首次准备.command` 自动建立隔离环境。完整步骤见 [安装与启动](docs/install.md)。
 

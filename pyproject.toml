@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "agent-relay-portable"
 description = "Local conversation migration and portable conversation/Skill storage for AI coding assistants."
@@ -9,7 +13,23 @@ dynamic = ["version"]
 [project.optional-dependencies]
 dsh = ["zstandard>=0.23.0,<1"]
 
-# 项目以源码目录 + 启动器方式分发，不作为 pip 包发布；此文件只承载元数据与工具配置。
+[project.scripts]
+relay = "cli:main"
+agent-relay = "cli:main"
+
+# 主要分发方式仍是源码目录 + 启动器（U 盘便携版）；下面让它同时可以 `pipx install` / `pip install`。
+# 安装后数据放在每用户目录（见 relay/runtime.py），不会写进 site-packages。
+[tool.setuptools]
+package-dir = { "" = "app", "relay_web" = "app/web" }
+py-modules = ["bootstrap", "cli", "server", "portable"]
+packages = ["relay", "relay.adapters", "relay_web"]
+
+[tool.setuptools.package-data]
+relay_web = ["*.html", "*.css", "*.js", "*.svg", "*.png", "*.ico"]
+
+[tool.setuptools.dynamic]
+version = { attr = "relay.__version__" }
+
 [tool.ruff]
 target-version = "py38"
 line-length = 120

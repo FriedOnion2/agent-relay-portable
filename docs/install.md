@@ -51,6 +51,18 @@ Linux / macOS 按实际解释器将 `python` 换为 `python3`。`RELAY_PYTHON` �
 程序会保留占用端口的旧服务或其他软件，**不会自动结束它们**。所有候选端口都被占用时才报错。
 要释放旧 AgentRelay 的端口，打开旧网页，点击 **退出服务**，或在旧终端按 **Ctrl+C**。
 
+### 用 pip / pipx 安装
+
+```sh
+pipx install git+https://github.com/FriedOnion2/agent-relay-portable    # 推荐，隔离环境
+pip install .                                                         # 在源码目录里安装
+pip install ".[dsh]"                                                  # 同时装 zstandard（读写 DSH 压缩历史）
+```
+
+安装后得到 `relay` 与 `agent-relay` 两个命令（等价于 `python app/cli.py`）。程序本体装在 site-packages，**数据不会写进去**：配置 `config.json`、日志 `logs/`、存储包 `storage/` 放在每用户数据目录——Linux `~/.local/share/agent-relay`（遵循 `XDG_DATA_HOME`）、macOS `~/Library/Application Support/AgentRelay`、Windows `%APPDATA%\AgentRelay`；设置绝对路径的环境变量 `RELAY_PORTABLE_ROOT` 可改到别处（例如放在移动硬盘上）。从源码目录或 Release 运行时行为不变，数据仍在程序旁边。
+
+安装包里模块名是顶层的 `cli`、`server`、`bootstrap`、`portable`，所以建议用 pipx 或独立 venv，不要装进共用环境。
+
 ### 退出与重新启动
 
 点击网页右上角 **退出服务** 并确认，可停止当前服务，包括 `.app` 启动的后台服务。
