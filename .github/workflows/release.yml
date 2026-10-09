@@ -43,6 +43,12 @@ jobs:
         run: |
           sha="$(git rev-parse HEAD)"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          version="$(PYTHONPATH=app python3 -c 'from relay import __version__; print(__version__)')"
+          if [[ "$REF" != v* && "$version" != *-dev ]]; then
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            echo "Stable version on a branch: publish only from its version tag."
+            exit 0
+          fi
           if [[ "$REF" == v* ]]; then arg=(--tag "$REF"); else arg=(--sha "$sha"); fi
           python3 scripts/release_notes.py "${arg[@]}" --meta | tee -a "$GITHUB_OUTPUT"
           python3 scripts/release_notes.py "${arg[@]}" --repo "$GITHUB_REPOSITORY" --output "$RUNNER_TEMP/notes.md"
@@ -54,6 +60,7 @@ jobs:
     uses: ./.github/workflows/native-roundtrip.yml
   build:
     needs: meta
+    if: needs.meta.outputs.mode == 'dev' || needs.meta.outputs.mode == 'stable'
     strategy:
       fail-fast: false
       matrix:
