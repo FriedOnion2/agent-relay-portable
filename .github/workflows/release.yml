@@ -48,6 +48,10 @@ jobs:
           python3 scripts/release_notes.py "${arg[@]}" --repo "$GITHUB_REPOSITORY" --output "$RUNNER_TEMP/notes.md"
         env:
           REF: ${{ steps.refs.outputs.ref }}
+  client-gate:
+    needs: meta
+    if: needs.meta.outputs.mode == 'stable'
+    uses: ./.github/workflows/real-clients.yml
   build:
     needs: meta
     strategy:
@@ -144,7 +148,11 @@ jobs:
         shell: bash
         run: python scripts/smoke_universal.py universal-assets/*.zip
   publish:
-    needs: [meta, validate-universal]
+    needs: [meta, validate-universal, client-gate]
+    if: >-
+      always() && needs.meta.result == 'success' &&
+      needs.validate-universal.result == 'success' &&
+      (needs.meta.outputs.mode != 'stable' || needs.client-gate.result == 'success')
     runs-on: ubuntu-22.04
     permissions:
       contents: write
