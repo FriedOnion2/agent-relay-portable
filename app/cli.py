@@ -221,6 +221,30 @@ def cmd_show(args):
             break
 
 
+
+def cmd_diff(args):
+    from relay import diff
+    res = diff.compare(registry.read_conversation(args.agent, args.id), registry.read_conversation(args.agent2, args.id2))
+    if args.json:
+        _print_json(res)
+    else:
+        a, b = res["a"], res["b"]
+        print("A: %s %s（%d 项）\nB: %s %s（%d 项）" % (a["source"], a["id"], a["items"], b["source"], b["id"], b["items"]))
+        print("一致 %d 项，仅 A 有 %d 项，仅 B 有 %d 项，相似度 %.1f%%" % (res["matched"], res["only_in_a"], res["only_in_b"], res["ratio"] * 100))
+        for row in res["changed"][:args.max]:
+            print("  改动  A: [%s/%s] %s\n        B: [%s/%s] %s" % (row["before"]["role"], row["before"]["kind"], row["before"]["text"],
+                                                                row["after"]["role"], row["after"]["kind"], row["after"]["text"]))
+        for label, key in (("仅 A", "only_in_a_samples"), ("仅 B", "only_in_b_samples")):
+            for row in res[key][:args.max]:
+                print("  %s  [%s/%s] %s" % (label, row["role"], row["kind"], row["text"]))
+        delta = {k: v for k, v in res["stats_delta"].items() if v}
+        if delta:
+            print("数量差（B−A）：" + "，".join("%s %+d" % kv for kv in delta.items()))
+        print("两份会话内容一致。" if res["identical"] else "存在差异。")
+    if not res["identical"]:
+        sys.exit(1)
+
+
 def cmd_scan(args):
     from relay import sensitive
     result = sensitive.scan_conversation(registry.read_conversation(args.agent, args.id))
@@ -262,29 +286,6 @@ def cmd_batch(args):
         if res["dry_run"]:
             print("确认无误后加 --yes 实际执行。")
     if not res["ok"]:
-        sys.exit(1)
-
-
-def cmd_diff(args):
-    from relay import diff
-    res = diff.compare(registry.read_conversation(args.agent, args.id), registry.read_conversation(args.agent2, args.id2))
-    if args.json:
-        _print_json(res)
-    else:
-        a, b = res["a"], res["b"]
-        print("A: %s %s（%d 项）\nB: %s %s（%d 项）" % (a["source"], a["id"], a["items"], b["source"], b["id"], b["items"]))
-        print("一致 %d 项，仅 A 有 %d 项，仅 B 有 %d 项，相似度 %.1f%%" % (res["matched"], res["only_in_a"], res["only_in_b"], res["ratio"] * 100))
-        for row in res["changed"][:args.max]:
-            print("  改动  A: [%s/%s] %s\n        B: [%s/%s] %s" % (row["before"]["role"], row["before"]["kind"], row["before"]["text"],
-                                                                row["after"]["role"], row["after"]["kind"], row["after"]["text"]))
-        for label, key in (("仅 A", "only_in_a_samples"), ("仅 B", "only_in_b_samples")):
-            for row in res[key][:args.max]:
-                print("  %s  [%s/%s] %s" % (label, row["role"], row["kind"], row["text"]))
-        delta = {k: v for k, v in res["stats_delta"].items() if v}
-        if delta:
-            print("数量差（B−A）：" + "，".join("%s %+d" % kv for kv in delta.items()))
-        print("两份会话内容一致。" if res["identical"] else "存在差异。")
-    if not res["identical"]:
         sys.exit(1)
 
 
@@ -540,6 +541,13 @@ def build_parser():
     pd.add_argument("--max", type=int, default=20, help="最多显示多少条差异样例")
     pd.add_argument("--json", action="store_true")
     pd.set_defaults(func=cmd_diff)
+
+
+    p4b = sub.add_parser("scan", help="扫描会话里的疑似密钥、令牌和口令（只显示类型、位置和长度）")
+    p4b.add_argument("agent", choices=read_agents)
+    p4b.add_argument("id")
+    p4b.add_argument("--json", action="store_true")
+    p4b.set_defaults(func=cmd_scan)
 
     p5 = sub.add_parser("transfer", help="迁移会话到另一个 agent")
     p5.add_argument("agent", choices=read_agents, help="来源 agent")
