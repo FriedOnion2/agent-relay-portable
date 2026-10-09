@@ -53,3 +53,8 @@ GitHub Actions 的「Real client compatibility」工作流每周一并在相关�
 - 用标签 `format-drift` 找同名的未关闭 issue：没有就新建（`real-clients` 会附上软件×系统支持表），已有就追加评论，不会每周刷出新 issue。
 - 问题修复后手动关闭该 issue；下次再失败会重新建一个。
 - 需要工作流的 `issues: write` 权限（作业里已声明），不使用任何额外密钥。
+## 网页界面的多语言
+
+界面文字以中文原文为键，英文译文放在 `app/web/index.html` 的 `EN`（客户端文案）和 `EN_SERVER`（服务端固定消息）里。
+新增界面文字时：静态 HTML 直接写中文，脚本里用 `tr('中文 {变量}', {变量: 值})`，并在 `EN` 里补英文；
+`node --test tests/web.test.cjs` 会检查所有界面文字都有译文、占位符一致。服务端返回的消息用 `ts()` 按原文精确匹配翻译，未收录的保持原文。
