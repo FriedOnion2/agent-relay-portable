@@ -274,7 +274,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self._error('缺少来源 / 会话 ID / 目标')
                 return self._json(preview.conversion(body.get('source'), body.get('id'), body.get('target'),
                            body.get('cwd') or None, body.get('session_id') or None,
-                           body.get('remap_tools', True), body.get('include_thinking', True), body.get('title') or None))
+                           body.get('remap_tools', True), body.get('include_thinking', True), body.get('title') or None,
+                           bool(body.get('redact_secrets', False))))
             if u.path == "/api/shutdown":
                 self._json({"ok": True})
                 # shutdown must run outside the serve_forever thread.
@@ -333,6 +334,7 @@ class Handler(BaseHTTPRequestHandler):
                     include_thinking=bool(body.get("include_thinking", True)),
                     new_title=body.get("title") or None,
                     preview_token=body.get('preview_token'),
+                    redact_secrets=bool(body.get('redact_secrets', False)),
                 )
                 return self._json(res)
             if u.path == "/api/export-md":
@@ -340,8 +342,14 @@ class Handler(BaseHTTPRequestHandler):
                     body.get("source"), body.get("id"),
                     include_thinking=bool(body.get("include_thinking", True)),
                     include_tools=bool(body.get("include_tools", True)),
+                    redact_secrets=bool(body.get("redact_secrets", False)),
                 )
                 return self._json({"ok": True, "markdown": md})
+            if u.path == "/api/scan":
+                from relay import sensitive
+                if not body.get("source") or not body.get("id"):
+                    return self._error("缺少来源 / 会话 ID")
+                return self._json(dict(ok=True, **sensitive.scan_conversation(registry.read_conversation(body["source"], body["id"]))))
             return self._error("unknown endpoint", 404)
         except FileExistsError as e:
             return self._error(str(e), 409)
