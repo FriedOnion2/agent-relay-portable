@@ -148,7 +148,7 @@ printf '准备完成。可双击 AgentRelay.app 或启动_AgentRelay.command。\
 '''
     (stage / 'Mac首次运行.command').write_text(prepare)
     (stage / 'Mac首次运行.command').chmod(0o755)
-    (stage / '开始使用.txt').write_text('''AgentRelay {tag} 开发预览版 — 一个包切换 Windows / Mac / Linux
+    (stage / '开始使用.txt').write_text('''AgentRelay {tag} {kind} — 一个包切换 Windows / Mac / Linux
 
 本总包内置四套运行时：Windows x64、Mac Apple Silicon / Intel、Linux x64。
 无需另装 Python、Node.js 或 zstandard，首次启动不下载依赖。
@@ -200,7 +200,7 @@ Codex Desktop 的索引可能需要额外刷新，JSONL 写入不保证自动出
 Skill 只复制文件，不执行脚本、不安装依赖或转换目标工具接口。
 本地运行，不上传数据、不调用模型。开发预览版请先用副本验证。
 完整使用说明：https://github.com/FriedOnion2/agent-relay-portable
-'''.format(tag=tag), encoding='utf-8')
+'''.format(tag=tag, kind='滚动开发版' if '-dev' in tag else '正式版'), encoding='utf-8')
     asset = output / (name + '.zip')
     with zipfile.ZipFile(asset, 'w', zipfile.ZIP_DEFLATED) as archive:
         for path in sorted(stage.rglob('*')):

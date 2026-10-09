@@ -37,7 +37,7 @@ CodeBuddy CLI and IDE appear under one source. DSH and WorkBuddy have separate n
 
 ## Download and launch
 
-Current development preview: **v0.4.0-dev.2** · [Download the universal archive](https://github.com/FriedOnion2/agent-relay-portable/releases/download/v0.4.0-dev.2/AgentRelay-v0.4.0-dev.2-universal.zip) · [Release notes and checksums](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v0.4.0-dev.2)
+Stable release: none yet (it will be the *Latest* on [Releases](https://github.com/FriedOnion2/agent-relay-portable/releases/latest)). **Rolling dev build:** [`dev`](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/dev) — rebuilt on every merge to `main`, always exactly one, may be unstable.
 
 Download **`AgentRelay-<version>-universal.zip`** from [GitHub Releases](https://github.com/FriedOnion2/agent-relay-portable/releases), extract it completely, and use the launcher for your device. GitHub's automatically generated **Source code** archives are for development.
 
