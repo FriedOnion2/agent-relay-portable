@@ -79,4 +79,4 @@ jobs:
           "$BIN/python" -m pip install .
           "$BIN/relay" --version
           "$BIN/agent-relay" --version
-          "$BIN/python" -c "import relay_web, os; p = list(relay_web.__path__)[0]; assert os.path.isfile(os.path.join(p, 'index.html')), p"
+          "$BIN/python" -c "import relay_web, os; p = list(relay_web.__path__)[0]; assert all(os.path.isfile(os.path.join(p, f)) for f in ('index.html', 'workflow.css')), p"

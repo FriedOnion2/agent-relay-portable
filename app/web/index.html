@@ -163,6 +163,7 @@
   @keyframes sp{to{transform:rotate(360deg)}}
   .placeholders{display:grid;place-items:center;height:100%;color:var(--text-3);font-size:13.5px;text-align:center;padding:20px}
 </style>
+<link rel="stylesheet" href="/static/workflow.css">
 </head>
 <body>
 <dialog class="confirm" id="confirmDialog" aria-labelledby="confirmTitle">
@@ -183,18 +184,36 @@
     <path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
     AgentRelay
   </div>
-  <span class="tagline">读取 WorkBuddy · DSH · CodeBuddy · Claude Code / Agent SDK · Codex 会话</span>
-  <div class="agent-chips" id="chips"></div>
-  <button class="btn" id="btnStorage">对话存储</button>
-  <button class="btn" id="btnCorpus">搜索与提炼</button>
-  <button class="btn" id="btnSkillStorage">Skill 存储</button>
+  <span class="tagline">本地迁移 · 跨设备搬运 · 经验沉淀</span>
+  <span class="local-badge">本地处理</span>
   <button class="btn" id="btnEnvironment">环境与兼容</button>
   <button class="btn" id="btnHistory">操作记录</button>
   <button class="btn" id="btnLang" title="Switch language / 切换语言" aria-label="Switch language / 切换语言">English</button>
   <button class="btn" id="btnExit" title="停止当前后台服务">退出服务</button>
 </header>
+<nav class="task-nav" aria-label="任务导航">
+  <button id="btnHome" class="nav-item">首页</button>
+  <button id="btnSessions" class="nav-item">迁移会话</button>
+  <button id="btnStorage" class="nav-item">跨设备搬运</button>
+  <button id="btnCorpus" class="nav-item">全文搜索</button>
+  <button id="btnSkillStorage" class="nav-item">Skill 资产</button>
+</nav>
+<div class="page-heading"><div><h1 id="pageTitle" tabindex="-1">从哪里开始？</h1><p id="pageDescription"></p></div><span id="taskProgress" aria-live="polite"></span></div>
+<div class="workspace">
+<section id="homePanel" class="task-panel home-panel">
+  <div class="task-cards">
+    <button class="task-card" id="homeMigrate"><span class="card-icon">↔</span><strong>迁移会话</strong><span>换一个 Agent，或在已挂载的双系统之间接力。</span><span class="card-action">选择来源与目标 →</span></button>
+    <button class="task-card" id="homeMove"><span class="card-icon">↗</span><strong>搬到另一台设备</strong><span>保存原生 ZIP 包，在新设备映射项目目录并恢复。</span><span class="card-action">保存或恢复 →</span></button>
+    <button class="task-card" id="homeSearch"><span class="card-icon">⌕</span><strong>找回历史经验</strong><span>全文查找历史会话，核对证据，提炼待审核 Skill。</span><span class="card-action">搜索与提炼 →</span></button>
+    <button class="task-card" id="homeSkills"><span class="card-icon">◇</span><strong>携带 Skill</strong><span>打包 SKILL.md、脚本和资源，在另一台设备恢复。</span><span class="card-action">管理 Skill 资产 →</span></button>
+  </div>
+  <div class="section-heading"><h2>本机来源</h2><button class="btn" id="homeConfigure">配置目录</button></div>
+  <p class="muted">只读来源可以预览和迁出；共享 Claude 日志无法区分 Code 与 SDK 创建者。</p>
+  <div id="sourceCards" class="source-cards"></div>
+  <div id="chips" hidden></div>
+</section>
 
-<div class="wrap">
+<div class="wrap" id="sessionsPanel" style="display:none">
   <aside>
     <div class="tabs" id="tabs"></div>
     <div id="sourceNote" class="meta" style="padding:8px 12px;display:none"></div>
@@ -211,16 +230,20 @@
   </aside>
 
   <main>
-    <div class="bar">
-      <select class="sel" id="target"></select>
-      <input class="input" id="cwd" style="width:290px" placeholder="目标工作目录（留空沿用原会话）">
-      <input class="input" id="projectPath" style="display:none;width:290px" placeholder="同一项目在 Ubuntu 中的挂载路径 /mnt/…">
-      <input class="input" id="importId" style="display:none;width:190px" placeholder="新会话 ID（可选）">
-      <button class="btn" id="btnNewId" style="display:none">生成新 ID</button>
+    <div class="session-guide"><b id="sessionGuide">1 选择会话 → 2 设置目标与项目 → 3 预览后确认</b><button class="btn" id="backToStorage" style="display:none">返回搬运页面</button></div>
+    <div class="bar migration-setup" id="migrationSetup">
+      <label class="field">目标 Agent<select class="sel" id="target" aria-label="目标 Agent"></select></label>
+      <label class="field">目标项目目录<input class="input" id="cwd" placeholder="目标工作目录（留空沿用原会话）"></label>
+      <label class="field" id="projectPathField" style="display:none">本机可访问的项目路径<input class="input" id="projectPath" style="display:none" placeholder="同一项目在 Ubuntu 中的挂载路径 /mnt/…"></label>
+      <details class="advanced" id="nativeOptions" style="display:none"><summary>原生迁移 ID 与冲突</summary><p>留空保留原 ID；有冲突时停止。生成新 ID 可保留两份独立会话。</p><input class="input" id="importId" style="display:none" placeholder="新会话 ID（可选）"><button class="btn" id="btnNewId" style="display:none">生成新 ID</button></details>
+      <details class="advanced"><summary>转换选项</summary>
       <label class="opt"><input type="checkbox" id="remap" checked>工具名适配</label>
       <label class="opt"><input type="checkbox" id="think" checked>保留思考</label>
       <label class="opt" title="迁移前把疑似密钥、令牌和口令替换为 [REDACTED:类型]"><input type="checkbox" id="redact">脱敏密钥</label>
-      <div class="spacer"></div>
+      </details>
+      <p class="mapping-note" id="mappingNote"></p>
+    </div>
+    <div class="bar session-actions">
       <button class="btn" id="btnMd" disabled>导出 Markdown</button>
       <button class="btn" id="btnStore" disabled>存储此会话</button>
       <button class="btn primary" id="btnImport" style="display:none" disabled>迁到 Ubuntu 对应软件</button>
@@ -238,29 +261,36 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<section id="storagePanel" style="display:none;position:fixed;inset:70px 24px 24px;z-index:80;background:var(--bg,#fff);padding:20px;overflow:auto;border:1px solid #bbb;border-radius:12px">
+<section id="storagePanel" class="task-panel" style="display:none" aria-label="跨设备对话存储">
   <div class="bar"><b>跨设备对话存储</b><button class="btn" id="closeStorage">关闭</button></div>
-  <p>在左侧列表勾选对话，或全选当前列表，点击「存储所选对话」批量保存。按 Agent 保存原生 ZIP 包。把 storage 文件夹复制到另一台设备，或填写包路径后恢复。同 ID 不覆盖，恢复到对应软件。</p>
+  <div class="transfer-steps"><div><b>在原设备保存</b><p>选择会话并保存 ZIP，复制包或 storage 文件夹到新设备。</p><button class="btn primary" id="chooseToStore">选择要携带的会话</button></div><div><b>在新设备恢复</b><p>选择下面的包，填写本机项目目录，预览后恢复到对应软件。</p></div></div>
+  <p class="muted">包和索引未加密。请使用你信任的存储介质；本页面不会上传会话。</p>
   <div class="bar">
     <input class="input" id="storageRoot" placeholder="存储目录（留空使用项目 storage/）" style="width:380px">
     <button class="btn" id="refreshStorage">刷新存储列表</button>
   </div>
-  <div class="bar">
-    <input class="input" id="packagePath" placeholder="会话包 .zip 路径" style="width:380px">
-    <input class="input" id="restoreCwd" placeholder="本机已存在的目标项目目录">
-    <input class="input" id="restoreId" placeholder="新 UUID（可选，避免同 ID 冲突）">
-    <button class="btn primary" id="restorePackage">恢复到对应软件</button>
+  <div class="restore-layout">
+    <div class="package-library"><h2>1 选择会话包</h2><p class="muted">点选库中的包，或填写当前设备上 ZIP 的完整路径。</p><div id="storageList"></div></div>
+    <div class="restore-form"><h2>2 映射本机项目</h2>
+      <label class="field">会话包路径<input class="input" id="packagePath" placeholder="会话包 .zip 路径"></label>
+      <p id="selectedPackage" class="muted" aria-live="polite"></p>
+      <label class="field">本机项目目录<input class="input" id="restoreCwd" placeholder="本机已存在的目标项目目录"></label>
+      <p class="muted">填写新设备上同一个项目的实际目录，旧设备路径仅用于参考。</p>
+      <label class="field">会话 ID 策略<select class="sel" id="restoreConflict"><option value="keep">保留原 ID，有冲突时停止</option><option value="new">创建独立副本，生成新 ID</option></select></label>
+      <details class="advanced"><summary>手动指定 ID</summary><input class="input" id="restoreId" placeholder="新 UUID（可选，避免同 ID 冲突）"><button class="btn" id="restoreNewId">生成新 ID</button></details>
+      <p id="restoreError" class="inline-error" role="alert"></p>
+      <button class="btn primary" id="restorePackage">恢复到对应软件</button><p class="muted">3 检查保真度预览 → 确认写入 → 在目标软件核对续聊</p>
+    </div>
   </div>
   <div id="storageResult" class="meta" style="white-space:pre-wrap;padding:12px"></div>
-  <div id="storageList"></div>
 </section>
-<section id="historyPanel" style="display:none;position:fixed;inset:70px 24px 24px;z-index:82;background:var(--bg,#fff);padding:20px;overflow:auto;border:1px solid #bbb;border-radius:12px">
+<section id="historyPanel" class="task-panel" style="display:none" aria-label="操作记录">
   <div class="bar"><b>操作记录</b><button class="btn" id="refreshHistory">刷新</button><button class="btn" id="closeHistory">关闭</button></div>
   <p>每次写入目标软件的迁移都会记录下来。撤销只删除这次新建的文件、并把被追加的索引截回原长度；写入后又被修改的文件（例如已经在目标软件里续聊）默认保留。</p>
   <div id="historyResult" class="meta" style="white-space:pre-wrap;padding:8px 12px"></div>
   <div id="historyList"></div>
 </section>
-<section id="skillPanel" style="display:none;position:fixed;inset:70px 24px 24px;z-index:81;background:var(--bg,#fff);padding:20px;overflow:auto;border:1px solid #bbb;border-radius:12px">
+<section id="skillPanel" class="task-panel" style="display:none" aria-label="跨设备 Skill 存储">
   <div class="bar"><b>跨设备 Skill 存储</b><button class="btn" id="closeSkills">关闭</button></div>
   <p>保存完整 SKILL.md、脚本和资源目录。复制 ZIP 到目标设备后恢复；已有同名 Skill 不覆盖，脚本不会自动执行。</p>
   <div class="bar">
@@ -279,7 +309,8 @@
     <span id="skillSelectionCount" class="meta">已选 0 项</span>
     <button class="btn" id="storeSkills" disabled>存储所选 Skill</button>
   </div>
-  <div id="skillList"></div>
+  <h2>本机 Skill</h2><div id="skillList"></div>
+  <h2>从已有包恢复</h2>
   <div class="bar">
     <input class="input" id="skillPackage" placeholder="Skill 包 .zip 路径" style="width:380px">
     <select class="sel" id="skillTargetAgent"></select>
@@ -291,7 +322,7 @@
   <div id="skillPackages"></div>
 </section>
 
-<section id="environmentPanel" style="display:none;position:fixed;inset:70px 24px 24px;z-index:82;background:var(--bg);padding:20px;overflow:auto;border:1px solid #bbb;border-radius:12px" role="dialog" aria-label="环境与兼容">
+<section id="environmentPanel" class="task-panel" style="display:none" aria-label="环境与兼容">
   <div class="bar"><b>设备配置与格式健康度</b><button class="btn" id="closeEnvironment">关闭</button></div>
   <p>目录覆盖仅在当前设备生效。换设备后默认探测本机来源；旧路径失效时可在此重新选择。</p>
   <div class="bar"><select class="sel" id="deviceAgent"></select><input class="input" id="deviceHome" placeholder="当前设备实际 Agent 根目录；留空则自动探测" style="width:420px"><button class="btn" id="saveDeviceHome">保存本机目录</button></div>
@@ -300,32 +331,38 @@
   <p>自检仅验证临时合成样本，客户端版本与真实续聊未验证时明确显示未知；不读取真实对话、不调用模型。</p>
   <div id="healthResult"></div>
 </section>
-<section id="corpusPanel" style="display:none;position:fixed;inset:70px 24px 24px;z-index:83;background:var(--bg);padding:20px;overflow:auto;border:1px solid #bbb;border-radius:12px" role="dialog" aria-label="全文搜索与 Skill 草稿">
+<section id="corpusPanel" class="task-panel" style="display:none" aria-label="全文搜索与 Skill 草稿">
   <div class="bar"><b>全文搜索与 Skill 草稿</b><button class="btn" id="closeCorpus">关闭</button></div>
   <p>在本机处理，本功能不上传正文、不调用模型。索引随 index 文件夹搬走；复制前先结束任务并退出服务。旧设备的会话缓存可离线查看，恢复时仍需选择本机目录。</p>
+  <details class="advanced"><summary>索引设置与处理范围</summary>
   <div class="bar" style="flex-wrap:wrap">
     <label class="opt"><input type="checkbox" id="indexThinking">索引思考内容（默认关闭）</label>
     <label class="opt"><input type="checkbox" id="indexPackages" checked>包含已存储对话包</label>
     <button class="btn" id="updateCorpus">更新索引</button>
-    <button class="btn" id="extractDrafts">提炼 Skill 草稿</button>
-    <button class="btn" id="cancelCorpus" disabled>取消任务</button>
   </div>
   <p class="meta">更新最多扫描 10,000 条记录 / 120 秒；提炼最多 500 份完整会话 / 60 秒。达到上限会提示，可缩小索引来源或清理无关缓存。部分会话不会用于提炼。</p>
   <label>更新来源 <select class="sel" id="indexSource"><option value="">全部已配置来源</option></select></label>
+  </details>
+  <div class="bar"><button class="btn primary" id="updateCorpusQuick">更新索引</button><button class="btn" id="extractDrafts">提炼 Skill 草稿</button><button class="btn" id="cancelCorpus" disabled>取消任务</button></div>
+  <p id="indexSummary" class="muted" aria-live="polite"></p>
   <pre id="corpusStatus" style="white-space:pre-wrap" aria-live="polite"></pre>
   <div class="bar" style="flex-wrap:wrap">
     <input class="input" id="corpusQuery" placeholder="中文单字、短词或英文全文搜索" style="width:300px" aria-label="全文关键词">
     <select class="sel" id="corpusSource" aria-label="搜索来源"><option value="">全部来源</option></select>
+    <details class="advanced"><summary>项目、工具与日期筛选</summary>
     <input class="input" id="corpusProject" placeholder="项目路径包含" style="width:200px">
     <input class="input" id="corpusTool" placeholder="工具字段包含" style="width:140px">
     <label>从 <input class="input" type="date" id="corpusAfter" style="width:150px"></label>
     <label>至 <input class="input" type="date" id="corpusBefore" style="width:150px"></label>
     <label class="opt"><input type="checkbox" id="searchThinking">搜索思考内容</label>
+    </details>
     <button class="btn primary" id="searchCorpus">搜索</button>
     <button class="btn" id="moreCorpus" disabled>下一页</button>
   </div>
+  <p id="searchSummary" class="muted" aria-live="polite"></p>
   <div id="corpusResults"></div>
   <div id="corpusDocument"></div>
+  <div class="section-heading"><h2>从重复经验生成 Skill 草稿</h2><button class="btn" id="showDistill">查看提炼区</button></div>
   <p>Skill 候选需要至少三条独立会话证据。排序分不是成功概率，非空工具返回也不证明任务成功。没有重复流程时返回空列表。</p>
   <div id="draftCandidates"></div>
   <div id="draftEditor" style="display:none">
@@ -337,8 +374,11 @@
       <button class="btn primary" id="exportDraft" disabled>导出选中草稿</button>
     </div>
     <pre id="draftResult" style="white-space:pre-wrap"></pre>
+    <button class="btn primary" id="storeExportedDraft" style="display:none">把已导出草稿存为 Skill 包</button>
   </div>
 </section>
+</div>
+<section id="operationResult" class="operation-result" style="display:none" aria-label="本次操作结果" aria-live="polite"></section>
 <script>
 const AGENTS = {workbuddy:'WorkBuddy', dsh:'DeepSeek Harness', codebuddy:'CodeBuddy', claude:'Claude Code', claude_sdk:'Claude Agent SDK', codex:'OpenAI Codex'};
 const state = {source:'workbuddy', target:'claude', sources:[], sessions:[], current:null, turnLimit:40,
@@ -351,6 +391,101 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 // 中文原文即键。tr(原文, 变量) 翻译客户端文案；ts(服务端消息) 按原文精确匹配翻译已知的服务端消息，未收录的保持原样。
 // 页面静态文字由 applyStatic() 按文本节点/属性精确匹配翻译。新增界面文字时请同步补充 EN（tests/web.test.cjs 会检查）。
 const EN = {
+  '索引文件更新：{time}':'Index file updated: {time}',
+  '已复制':'Copied',
+  '该 ID 已存在。选择「创建独立副本」后重新预览，可保留原会话。':'This ID already exists. Choose “Create an independent copy” and preview again to keep the original session.',
+  '查看项目、ID、文件与续聊提示':'View project, ID, files and resume notes',
+  // Task workflow UI.
+  "本地迁移 · 跨设备搬运 · 经验沉淀":"Migrate locally · Move between devices · Reuse experience",
+  "本地处理":"Processed locally",
+  "首页":"Home",
+  "迁移会话":"Migrate sessions",
+  "跨设备搬运":"Move between devices",
+  "全文搜索":"Full-text search",
+  "Skill 资产":"Skill assets",
+  "从哪里开始？":"Where would you like to start?",
+  "换一个 Agent，或在已挂载的双系统之间接力。":"Switch agents or continue across mounted dual-boot systems.",
+  "选择来源与目标 →":"Choose source and target →",
+  "搬到另一台设备":"Move to another device",
+  "保存原生 ZIP 包，在新设备映射项目目录并恢复。":"Save a native ZIP package, map the project on your new device, and restore.",
+  "保存或恢复 →":"Save or restore →",
+  "找回历史经验":"Find past experience",
+  "全文查找历史会话，核对证据，提炼待审核 Skill。":"Search past sessions, inspect evidence, and distill Skills for review.",
+  "搜索与提炼 →":"Search and distill →",
+  "携带 Skill":"Take your Skills with you",
+  "打包 SKILL.md、脚本和资源，在另一台设备恢复。":"Package SKILL.md, scripts and assets to restore on another device.",
+  "管理 Skill 资产 →":"Manage Skill assets →",
+  "本机来源":"Sources on this device",
+  "配置目录":"Configure directories",
+  "只读来源可以预览和迁出；共享 Claude 日志无法区分 Code 与 SDK 创建者。":"Read-only sources can be previewed and migrated out. Shared Claude logs cannot identify whether Code or the SDK created them.",
+  "1 选择会话 → 2 设置目标与项目 → 3 预览后确认":"1 Choose session → 2 Set target and project → 3 Preview and confirm",
+  "返回搬运页面":"Back to device transfer",
+  "目标 Agent":"Target agent",
+  "目标项目目录":"Target project directory",
+  "本机可访问的项目路径":"Project path accessible on this device",
+  "原生迁移 ID 与冲突":"Native session ID and conflicts",
+  "留空保留原 ID；有冲突时停止。生成新 ID 可保留两份独立会话。":"Leave blank to keep the original ID; stop on conflicts. Generate a new ID to keep two independent sessions.",
+  "转换选项":"Conversion options",
+  "在原设备保存":"Save on the original device",
+  "选择会话并保存 ZIP，复制包或 storage 文件夹到新设备。":"Choose sessions, save ZIP packages, and copy them or the storage folder to the new device.",
+  "选择要携带的会话":"Choose sessions to take",
+  "在新设备恢复":"Restore on the new device",
+  "选择下面的包，填写本机项目目录，预览后恢复到对应软件。":"Select a package below, enter the local project directory, and preview before restoring into the matching app.",
+  "包和索引未加密。请使用你信任的存储介质；本页面不会上传会话。":"Packages and the index are unencrypted. Use storage you trust; this page does not upload sessions.",
+  "1 选择会话包":"1 Choose a session package",
+  "点选库中的包，或填写当前设备上 ZIP 的完整路径。":"Choose a package from the library, or enter the full ZIP path on this device.",
+  "2 映射本机项目":"2 Map the local project",
+  "会话包路径":"Session package path",
+  "本机项目目录":"Local project directory",
+  "填写新设备上同一个项目的实际目录，旧设备路径仅用于参考。":"Enter the actual directory of the same project on this device. The old path is for reference only.",
+  "会话 ID 策略":"Session ID strategy",
+  "保留原 ID，有冲突时停止":"Keep the original ID; stop on conflict",
+  "创建独立副本，生成新 ID":"Create an independent copy with a new ID",
+  "手动指定 ID":"Specify an ID manually",
+  "3 检查保真度预览 → 确认写入 → 在目标软件核对续聊":"3 Review fidelity → Confirm writing → Check resume in the target app",
+  "本机 Skill":"Local Skills",
+  "从已有包恢复":"Restore from a saved package",
+  "索引设置与处理范围":"Index settings and processing limits",
+  "项目、工具与日期筛选":"Project, tool and date filters",
+  "从重复经验生成 Skill 草稿":"Turn repeated experience into Skill drafts",
+  "查看提炼区":"Go to Skill candidates",
+  "把已导出草稿存为 Skill 包":"Save the exported draft as a Skill package",
+  "任务导航":"Task navigation",
+  "本次操作结果":"Operation result",
+  "可切换来源、清除标题筛选，或在环境与兼容中配置目录。":"Switch sources, clear the title filter, or configure directories under Environment.",
+  "会话已恢复":"Session restored",
+  "原生会话已迁移":"Native session migrated",
+  "会话已迁移":"Session migrated",
+  "本页 {n} 条结果；离线缓存可查看，写入需使用可用的本机原会话或会话包。":"{n} results on this page. Offline caches can be viewed; writing requires an available local session or package.",
+  "1 选择会话 → 2 保存 ZIP → 3 复制到新设备":"1 Choose sessions → 2 Save ZIP → 3 Copy to the new device",
+  "已选会话 · 下一步检查目标":"Session selected · Check the target next",
+  "等待选择会话":"Choose a session to continue",
+  "原生接力保留记录；历史正文与工具参数中的旧路径不会自动替换。通用转换使用下方转换选项。":"Native transfer preserves records; old paths in text and tool arguments are not rewritten. Conversion options apply to generic conversion.",
+  "换设备时填写本机项目目录。同机可留空沿用来源；转换不会复制账号或完整运行环境。":"For a new device, enter its local project directory. On the same device, blank keeps the source path. Conversion does not copy accounts or the full runtime.",
+  "{n} 条会话 · {capability}":"{n} sessions · {capability}",
+  "可读取与写入":"Read and write",
+  "只读来源":"Read-only source",
+  "目录未发现或不可读":"Directory missing or unreadable",
+  "在此来源中选择会话，预览后再迁移。":"Choose a session from this source and preview before migrating.",
+  "没有安装此客户端可忽略；已有记录请配置实际目录。":"Ignore this if the client is not installed; configure its directory if you have records.",
+  "浏览会话":"Browse sessions",
+  "已选 {agent} · {title}；原项目：{cwd}":"Selected {agent} · {title}; original project: {cwd}",
+  "已选择导出的草稿目录。点击存储 Skill 生成便携包；不会安装或执行。":"The exported draft directory is selected. Click Store Skill to create a portable package; nothing is installed or executed.",
+  "目标：{agent} · 项目：{cwd}\n会话 ID：{id}\n文件：{path}":"Target: {agent} · Project: {cwd}\nSession ID: {id}\nFile: {path}",
+  "在目标列表中核对":"Check in the target session list",
+  "已写入文件。请在目标客户端核对续聊；写入成功不代表完整运行状态已恢复。":"Files have been written. Check resume in the target client; a successful write does not confirm complete runtime restoration.",
+  "续聊命令：{cmd}":"Resume command: {cmd}",
+  "复制失败，请手动复制":"Copy failed; please copy manually",
+  "复制续聊命令":"Copy resume command",
+  "查看目标会话":"View target session",
+  "收起结果":"Dismiss result",
+  "选择一个任务开始。本机记录与便携包都由本地服务处理。":"Choose a task. Local records and portable packages are processed by the local service.",
+  "选择来源与会话，再设置目标。写入前会显示保留、降级和未知内容。":"Choose a source and session, then set the target. Preserved, degraded and unknown content is shown before writing.",
+  "在原设备保存，在新设备恢复。每台设备分别选择本机项目目录。":"Save on the original device, restore on the new one. Choose the local project directory separately on each device.",
+  "先更新索引，再全文检索。重复流程可提炼为需要人工审核的 Skill 草稿。":"Update the index, then search. Repeated workflows can become Skill drafts requiring human review.",
+  "携带完整 Skill 目录；同名不覆盖，脚本不会自动执行。":"Move complete Skill directories; existing names are not overwritten and scripts are never run automatically.",
+  "配置当前设备的目录，并查看格式自检边界。":"Configure this device’s directories and review the limits of format checks.",
+  "查看写入记录；已被续聊修改的内容默认保留。":"Review write operations; content changed by subsequent sessions is kept by default.",
   // —— 静态页面 ——
   'AgentRelay · 对话记录迁移':'AgentRelay · Conversation Migration',
   '取消':'Cancel','确认':'Confirm','关闭':'Close',
@@ -561,6 +696,7 @@ function tr(zh, vars){
 function ts(message){
   if(lang !== 'en' || typeof message !== 'string') return message;
   if(EN_SERVER[message] !== undefined) return EN_SERVER[message];
+  if(EN[message] !== undefined) return EN[message];
   for(const [pattern, template] of EN_PATTERNS) if(pattern.test(message)) return message.replace(pattern, template);
   return message;
 }
@@ -615,6 +751,9 @@ function applyLang(){
   renderList();
   renderDetail();
   updateActions();
+  renderHome();renderWorkflow();renderOperationResult();
+  if(corpusState.indexStatus)renderIndexSummary(corpusState.indexStatus);
+  if(corpusState.resultCount!=null)renderSearchSummary(corpusState.resultCount);
 }
 
 async function api(url, options){
@@ -678,7 +817,8 @@ async function storeBatch(kind){
   const agent=kind==='sessions'?state.source:$('#skillAgent').value;
   const storage=$(kind==='sessions'?'#storageRoot':'#skillStorageRoot').value.trim()||null;
   const result=$(kind==='sessions'?'#storageResult':'#skillResult');
-  if(kind==='sessions') $('#storagePanel').style.display='';
+  result.style.display='';
+  if(kind==='sessions') showPage('storage');
   state.transferring=true;updateActions();
   const lines=[];let succeeded=0, completed=0;
   try{
@@ -715,6 +855,9 @@ function updateActions(){
   $('#importId').style.display = native ? '' : 'none';
   $('#btnNewId').style.display = native ? '' : 'none';
   $('#projectPath').style.display = mode==='export-windows' ? '' : 'none';
+  $('#projectPathField').style.display = mode==='export-windows' ? '' : 'none';
+  $('#nativeOptions').style.display = native ? '' : 'none';
+  renderWorkflow();
   if(!state.transferring) $('#btnImport').textContent = mode==='import-windows' ? tr('迁到 Ubuntu 对应软件') : tr('迁到 Windows 对应软件');
   $('#btnImport').title = tr('对应软件迁移保留完整原生记录；工具名适配与保留思考勾选项仅用于通用迁移');
   $('#btnImport').disabled = !native || !state.current || state.current.truncated ||
@@ -748,6 +891,7 @@ async function init(){
   buildTarget();
   bind();
   await loadSessions();
+  showPage('home',false);
   const evidence=new URLSearchParams(globalThis.location?.search||'').get('document');
   if(evidence){await openCorpus();await openCorpusDocument(evidence);}
 }
@@ -756,6 +900,7 @@ async function loadSources(){
   const r = await api('/api/sources');
   state.sources = r.sources || [];
   renderChips();
+  renderHome();
   if (!state.listRequest && !(r.sources||[]).some(s=>s.available && s.name===state.source)){
     const first = (r.sources||[]).find(s=>s.available);
     if (first) state.source = first.name;
@@ -827,8 +972,9 @@ async function exitService(){
 }
 
 function bind(){
+  bindWorkflow();
   $('#btnCorpus').onclick=openCorpus;
-  $('#closeCorpus').onclick=()=>{$('#corpusPanel').style.display='none';};
+  $('#closeCorpus').onclick=()=>{showPage('sessions');};
   $('#updateCorpus').onclick=()=>startCorpusJob('index');
   $('#extractDrafts').onclick=()=>startCorpusJob('extract');
   $('#cancelCorpus').onclick=cancelCorpusJob;
@@ -839,14 +985,14 @@ function bind(){
   $('#draftDirectory').oninput=updateDraftAction;
   $('#exportDraft').onclick=exportDraft;
   $('#btnEnvironment').onclick=async()=>{
-    $('#environmentPanel').style.display='';
+    showPage('environment');
     const selector=$('#deviceAgent');selector.innerHTML='';
     for(const [key,label] of Object.entries(AGENTS)){
       const option=document.createElement('option');option.value=key;option.textContent=label;selector.appendChild(option);
     }
     try{showEnvironment(await api('/api/environment'));}catch(e){toast(e.message,true);}
   };
-  $('#closeEnvironment').onclick=()=>{$('#environmentPanel').style.display='none';};
+  $('#closeEnvironment').onclick=()=>{showPage('sessions');};
   $('#saveDeviceHome').onclick=saveDeviceHome;
   $('#runHealth').onclick=runHealth;
   $('#selectAllSessions').onchange=e=>selectAll('sessions',e.target.checked);
@@ -855,24 +1001,24 @@ function bind(){
   $('#batchMigrate').onclick=doBatch;
   $('#btnHistory').onclick=openHistory;
   $('#refreshHistory').onclick=refreshHistory;
-  $('#closeHistory').onclick=()=>{$('#historyPanel').style.display='none';};
+  $('#closeHistory').onclick=()=>{showPage('sessions');};
   $('#storeSkills').onclick=()=>storeBatch('skills');
   $('#btnExit').onclick = exitService;
   $('#btnLang').onclick = ()=>setLang(lang === 'en' ? 'zh' : 'en');
   $('#btnSkillStorage').onclick = ()=>{
-    $('#skillPanel').style.display=''; buildSkillAgents();
+    showPage('skills'); buildSkillAgents();
     $('#skillStorageRoot').value=$('#storageRoot').value;
     loadSkills(); refreshSkillPackages();
   };
-  $('#closeSkills').onclick = ()=>{$('#skillPanel').style.display='none';};
+  $('#closeSkills').onclick = ()=>{showPage('sessions');};
   $('#discoverSkills').onclick=loadSkills;
   $('#skillAgent').onchange=loadSkills;
   $('#storeSkill').onclick=storeSelectedSkill;
   $('#refreshSkillPackages').onclick=refreshSkillPackages;
   $('#restoreSkill').onclick=restoreSelectedSkill;
   $('#btnStore').onclick = storeCurrent;
-  $('#btnStorage').onclick = ()=>{ $('#storagePanel').style.display=''; refreshStorage(); };
-  $('#closeStorage').onclick = ()=>{ $('#storagePanel').style.display='none'; };
+  $('#btnStorage').onclick = ()=>{ showPage('storage'); refreshStorage(); };
+  $('#closeStorage').onclick = ()=>{ showPage('sessions'); };
   $('#refreshStorage').onclick = refreshStorage;
   $('#restorePackage').onclick = restoreStored;
   $('#target').onchange = e => {state.target = e.target.value; updateActions();};
@@ -939,7 +1085,8 @@ function renderList(){
   box.innerHTML = '';
   selections.sessions.inputs.clear();
   if(!state.sessions.length){
-    box.innerHTML = '<div class="empty">'+esc(tr('没有会话'))+'<br><span style="font-size:12px">'+esc(tr('换一个 agent 试试'))+'</span></div>';
+    box.innerHTML = '<div class="empty">'+esc(tr('没有会话'))+'<p>'+esc(tr('可切换来源、清除标题筛选，或在环境与兼容中配置目录。'))+'</p></div>';
+    const configure=document.createElement('button');configure.className='btn';configure.textContent=tr('配置目录');configure.onclick=()=>$('#btnEnvironment').onclick();box.appendChild(configure);
     return;
   }
   state.sessions.forEach(s=>{
@@ -947,7 +1094,7 @@ function renderList(){
     el.className = 'item';
     el.dataset.id = s.id;
     el.innerHTML = `
-      <h4>${esc(s.title || tr('未命名会话'))}</h4>
+      <h4><button class="session-title" type="button">${esc(s.title || tr('未命名会话'))}</button></h4>
       <div class="meta">
         <span title="${esc(tr('更新时间'))}">${esc(s.updated)}</span>
         <span>${esc(s.readable===false?tr('读取受限'):s.turns===1?tr('1 轮'):tr('{n} 轮',{n:s.turns}))}</span>
@@ -1294,7 +1441,8 @@ async function storeCurrent(){
   try{
     const r=await api('/api/store-session',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({source:selected.source,id:selected.id,storage:$('#storageRoot').value.trim()||null})});
-    $('#storagePanel').style.display='';
+    showPage('storage');
+    $('#storageResult').style.display='';
     $('#storageResult').textContent=tr('已存储 {agent} 会话\n包路径：{path}\n复制此 ZIP 包或整个 storage 文件夹到另一台设备后恢复。',{agent:AGENTS[r.manifest.agent],path:r.path});
     await refreshStorage();
   }catch(e){toast(tr('存储失败：{error}',{error:e.message}),true);}
@@ -1302,8 +1450,10 @@ async function storeCurrent(){
 }
 
 async function refreshStorage(){
+  const request=++workflow.storageRequest,root=$('#storageRoot').value.trim();
   try{
-    const r=await api('/api/stored-sessions?storage='+encodeURIComponent($('#storageRoot').value.trim()));
+    const r=await api('/api/stored-sessions?storage='+encodeURIComponent(root));
+    if(request!==workflow.storageRequest||root!==$('#storageRoot').value.trim())return;
     const box=$('#storageList'); box.innerHTML='';
     for(const row of r.packages||[]){
       const item=document.createElement('div'); item.className='meta'; item.style.padding='10px';
@@ -1313,17 +1463,19 @@ async function refreshStorage(){
       item.appendChild(details);
       if(!row.error){
         const button=document.createElement('button'); button.className='btn'; button.textContent=tr('选择恢复');
-        button.onclick=()=>{$('#packagePath').value=row.path;}; item.appendChild(button);
+        button.onclick=()=>{selectPackage(row);}; item.appendChild(button);
       }
       box.appendChild(item);
     }
     if(!(r.packages||[]).length) box.textContent=tr('暂无已存储会话。默认目录：{root}',{root:r.root});
-  }catch(e){toast(tr('存储列表读取失败：{error}',{error:e.message}),true);}
+  }catch(e){if(request===workflow.storageRequest)toast(tr('存储列表读取失败：{error}',{error:e.message}),true);}
 }
 
 async function restoreStored(){
   const payload={package:$('#packagePath').value.trim(),cwd:$('#restoreCwd').value.trim(),session_id:$('#restoreId').value.trim()||null};
   if(state.transferring) return;
+  if($('#restoreConflict').value==='new' && !payload.session_id){payload.session_id=generateId('#restoreId');if(!payload.session_id)return;}
+  $('#restoreError').textContent='';
   if(!payload.package || !payload.cwd) return toast(tr('填写会话包路径和本机目标项目目录'),true);
   state.transferring=true; $('#restorePackage').disabled=true; updateActions();
   try{
@@ -1333,7 +1485,11 @@ async function restoreStored(){
     $('#storageResult').textContent=tr('已恢复 {agent}\n会话 ID：{id}\n文件：{path}',{agent:AGENTS[r.to.source],id:r.to.native_id,path:r.to.path})+
       (r.resume_command?tr('\n续聊命令：{cmd}',{cmd:r.resume_command}):'')+'\n'+(r.notes||[]).map(ts).join('\n');
     await loadSources();
-  }catch(e){toast(tr('恢复失败：{error}',{error:e.message}),true);}
+    $('#storageResult').style.display='none';showOperationResult(r,'会话已恢复');toast(tr('会话已恢复'));
+  }catch(e){
+    const reason=/ID.*(?:已存在|exists)/i.test(e.message)?tr('该 ID 已存在。选择「创建独立副本」后重新预览，可保留原会话。'):e.message;
+    $('#restoreError').textContent=tr('恢复失败：{error}',{error:reason});toast(tr('恢复失败：{error}',{error:reason}),true);
+  }
   finally{state.transferring=false;$('#restorePackage').disabled=false;updateActions();}
 }
 
@@ -1378,6 +1534,7 @@ async function doImportWindows(){
     };
     result.appendChild(button);
     result.style.display = '';
+    showOperationResult(r,'原生会话已迁移');
     toast(tr('已迁到 {os} 对应软件',{os:targetOS}));
     await loadSources();
   }catch(e){toast(tr('导入失败：{error}',{error:e.message}),true);}
@@ -1403,6 +1560,10 @@ async function doTransfer(){
     include_thinking: $('#think').checked,
     redact_secrets: $('#redact').checked,
   };
+  // Keep the ID we send to the writer for the completion card. Older browsers
+  // can still use the writer's default ID and locate the result by file path.
+  const sessionId=globalThis.crypto?.randomUUID?.();
+  if(sessionId)payload.session_id=sessionId;
   let r;
   try{
     const token=await confirmMigration(payload);if(!token) return;
@@ -1417,6 +1578,8 @@ async function doTransfer(){
     btn.textContent = tr('迁移到目标');
     updateActions();
   }
+  if(sessionId)r.to.native_id=sessionId;
+  showOperationResult(r,'会话已迁移');
   const p = r.to.path;
   toast(tr('已迁移到 {agent}：{path}',{agent:AGENTS[r.to.source],path:p}), false, {
     label:tr('复制路径'),
@@ -1477,7 +1640,7 @@ function historyKind(kind){
           'export-windows':tr('Ubuntu → Windows 原生迁移')}[kind]||kind||'';
 }
 async function openHistory(){
-  $('#historyPanel').style.display='';
+  showPage('history');
   await refreshHistory();
 }
 async function refreshHistory(){
@@ -1532,23 +1695,32 @@ async function undoOperation(row){
   finally{state.transferring=false;updateActions();}
 }
 
-const corpusState={request:0,documentRequest:0,offset:0,job:null,busy:false,timer:null,rendered:null,selected:null,exporting:false};
+const corpusState={request:0,documentRequest:0,offset:0,job:null,busy:false,timer:null,rendered:null,selected:null,exporting:false,indexStatus:null,resultCount:null};
 async function openCorpus(){
-  $('#corpusPanel').style.display='';
+  showPage('corpus');
   for(const id of ['#indexSource','#corpusSource']){
     const selector=$(id);selector.innerHTML='<option value="">'+esc(tr('全部来源'))+'</option>';
     for(const row of state.sources){const option=document.createElement('option');option.value=row.name;option.textContent=AGENTS[row.name]||row.name;selector.appendChild(option);}
   }
   try{
     const r=await api('/api/corpus');
-    $('#corpusStatus').textContent=r.exists?tr('索引中有 {docs} 条记录；思考索引 {thinking} 条。',{docs:r.documents,thinking:r.thinking_documents}):tr('尚未建立索引，请点击更新索引。');
+    renderIndexSummary(r);
     await pollCorpusJob();
   }catch(e){toast(e.message,true);}
 }
 function corpusBusy(value){
   corpusState.busy=value;
-  $('#updateCorpus').disabled=value;$('#extractDrafts').disabled=value;
+  $('#updateCorpus').disabled=value;$('#updateCorpusQuick').disabled=value;$('#extractDrafts').disabled=value;
   $('#cancelCorpus').disabled=!value;
+}
+function renderIndexSummary(r){
+  corpusState.indexStatus=r;
+  $('#indexSummary').textContent=r.exists?tr('索引中有 {docs} 条记录；思考索引 {thinking} 条。',{docs:r.documents,thinking:r.thinking_documents})+
+    (r.file_updated_at?' '+tr('索引文件更新：{time}',{time:r.file_updated_at}):''):tr('尚未建立索引，请点击更新索引。');
+}
+function renderSearchSummary(count){
+  corpusState.resultCount=count;
+  $('#searchSummary').textContent=tr('本页 {n} 条结果；离线缓存可查看，写入需使用可用的本机原会话或会话包。',{n:count});
 }
 async function startCorpusJob(kind){
   if(corpusState.busy)return;
@@ -1585,6 +1757,10 @@ async function pollCorpusJob(){
   if(r.kind==='extract' && r.status==='completed' && corpusState.rendered!==r.id){
     renderDraftCandidates(p.candidates||[]);corpusState.rendered=r.id;
   }
+  if(r.kind==='index'&&r.status!=='running'&&workflow.indexJob!==r.id){
+    workflow.indexJob=r.id;
+    api('/api/corpus').then(renderIndexSummary).catch(e=>toast(e.message,true));
+  }
   if(r.status==='running')corpusState.timer=setTimeout(()=>pollCorpusJob().catch(e=>{corpusBusy(false);toast(e.message,true);}),650);
 }
 async function cancelCorpusJob(){
@@ -1605,6 +1781,7 @@ async function searchCorpus(offset=0){
     const r=await api(url);
     if(request!==corpusState.request)return;
     corpusState.offset=offset;$('#corpusResults').innerHTML='';$('#moreCorpus').disabled=!r.more;
+    renderSearchSummary(r.results.length);
     if(!r.results.length)$('#corpusResults').textContent=r.indexed?tr('没有匹配会话。'):tr('尚未建立索引。');
     for(const row of r.results){
       const box=document.createElement('div');box.className='session';
@@ -1626,7 +1803,7 @@ async function openCorpusDocument(key){
     const pre=document.createElement('pre');pre.style.whiteSpace='pre-wrap';
     pre.textContent=r.conversation.turns.map(t=>t.role+'\n'+t.blocks.map(b=>b.text||(b.name?b.name+'\n':'')+(b.arguments||b.output||'')).join('\n')).join('\n\n');panel.appendChild(pre);
     if(r.can_open){const button=document.createElement('button');button.className='btn';button.textContent=tr('打开本机原会话');button.onclick=async()=>{
-      state.source=r.source;await loadSessions();await openSession({id:r.sid});$('#corpusPanel').style.display='none';
+      workflow.carrying=false;state.source=r.source;buildTabs();await loadSessions();await openSession({id:r.sid});showPage('sessions');
     };panel.appendChild(button);}
   }catch(e){if(request===corpusState.documentRequest)toast(e.message,true);}
 }
@@ -1640,7 +1817,8 @@ function renderDraftCandidates(candidates){
       corpusState.selected=c.id;
       const origin=globalThis.location?.origin||'http://127.0.0.1:8745';
       $('#draftMarkdown').value=c.markdown.split('http://127.0.0.1:8745/').join(origin+'/');$('#confirmDraft').checked=false;
-      $('#draftResult').textContent='';$('#draftEditor').style.display='';updateDraftAction();
+      $('#draftResult').textContent='';$('#draftEditor').style.display='';workflow.draftPath=null;$('#storeExportedDraft').style.display='none';updateDraftAction();
+      $('#draftEditor').scrollIntoView?.({block:'start',behavior:'smooth'});
     };box.appendChild(button);
     for(const key of c.evidence){const evidence=document.createElement('button');evidence.className='btn';evidence.textContent=tr('查看证据 {key}',{key:key.slice(0,8)});evidence.onclick=()=>openCorpusDocument(key);box.appendChild(evidence);}
     $('#draftCandidates').appendChild(box);
@@ -1656,7 +1834,139 @@ async function exportDraft(){
     const r=await api('/api/export-draft',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       markdown:$('#draftMarkdown').value,directory:$('#draftDirectory').value.trim(),confirmed:true})});
     $('#draftResult').textContent=tr('草稿已导出：{path}',{path:r.path});$('#confirmDraft').checked=false;
+    workflow.draftPath=r.path;workflow.draftAgent=state.source.replace(/^(windows_|ubuntu_)/,'');$('#storeExportedDraft').style.display='';
   }catch(e){toast(e.message,true);}finally{corpusState.exporting=false;updateDraftAction();}
+}
+// Task navigation only controls presentation. Writes still use the existing
+// preview token, conflict checks and operation log on the local service.
+const workflow={page:'home',carrying:false,result:null,storageRequest:0,indexJob:null,draftPath:null,draftAgent:null};
+const taskPages={home:'#homePanel',sessions:'#sessionsPanel',storage:'#storagePanel',corpus:'#corpusPanel',
+  skills:'#skillPanel',environment:'#environmentPanel',history:'#historyPanel'};
+const taskLabels={home:'从哪里开始？',sessions:'迁移会话',storage:'跨设备搬运',corpus:'全文搜索与 Skill 草稿',
+  skills:'Skill 资产',environment:'环境与兼容',history:'操作记录'};
+const taskDescriptions={home:'选择一个任务开始。本机记录与便携包都由本地服务处理。',
+  sessions:'选择来源与会话，再设置目标。写入前会显示保留、降级和未知内容。',
+  storage:'在原设备保存，在新设备恢复。每台设备分别选择本机项目目录。',
+  corpus:'先更新索引，再全文检索。重复流程可提炼为需要人工审核的 Skill 草稿。',
+  skills:'携带完整 Skill 目录；同名不覆盖，脚本不会自动执行。',
+  environment:'配置当前设备的目录，并查看格式自检边界。',history:'查看写入记录；已被续聊修改的内容默认保留。'};
+function showPage(page,focus=true){
+  if(!taskPages[page])return;
+  workflow.page=page;
+  for(const [key,selector] of Object.entries(taskPages))$(selector).style.display=key===page?'':'none';
+  renderWorkflow();
+  if(focus)$('#pageTitle').focus?.();
+}
+function renderWorkflow(){
+  $('#pageTitle').textContent=tr(taskLabels[workflow.page]);
+  $('#pageDescription').textContent=tr(taskDescriptions[workflow.page]);
+  for(const [id,page] of Object.entries({btnHome:'home',btnSessions:'sessions',btnStorage:'storage',btnCorpus:'corpus',btnSkillStorage:'skills',btnEnvironment:'environment',btnHistory:'history'})){
+    $('#'+id).setAttribute('aria-current',workflow.page===page?'page':'false');
+  }
+  const carrying=workflow.carrying&&workflow.page==='sessions';
+  $('#migrationSetup').style.display=carrying?'none':'';
+  $('#btnGo').style.display=carrying?'none':'';
+  if(carrying)$('#btnImport').style.display='none';
+  $('#backToStorage').style.display=carrying?'':'none';
+  $('#sessionGuide').textContent=carrying?tr('1 选择会话 → 2 保存 ZIP → 3 复制到新设备'):tr('1 选择会话 → 2 设置目标与项目 → 3 预览后确认');
+  $('#taskProgress').textContent=workflow.page==='sessions'?(state.current?tr('已选会话 · 下一步检查目标'):tr('等待选择会话')):'';
+  const mode=nativeMode();
+  $('#mappingNote').textContent=mode?tr('原生接力保留记录；历史正文与工具参数中的旧路径不会自动替换。通用转换使用下方转换选项。'):
+    tr('换设备时填写本机项目目录。同机可留空沿用来源；转换不会复制账号或完整运行环境。');
+}
+function renderHome(){
+  const box=$('#sourceCards');box.innerHTML='';
+  for(const source of state.sources){
+    const card=document.createElement('div');card.className='source-card';
+    const title=document.createElement('b');title.textContent=source.label||AGENTS[source.name]||source.name;card.appendChild(title);
+    const status=document.createElement('p');status.className=source.available?'status':'missing';
+    status.textContent=source.available?tr('{n} 条会话 · {capability}',{n:source.session_count||0,capability:source.can_write?tr('可读取与写入'):tr('只读来源')}):tr('目录未发现或不可读');card.appendChild(status);
+    const note=document.createElement('p');note.textContent=ts(source.error)||ts(source.read_note)||
+      (source.available?tr('在此来源中选择会话，预览后再迁移。'):tr('没有安装此客户端可忽略；已有记录请配置实际目录。'));card.appendChild(note);
+    const button=document.createElement('button');button.className='btn';button.textContent=source.available?tr('浏览会话'):tr('配置目录');
+    button.onclick=async()=>{
+      if(source.available){workflow.carrying=false;state.source=source.name;buildTabs();showPage('sessions');await loadSessions();}
+      else{await $('#btnEnvironment').onclick();if(source.name in AGENTS)$('#deviceAgent').value=source.name;$('#deviceHome').focus?.();}
+    };card.appendChild(button);box.appendChild(card);
+  }
+}
+function generateId(selector){
+  const id=globalThis.crypto?.randomUUID?.();
+  if(!id){toast(tr('当前浏览器不能生成 UUID，请手动填写新会话 ID'),true);return null;}
+  $(selector).value=id;return id;
+}
+function selectPackage(row){
+  $('#packagePath').value=row.path;
+  $('#selectedPackage').textContent=tr('已选 {agent} · {title}；原项目：{cwd}',{agent:AGENTS[row.agent]||row.agent,title:row.session?.title||row.session?.id||tr('会话'),cwd:row.session?.cwd||tr('未知')});
+  $('#restoreError').textContent='';$('#restoreCwd').focus?.();
+}
+function bindWorkflow(){
+  $('#btnHome').onclick=()=>showPage('home');
+  $('#btnSessions').onclick=()=>{workflow.carrying=false;showPage('sessions');updateActions();};
+  $('#homeMigrate').onclick=()=>$('#btnSessions').onclick();
+  $('#homeMove').onclick=()=>$('#btnStorage').onclick();
+  $('#homeSearch').onclick=()=>openCorpus();
+  $('#homeSkills').onclick=()=>$('#btnSkillStorage').onclick();
+  $('#homeConfigure').onclick=()=>$('#btnEnvironment').onclick();
+  $('#chooseToStore').onclick=()=>{workflow.carrying=true;showPage('sessions');updateActions();};
+  $('#backToStorage').onclick=()=>$('#btnStorage').onclick();
+  $('#restoreConflict').onchange=()=>{
+    $('#restoreId').value='';
+    if($('#restoreConflict').value==='new')generateId('#restoreId');
+  };
+  $('#restoreNewId').onclick=()=>{if(generateId('#restoreId'))$('#restoreConflict').value='new';};
+  $('#packagePath').oninput=()=>{$('#selectedPackage').textContent='';$('#restoreError').textContent='';};
+  $('#updateCorpusQuick').onclick=()=>startCorpusJob('index');
+  $('#corpusQuery').onkeydown=e=>{if(e.key==='Enter')searchCorpus(0);};
+  $('#showDistill').onclick=()=>$('#draftCandidates').scrollIntoView?.({block:'start',behavior:'smooth'});
+  $('#storeExportedDraft').onclick=()=>{
+    if(!workflow.draftPath)return;
+    showPage('skills');buildSkillAgents();$('#skillAgent').value=workflow.draftAgent in AGENTS?workflow.draftAgent:'codex';
+    // Export returns a SKILL.md path. Both Windows and POSIX separators work.
+    $('#skillPath').value=workflow.draftPath.replace(/[\\/][^\\/]+$/,'');
+    $('#skillStorageRoot').value=$('#storageRoot').value;
+    $('#skillResult').textContent=tr('已选择导出的草稿目录。点击存储 Skill 生成便携包；不会安装或执行。');
+    $('#storeSkill').focus?.();refreshSkillPackages();
+  };
+  // Escape returns to the home task; native dialogs handle their own cancel.
+  document.addEventListener?.('keydown',e=>{
+    if(e.key==='Escape'&&!$('#confirmDialog').open&&!state.transferring){showPage('home');$('#btnHome').focus?.();}
+  });
+}
+function showOperationResult(result,title){
+  workflow.result={result,title};renderOperationResult();
+}
+function renderOperationResult(){
+  const box=$('#operationResult');
+  if(!workflow.result){box.style.display='none';return;}
+  box.innerHTML='';box.style.display='';
+  const {result:r,title}=workflow.result;
+  const heading=document.createElement('h2');heading.textContent=tr(title);box.appendChild(heading);
+  const info=document.createElement('details');
+  const summary=document.createElement('summary');summary.textContent=tr('查看项目、ID、文件与续聊提示');info.appendChild(summary);box.appendChild(info);
+  const details=document.createElement('p');details.textContent=tr('目标：{agent} · 项目：{cwd}\n会话 ID：{id}\n文件：{path}',{
+    agent:AGENTS[r.to.source.replace(/^(windows_|ubuntu_)/,'')]||r.to.source,cwd:r.to.cwd||tr('未知'),
+    id:r.to.native_id||r.to.id||tr('在目标列表中核对'),path:r.to.path});info.appendChild(details);
+  const note=document.createElement('p');note.textContent=tr('已写入文件。请在目标客户端核对续聊；写入成功不代表完整运行状态已恢复。')+'\n'+[...new Set([...(r.notes||[]),...(r.preview?.warnings||[])])].map(ts).join('\n');info.appendChild(note);
+  if(r.resume_command){const command=document.createElement('p');command.textContent=tr('续聊命令：{cmd}',{cmd:r.resume_command});info.appendChild(command);}
+  const actions=document.createElement('div');actions.className='result-actions';box.appendChild(actions);
+  const add=(label,fn)=>{const button=document.createElement('button');button.className='btn';button.textContent=tr(label);button.onclick=fn;actions.appendChild(button);};
+  const copy=async value=>{
+    try{if(!navigator.clipboard)throw new Error('clipboard');await navigator.clipboard.writeText(value);toast(tr('已复制'));}
+    catch(e){toast(tr('复制失败，请手动复制'),true);}
+  };
+  add('复制路径',()=>copy(r.to.path));
+  if(r.resume_command)add('复制续聊命令',()=>copy(r.resume_command));
+  add('查看目标会话',async()=>{
+    try{
+      workflow.carrying=false;state.source=r.to.source;$('#q').value=r.to.id||r.to.native_id||'';
+      buildTabs();showPage('sessions');await loadSessions();
+      const row=state.sessions.find(item=>(r.to.id&&item.id===r.to.id)||item.path?.replace(/\\/g,'/')===r.to.path.replace(/\\/g,'/'));
+      if(row)await openSession(row);else toast(tr('请在目标来源中按会话 ID 搜索'),true);
+    }catch(e){toast(tr('刷新失败：{error}',{error:e.message}),true);}
+  });
+  add('操作记录',()=>openHistory());
+  add('收起结果',()=>{workflow.result=null;renderOperationResult();});
 }
 function download(name, text){
   const b = new Blob([text], {type:'text/markdown;charset=utf-8'});

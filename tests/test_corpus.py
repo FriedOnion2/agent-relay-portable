@@ -48,6 +48,15 @@ class CorpusTests(unittest.TestCase):
         self.assertEqual(self.store.search('发布')['results'],[])
         self.assertFalse((self.root/'index').exists())
 
+    def test_status_reports_index_file_time_without_modifying_it(self):
+        self.update()
+        stamp = self.store.path.stat().st_mtime_ns
+        first = self.store.status()
+        second = self.store.status()
+        self.assertRegex(first['file_updated_at'], r'^\d{4}-\d{2}-\d{2}T')
+        self.assertEqual(first['file_updated_at'], second['file_updated_at'])
+        self.assertEqual(self.store.path.stat().st_mtime_ns, stamp)
+
     def test_chinese_short_words_mixed_filters_and_literal_verification(self):
         self.assertTrue(self.update()['ok'])
         for query in ('发','发布','发布流程','release发布','portable 发布','ready'):

@@ -6,11 +6,15 @@
 
 [中文](README.md) | **English**
 
-Browse, export, and migrate AI coding assistant conversations locally, or carry conversation and Skill archives on a portable drive and restore them on another device. AgentRelay provides a **Chinese web interface and a command-line interface** for Windows, macOS, and Ubuntu / Linux.
+Browse, export, and migrate AI coding assistant conversations locally, or carry conversation and Skill archives on a portable drive and restore them on another device. AgentRelay provides a **Chinese/English web interface and a command-line interface** for Windows, macOS, and Ubuntu / Linux.
 
 **The universal release bundles Python 3.12 and `zstandard`. Extract the complete archive and launch it: no Python or Node.js installation and no dependency downloads on first launch.** One archive contains Windows, macOS, and Linux runtimes for switching devices.
 
 The service listens only on the local machine. It does not upload conversations or call models. Python installation instructions below apply only to running the source code.
+
+The task home links to migration, moving between devices, full-text search, and Skill assets. Restore archives with an explicit local project mapping and keep the original ID or create a separate copy; completed migration results remain available when switching pages. Reviewed draft exports can be handed to Skill storage, which requires a separate explicit save. See the [web workflow guide](docs/web-workflow.md) (Chinese).
+
+![Task home](docs/images/task-home.jpg)
 
 ## Features and supported sources
 
@@ -84,9 +88,9 @@ The source Mac `.app` opens the browser after HTTP becomes ready and respects `o
 
 ## Batch conversation and Skill storage
 
-For conversations, select rows in the current source list or click **全选当前列表** (Select all in current list), then **存储所选对话** (Store selected conversations). **存储此会话** (Store this conversation) remains available in an individual preview. Use **对话存储** (Conversation storage) to choose a storage directory, inspect archives, and restore.
+For conversations, select rows in the current source list or click **全选当前列表** (Select all in current list), then **存储所选对话** (Store selected conversations). **存储此会话** (Store this conversation) remains available in an individual preview. Use **跨设备搬运** (Move between devices) to choose a storage directory, inspect archives, and restore.
 
-For Skills, open **Skill 存储** (Skill storage), choose the source agent, and click **查找 Skill** (Find Skills). Enter the actual Skill root if discovery finds nothing. Select directories or the entire current list, then click **存储所选 Skill** (Store selected Skills). You can also enter a directory directly for individual storage.
+For Skills, open **Skill 资产** (Skill assets), choose the source agent, and click **查找 Skill** (Find Skills). Enter the actual Skill root if discovery finds nothing. Select directories or the entire current list, then click **存储所选 Skill** (Store selected Skills). You can also enter a directory directly for individual storage.
 
 Select all includes only readable items in the current list. Changing the source or conversation search, or rescanning Skills, clears selections. Each item gets its own archive and success/failure result. Successful items are deselected; failed items stay selected for retry. Restore operates on one archive at a time.
 
