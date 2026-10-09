@@ -7,6 +7,7 @@
 
 ### Added
 - 插件开发体验：新增 `plugins check`（隔离进程里逐项自检，不保存配置）、第二个示例 `examples/jsonl_adapter.py` 和 [插件编写指南](docs/writing-a-plugin.md)。
+- 可用 `pipx install` / `pip install` 安装，提供 `relay` / `agent-relay` 命令；安装后的数据放在每用户目录（`RELAY_PORTABLE_ROOT` 可改），不写进 site-packages；CI 在三个系统上验证 wheel 安装。
 - 计划任务（每日格式体检、每周真实客户端兼容性）失败时自动开 / 更新带 `format-drift` 标签的 issue，客户端改了存储格式不再靠人盯 Actions 页面。
 - 会话对比：`relay diff <agent> <id> <agent2> <id2>`（API `/api/diff`）按顺序对齐正文与工具调用，迁移后核对有没有丢内容；有差异时退出码为 1。
 - 操作记录与撤销：每次写入目标软件的迁移 / 恢复都会记录新建与追加的文件；`history` 查看，`undo` 撤销（只动仍和写入时一致的文件，续聊过的会话会保留）。

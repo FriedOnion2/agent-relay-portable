@@ -17,6 +17,12 @@ from urllib.parse import urlparse, parse_qs, unquote
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(BASE_DIR, "web")
+if not os.path.isdir(WEB_DIR):                      # pip / pipx 安装：网页文件随 relay_web 包安装
+    try:
+        import relay_web
+        WEB_DIR = os.path.abspath(list(relay_web.__path__)[0])
+    except ImportError:
+        pass
 sys.path.insert(0, BASE_DIR)
 
 from relay import registry  # noqa: E402
