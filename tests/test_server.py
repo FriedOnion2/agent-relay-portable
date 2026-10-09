@@ -103,6 +103,17 @@ class HttpTests(unittest.TestCase):
                 self.assertEqual(status, 200)
                 self.assertTrue(json.loads(raw)['ok'])
 
+    def test_diff_route_compares_two_sessions_and_validates_input(self):
+        from relay import ir
+        headers = {'Content-Type':'application/json'}
+        one = ir.Conversation(turns=[ir.Turn(ir.USER, [ir.Block.text_block('hi')])])
+        two = ir.Conversation(turns=[ir.Turn(ir.USER, [ir.Block.text_block('hi there')])])
+        with patch.object(server.registry, 'read_conversation', side_effect=[one, two]):
+            status, raw = self.request('POST', '/api/diff', json.dumps({'source':'a', 'id':'1', 'source2':'b', 'id2':'2'}), headers)
+        self.assertEqual(status, 200)
+        self.assertFalse(json.loads(raw)['identical'])
+        self.assertEqual(self.request('POST', '/api/diff', json.dumps({'source':'a', 'id':'1'}), headers)[0], 400)
+
     def test_batch_route_dry_runs_by_default_and_validates_input(self):
         headers = {'Content-Type':'application/json'}
         with patch('relay.batch.run', return_value={'ok':True, 'items':[]}) as run:
