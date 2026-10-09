@@ -13,6 +13,7 @@ import contextlib
 import hashlib
 import json
 import os
+import stat
 import threading
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
@@ -42,7 +43,15 @@ def _scan(roots: Iterable[str]):
     dirs = set()
     complete = True
     for root in roots:
-        if not root or not os.path.isdir(root):
+        if not root:
+            continue
+        try:
+            if not stat.S_ISDIR(os.stat(root).st_mode):
+                continue
+        except FileNotFoundError:
+            continue  # A missing destination can legitimately be created by the write.
+        except OSError:
+            complete = False
             continue
         stack = [os.path.abspath(root)]
         while stack:
@@ -60,8 +69,10 @@ def _scan(roots: Iterable[str]):
                                 info = entry.stat(follow_symlinks=False)
                                 files[entry.path] = (info.st_size, info.st_mtime_ns)
                         except OSError:
+                            complete = False
                             continue
             except OSError:
+                complete = False
                 continue
             if len(files) > MAX_FILES_SCANNED:
                 return files, dirs, False
@@ -147,7 +158,7 @@ def _finish(record, before_files, before_dirs, complete, roots, status, error):
         if not record["undoable"]:
             reasons = []
             if not (complete and after_complete):
-                reasons.append("目标目录文件过多，未跟踪文件变化")
+                reasons.append("目标目录扫描不完整（读取失败或文件过多），无法安全撤销")
             if len(created) > MAX_RECORDED or len(appended) > MAX_RECORDED:
                 reasons.append("变化的文件过多")
             if other:
