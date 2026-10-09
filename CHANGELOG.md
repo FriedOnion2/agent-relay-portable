@@ -6,15 +6,16 @@
 ## [Unreleased]
 
 ### Added
+- 批量迁移：`relay batch`（API `/api/batch`）按条件或 ID 列表批量转换，默认只预演，`--yes` 才写入；目标 ID 确定性派生，重复执行自动识别已迁移的会话（`--on-conflict skip|new|fail`），单条失败不拖垮整批，输出逐条进度与汇总。
 - 敏感信息扫描：预览会提示会话里疑似的 API 密钥、令牌、私钥和口令（只显示类型、位置和长度）；`relay scan` 单独扫描；迁移与导出支持 `--redact-secrets`（API：`redact_secrets`），写入时替换为 `[REDACTED:类型]`。
-- 操作记录与撤销：每次写入目标软件的迁移 / 恢复都会记录新建与追加的文件；`history` 查看，`undo` 撤销（只动仍和写入时一致的文件，续聊过的会话会保留）。
-- 网页界面支持中文 / English 切换（右上角按钮；记住选择，按浏览器语言自动选择，`?lang=en` 可强制）。服务端返回的已知提示一并翻译，未收录的保持原文。
-- 页面内迁移保真度预览对话框。
-- 真实客户端冒烟测试（Codex / DSH）在 Linux、macOS、Windows 上每周运行，并生成支持表。
 - CI 增加 mypy 类型检查与覆盖率统计（下限 75%），ruff 规则加入 bugbear 等。
 - `relay --version`；推送 `v*` tag 自动构建并发布 Release，说明取自本文件，附构建来源证明。
 - LICENSE（MIT）、SECURITY、CONTRIBUTING、CODE_OF_CONDUCT、CODEOWNERS、issue / PR 模板。
 - ruff、CodeQL、Dependabot。
+- 操作记录与撤销：每次写入目标软件的迁移 / 恢复都会记录新建与追加的文件；`history` 查看，`undo` 撤销（只动仍和写入时一致的文件，续聊过的会话会保留）。
+- 网页界面支持中文 / English 切换（右上角按钮；记住选择，按浏览器语言自动选择，`?lang=en` 可强制）。服务端返回的已知提示一并翻译，未收录的保持原文。
+- 页面内迁移保真度预览对话框。
+- 真实客户端冒烟测试（Codex / DSH）在 Linux、macOS、Windows 上每周运行，并生成支持表。
 
 ### Fixed
 - 迁移到 Codex 的会话在真实 Codex 中重建出完整 items（session_meta 补 `history_mode: paginated`）。
@@ -33,8 +34,11 @@
 - WorkBuddy 空工具返回被当成非空 JSON 的读取问题；目录枚举权限错误明确报告，不再误判为删除。
 
 ## [0.4.0-dev.1] - 2026-10-07
+
 ## [0.3.0-dev.1] - 2026-10-07
+
 ## [0.2.0-dev.2] - 2026-10-07
+
 ## [0.2.0-dev.1] - 2026-10-07
 
 早期开发版本，详见对应的 Release 页面。
