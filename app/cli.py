@@ -241,6 +241,8 @@ def cmd_diff(args):
             print("数量差（B−A）：" + "，".join("%s %+d" % kv for kv in delta.items()))
         print("两份会话内容一致。" if res["identical"] else "存在差异。")
     if not res["identical"]:
+        sys.exit(1)
+
 
 def cmd_scan(args):
     from relay import sensitive
