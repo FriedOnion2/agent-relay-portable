@@ -25,7 +25,7 @@ jobs:
       mode: ${{ steps.meta.outputs.mode }}
       label: ${{ steps.meta.outputs.label }}
       ref: ${{ steps.refs.outputs.ref }}
-      sha: ${{ steps.refs.outputs.sha }}
+      sha: ${{ steps.meta.outputs.sha }}
     steps:
       - id: refs
         run: |

@@ -162,6 +162,8 @@ def smoke(binary):
                     if actual is None:
                         time.sleep(.1)
                 assert actual, 'Packaged HTTP server did not start'
+                with opener.open('http://127.0.0.1:%d/static/workflow.css' % actual, timeout=5) as response:
+                    assert b'.task-panel' in response.read(), 'Packaged task stylesheet missing'
                 request = urllib.request.Request('http://127.0.0.1:%d/api/shutdown' % actual, data=b'{}',
                                                  headers={'Content-Type': 'application/json'})
                 with opener.open(request, timeout=5) as response:
