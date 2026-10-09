@@ -10,15 +10,45 @@
 - **Actions**：外部贡献者的工作流需维护者批准；默认 `GITHUB_TOKEN` 权限设为只读。
 - **元信息**：补 topics（例如 `ai-agents`、`claude-code`、`codex`、`conversation-export`）与简介链接。
 
-## 发布流程
+## 版本号与发布规则
 
-1. 把 `app/relay/__init__.py` 的 `__version__` 改为新版本（如 `0.5.0`、`0.5.0-dev.1`），在 `CHANGELOG.md` 中把 `[Unreleased]` 的内容移到 `## [0.5.0] - YYYY-MM-DD`，合并到 `main`。
-2. 在 `main` 上打 tag 并推送：`git tag v0.5.0 && git push origin v0.5.0`。
-3. `Build and publish release` 工作流自动运行：校验 tag 与 `__version__`、CHANGELOG 一致 → 四平台构建与测试 → 组装总包并在四类设备上验证 → 生成构建来源证明 → 创建 Release（版本号含 `-` 的标为 Pre-release；说明取自 CHANGELOG 与 `.github/release-notes-template.md`）。
-4. 工作流失败时 tag 不会产生 Release；修复后删除并重打 tag，或在 Actions 里手动运行并填入 tag。
-5. 发布后核对 Release 页面，并用 `gh attestation verify` 抽查总包。
+只有两种对外产物，没有第三种：
 
-本地预览说明：`python3 scripts/release_notes.py --tag v0.5.0 --output /tmp/notes.md`。
+| 产物 | 触发 | GitHub 上的形态 | 版本标签 |
+|---|---|---|---|
+| **滚动开发版** | 每次合并到 `main`（只改文档的合并除外），或手动运行工作流且不填 tag | 固定 tag `dev`，标为 Pre-release；每次构建**先全平台验证通过，再删除旧的、创建新的**，所以始终只有一个 | 文件名里带 `v<下一版本>-dev.<提交短哈希>`，例如 `AgentRelay-v0.5.0-dev.1a2b3c4-universal.zip` |
+| **正式版** | 推送 `vX.Y.Z` tag | 普通 Release，标为 Latest | `vX.Y.Z` |
+
+不再创建 `v0.5.0-dev.1` 这类带序号的预发布 tag：工作流会拒绝非 `vX.Y.Z` 的 tag。
+
+### 版本号
+
+- 遵循语义化版本，当前处于 `0.x`：**新功能或不兼容的调整升 MINOR**（0.5.0 → 0.6.0），**只修问题升 PATCH**（0.5.0 → 0.5.1）。`1.0.0` 在接口与存储格式稳定后再定。
+- `main` 上的 `app/relay/__init__.py` 的 `__version__` 始终是**下一个计划版本加 `-dev`**，如 `0.5.0-dev`（有测试守着）。开发版用它命名；`CHANGELOG.md` 的 `[Unreleased]` 段就是开发版的更新说明。
+- 刚发完 `0.5.0` 后，下一个 PR 把 `__version__` 改成 `0.5.1-dev` 或 `0.6.0-dev`，按预期的下一版选。
+- 正式版的 `__version__` 不带 `-dev`，必须与 tag 一致，并在 `CHANGELOG.md` 里有对应的 `## [X.Y.Z] - 日期` 段。
+
+### 发正式版
+
+1. 开一个只做发布的 PR：`__version__` 改为 `X.Y.Z`；`CHANGELOG.md` 把 `[Unreleased]` 的内容移到 `## [X.Y.Z] - YYYY-MM-DD`（并留一个空的 `[Unreleased]`）；同步 README / `docs/install.md` 里的版本提示。合并到 `main`。
+2. 在 `main` 上打 tag 并推送：`git tag vX.Y.Z && git push origin vX.Y.Z`。
+3. 紧接着再开一个 PR，把 `__version__` 改回下一个 `-dev`。
+4. `Build and publish release` 工作流自动运行：校验 tag 为 `vX.Y.Z` 且与 `__version__`、CHANGELOG 一致 → 四平台构建与测试 → 组装总包并在四类设备上验证 → 生成构建来源证明 → 创建 Release（说明取自 CHANGELOG 与 `.github/release-notes-template.md`）。
+5. 失败时不会产生 Release；修复后删除并重打 tag，或在 Actions 里手动运行并填入 tag。
+6. 发布后核对 Release 页面，并用 `gh attestation verify` 抽查总包。
+
+### 滚动开发版
+
+- 不需要任何手动操作；合并到 `main` 后约半小时内更新。说明取自 `[Unreleased]` 与 `.github/release-notes-dev-template.md`，并标明对应提交。
+- 构建失败或某个平台验证失败时，上一个开发版保持不变。
+- 想立即重建：Actions → `Build and publish release` → Run workflow，不填 tag。
+
+本地预览说明：
+
+```sh
+python3 scripts/release_notes.py --tag v0.5.0 --output /tmp/notes.md      # 正式版
+python3 scripts/release_notes.py --sha "$(git rev-parse HEAD)" --output /tmp/notes.md   # 开发版
+```
 
 ## 日常
 

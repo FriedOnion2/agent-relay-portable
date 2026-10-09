@@ -4,7 +4,7 @@ Release 总包与源码两种启动方式、端口与退出说明。回到 [READ
 
 ## Release 下载即用
 
-当前开发预览版：**v0.4.0-dev.2** · [下载三系统总包](https://github.com/FriedOnion2/agent-relay-portable/releases/download/v0.4.0-dev.2/AgentRelay-v0.4.0-dev.2-universal.zip) · [发布说明与校验文件](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v0.4.0-dev.2)
+正式版：暂未发布（发布后在 [Releases](https://github.com/FriedOnion2/agent-relay-portable/releases/latest) 的 Latest）。**滚动开发版**：[`dev`](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/dev)（每次合并到 `main` 自动更新，始终只有这一个，可能不稳定）。
 
 普通用户下载 [GitHub Releases](https://github.com/FriedOnion2/agent-relay-portable/releases) 中的
 **`AgentRelay-<版本>-universal.zip`**，完整解压后按当前设备运行启动器。一个总包同时包含
@@ -25,7 +25,7 @@ Mac 应用未经过 Apple 公证。如被系统阻止，在可信解压目录运
 本机缓存分别位于 `%LOCALAPPDATA%/AgentRelay/<版本>/`、`~/Library/Caches/AgentRelay/<版本>/`、
 `~/.cache/agentrelay/<版本>/`（Linux 尊重 `XDG_CACHE_HOME`）。如运行库解压中断，删除该版本缓存后重试。
 Release 包只包含运行文件、启动入口、配置示例和「开始使用.txt」，不附带测试、开发资料、格式调研或个人数据。
-开发预览版在 GitHub 标为 Pre-release；`SHA256SUMS.txt` 可用于验证下载的总包。
+滚动开发版在 GitHub 标为 Pre-release，文件名带 `-dev.<提交哈希>`；正式版文件名是 `vX.Y.Z`；`SHA256SUMS.txt` 可用于验证下载的总包。
 
 ## 源码启动
 
