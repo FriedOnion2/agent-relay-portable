@@ -46,10 +46,6 @@ def _content_to_text(items: Any) -> str:
     return ""
 
 
-_ASSISTANT_ITEMS = ("agent_message", "function_call", "function_call_output", "custom_tool_call",
-                    "custom_tool_call_output", "web_search_call")
-
-
 class CodexAdapter(BaseAdapter):
     name = "codex"
     label = "OpenAI Codex"
@@ -110,27 +106,13 @@ class CodexAdapter(BaseAdapter):
             elif rt == "turn_context":
                 cwd = cwd or pl.get("cwd") or ""
             elif rt == "response_item":
-                ptype = pl.get("type")
-                if ptype == "message":
-                    role = pl.get("role")
-                    if role == ir.USER:
-                        t = _content_to_text(pl.get("content"))
-                        if self.clean:
-                            t = strip_scaffolding(t)
-                        if t and not looks_like_system_prompt(t):
-                            turns += 1
-                            last_role = ir.USER
-                            if not first_user:
-                                first_user = ir.summarize_line(t, 60)
-                    elif role == ir.ASSISTANT and _content_to_text(pl.get("content")):
-                        if last_role != ir.ASSISTANT:
-                            turns += 1
-                        last_role = ir.ASSISTANT
-                elif ptype in _ASSISTANT_ITEMS:
-                    # 与 _parse 一致：连续的助手内容（含工具往返）合并为一轮
-                    if last_role != ir.ASSISTANT:
+                role, blocks = self._response_blocks(pl)
+                if blocks:
+                    if role == ir.USER or last_role != ir.ASSISTANT:
                         turns += 1
-                    last_role = ir.ASSISTANT
+                    last_role = role
+                    if role == ir.USER and not first_user:
+                        first_user = ir.summarize_line(blocks[0].text, 60)
             if ts is not None:
                 created_ms = ts if created_ms is None else min(created_ms, ts)
                 updated_ms = ts if updated_ms is None else max(updated_ms, ts)
@@ -145,6 +127,42 @@ class CodexAdapter(BaseAdapter):
         )
 
     # ---------------- 读取 ----------------
+
+    def _response_blocks(self, payload):
+        """Use the same retained-content rules for discovery and reading."""
+        kind = payload.get("type")
+        role = ir.ASSISTANT
+
+        def text(value):
+            result = _content_to_text(value)
+            return strip_scaffolding(result) if self.clean else result
+
+        if kind == "message":
+            if payload.get("role") in (ir.SYSTEM, "developer"):
+                return role, []
+            value = text(payload.get("content"))
+            if payload.get("role") == ir.USER:
+                role = ir.USER
+                if looks_like_system_prompt(value):
+                    value = ""
+            return role, [ir.Block.text_block(value)] if value else []
+        if kind == "agent_message":
+            value = text(payload.get("content"))
+            author, recipient = payload.get("author") or "", payload.get("recipient") or ""
+            return role, [ir.Block.text_block(f"[{author} → {recipient}] {value}")] if value else []
+        if kind == "reasoning":
+            value = text(payload.get("summary") or payload.get("content") or [])
+            return role, [ir.Block.thinking_block(value)] if value else []
+        if kind in ("function_call", "custom_tool_call"):
+            args = (payload.get("arguments") or "{}") if kind == "function_call" else (payload.get("input") or "")
+            return role, [ir.Block.tool_call(payload.get("call_id") or payload.get("id") or "",
+                                             payload.get("name") or "unknown", args)]
+        if kind in ("function_call_output", "custom_tool_call_output"):
+            return role, [ir.Block.tool_result(payload.get("call_id") or "", text(payload.get("output")) or "", False)]
+        if kind == "web_search_call":
+            return role, [ir.Block.tool_call(payload.get("call_id") or payload.get("id") or "", "WebSearch",
+                                             json.dumps(payload.get("action") or {}, ensure_ascii=False))]
+        return role, []
 
     def read(self, sid: str) -> ir.Conversation:
         path = self.find_path(sid)
@@ -196,87 +214,17 @@ class CodexAdapter(BaseAdapter):
                     conv.model = pl["model"]
 
             elif rt == "response_item":
-                ptype = pl.get("type")
-                if ptype == "message":
-                    role = pl.get("role")
-                    text = _content_to_text(pl.get("content"))
-                    if role == ir.SYSTEM or role == "developer":
-                        # 目标 agent 会自己注入系统提示，源侧的丢弃
-                        continue
-                    if not text:
-                        continue
-                    if self.clean:
-                        text = strip_scaffolding(text)
-                    if not text:
-                        continue
+                role, blocks = self._response_blocks(pl)
+                if blocks:
                     if role == ir.USER:
-                        if looks_like_system_prompt(text):
-                            continue
                         flush()
-                        conv.turns.append(ir.Turn(role=ir.USER, blocks=[ir.Block.text_block(text)],
-                                                  ts=iso(ts), source_type="response_item/message"))
+                        conv.turns.append(ir.Turn(role=role, blocks=blocks, ts=iso(ts),
+                                                  source_type="response_item/message"))
                     else:
                         ensure_assistant(ts)
-                        pending_assistant.blocks.append(ir.Block.text_block(text))
-
-                elif ptype == "agent_message":
-                    # 子 agent 之间的消息，降级为带标注的文本
-                    text = _content_to_text(pl.get("content"))
-                    if self.clean:
-                        text = strip_scaffolding(text)
-                    if text:
-                        ensure_assistant(ts)
-                        author = pl.get("author") or ""
-                        to = pl.get("recipient") or ""
-                        pending_assistant.blocks.append(ir.Block.text_block(
-                            f"[{author} → {to}] {text}"))
-
-                elif ptype == "reasoning":
-                    # encrypted_content 解不开，只保留 summary
-                    text = _content_to_text(pl.get("summary") or pl.get("content") or [])
-                    if self.clean:
-                        text = strip_scaffolding(text)
-                    if text:
-                        ensure_assistant(ts)
-                        pending_assistant.blocks.append(ir.Block.thinking_block(text))
-                    elif pl.get("encrypted_content"):
-                        conv.meta["encrypted_reasoning"] = conv.meta.get("encrypted_reasoning", 0) + 1
-
-                elif ptype == "function_call":
-                    cid = pl.get("call_id") or pl.get("id") or ""
-                    ensure_assistant(ts)
-                    pending_assistant.blocks.append(
-                        ir.Block.tool_call(cid, pl.get("name") or "unknown",
-                                           pl.get("arguments") or "{}"))
-
-                elif ptype == "function_call_output":
-                    ensure_assistant(ts)
-                    out = _content_to_text(pl.get("output"))
-                    if self.clean:
-                        out = strip_scaffolding(out)
-                    pending_assistant.blocks.append(
-                        ir.Block.tool_result(pl.get("call_id") or "", out or "", False))
-
-                elif ptype == "custom_tool_call":
-                    cid = pl.get("call_id") or pl.get("id") or ""
-                    ensure_assistant(ts)
-                    pending_assistant.blocks.append(
-                        ir.Block.tool_call(cid, pl.get("name") or "unknown",
-                                           pl.get("input") or ""))
-
-                elif ptype == "custom_tool_call_output":
-                    ensure_assistant(ts)
-                    out = _content_to_text(pl.get("output"))
-                    if self.clean:
-                        out = strip_scaffolding(out)
-                    pending_assistant.blocks.append(
-                        ir.Block.tool_result(pl.get("call_id") or "", out or "", False))
-
-                elif ptype == "web_search_call":
-                    ensure_assistant(ts)
-                    pending_assistant.blocks.append(
-                        ir.Block.tool_call(pl.get("call_id") or pl.get("id") or "",
-                                           "WebSearch", json.dumps(pl.get("action") or {}, ensure_ascii=False)))
+                        pending_assistant.blocks.extend(blocks)
+                elif pl.get("type") == "reasoning" and pl.get("encrypted_content"):
+                    conv.meta["encrypted_reasoning"] = conv.meta.get("encrypted_reasoning", 0) + 1
 
             # event_msg / token_usage_record 与迁移无关，忽略
 
@@ -343,6 +291,8 @@ class CodexAdapter(BaseAdapter):
         # 只有 response_item 时 thread/read 读不到任何 turn。
         current_turn: Optional[str] = None
         last_ts = base
+        turn_items: List[Any] = []
+        pending_tools: Dict[str, List[Dict[str, Any]]] = {}
 
         def open_turn(ts_ms: int) -> str:
             tid = uuid7(ts_ms)
@@ -365,15 +315,34 @@ class CodexAdapter(BaseAdapter):
         def close_turn(ts_ms: int, last_message: Optional[str]) -> None:
             nonlocal current_turn
             if current_turn:
+                # Completed history items retain call order even if their results
+                # arrive later. They are display records, never live tool requests.
+                for item_ts, item in turn_items:
+                    emit(item_ts, "event_msg", {"type": "item_completed", "thread_id": sid,
+                                                "turn_id": current_turn, "item": item,
+                                                "started_at_ms": item_ts, "completed_at_ms": ts_ms})
                 emit(ts_ms, "event_msg", {"type": "task_complete", "turn_id": current_turn,
                                           "last_agent_message": last_message,
                                           "started_at": ts_ms // 1000, "completed_at": ts_ms // 1000})
                 current_turn = None
+                turn_items.clear()
+                pending_tools.clear()
 
         def item_completed(ts_ms: int, item: Dict[str, Any]) -> None:
-            emit(ts_ms, "event_msg", {"type": "item_completed", "thread_id": sid,
-                                      "turn_id": current_turn, "item": item,
-                                      "started_at_ms": ts_ms, "completed_at_ms": ts_ms})
+            turn_items.append((ts_ms, item))
+
+        def tool_history(ts_ms, name, arguments):
+            # Generic imported history avoids claiming a foreign tool is a
+            # native Codex command, file edit or installed executable tool.
+            try:
+                arguments = json.loads(arguments)
+            except (ValueError, TypeError):
+                pass
+            item = {"type": "DynamicToolCall", "id": uuid7(ts_ms), "namespace": "agent_relay_import",
+                    "tool": name, "arguments": arguments, "status": "completed",
+                    "content_items": None, "success": None}
+            item_completed(ts_ms, item)
+            return item
 
         last_assistant_text: Optional[str] = None
 
@@ -414,6 +383,8 @@ class CodexAdapter(BaseAdapter):
                                     "encrypted_content": None},
                     }, ensure_ascii=False))
                     ordinal += 1
+                    item_completed(ts_b, {"type": "Reasoning", "id": uuid7(ts_b),
+                                          "summary_text": [b.text], "raw_content": []})
                 elif b.kind == ir.TEXT:
                     lines.append(json.dumps({
                         "timestamp": iso(ts_b), "ordinal": ordinal, "type": "response_item",
@@ -437,6 +408,9 @@ class CodexAdapter(BaseAdapter):
                                     "call_id": b.call_id or f"call_{uuid7(ts_b)}"},
                     }, ensure_ascii=False))
                     ordinal += 1
+                    item = tool_history(ts_b, name, b.arguments or "{}")
+                    if b.call_id:
+                        pending_tools.setdefault(b.call_id, []).append(item)
                 elif b.kind == ir.TOOL_RESULT:
                     lines.append(json.dumps({
                         "timestamp": iso(ts_b), "ordinal": ordinal, "type": "response_item",
@@ -445,12 +419,48 @@ class CodexAdapter(BaseAdapter):
                                     "call_id": b.call_id, "output": b.output or ""},
                     }, ensure_ascii=False))
                     ordinal += 1
+                    waiting = pending_tools.get(b.call_id)
+                    item = waiting.pop(0) if waiting else tool_history(
+                        ts_b, "unpaired_result", json.dumps({"call_id": b.call_id}))
+                    item.update(status="failed" if b.is_error else "completed", success=not b.is_error,
+                                content_items=[{"type": "inputText", "text": b.output or ""}])
 
         close_turn(last_ts, last_assistant_text)
-        atomic_write(out_path, lines, overwrite=False)
-        if conv.title:
-            # Codex 的会话名放在 session_index.jsonl（thread_name）；追加一行，不改动已有记录
-            with open(self.index_path, "a", encoding="utf-8") as fh:
-                fh.write(json.dumps({"id": sid, "thread_name": conv.title, "updated_at": iso(base)},
-                                    ensure_ascii=False) + "\n")
+        self._publish(out_path, lines, sid, conv.title, base)
         return out_path
+
+    def _publish(self, out_path, lines, sid, title, timestamp):
+        if not title:
+            atomic_write(out_path, lines, overwrite=False)
+            return
+        # Use the native-import publication lock too: Relay imports must not
+        # race with one another while updating the shared title index.
+        os.makedirs(self.root, exist_ok=True)
+        lock = os.path.join(self.root, ".relay-import.publish-lock")
+        with open(lock, "x"):
+            pass
+        try:
+            original = b""
+            if os.path.exists(self.index_path):
+                with open(self.index_path, "rb") as handle:
+                    original = handle.read(MAX_SCAN_BYTES + 1)
+                if len(original) > MAX_SCAN_BYTES:
+                    raise ValueError("目标 Codex 标题索引过大，已停止迁移")
+            entry = json.dumps({"id": sid, "thread_name": title, "updated_at": iso(timestamp)},
+                               ensure_ascii=False).encode("utf-8") + b"\n"
+            separator = b"\n" if original and not original.endswith(b"\n") else b""
+            atomic_write(out_path, lines, overwrite=False)
+            try:
+                # External Codex processes do not take Relay's lock.
+                current = b""
+                if os.path.exists(self.index_path):
+                    with open(self.index_path, "rb") as handle:
+                        current = handle.read(MAX_SCAN_BYTES + 1)
+                if current != original:
+                    raise ValueError("Codex 标题索引正在变化，请关闭软件后重试")
+                atomic_write(self.index_path, [original, separator, entry], encoding=None)
+            except BaseException:
+                os.unlink(out_path)
+                raise
+        finally:
+            os.unlink(lock)
