@@ -51,7 +51,7 @@ jobs:
   client-gate:
     needs: meta
     if: needs.meta.outputs.mode == 'stable'
-    uses: ./.github/workflows/real-clients.yml
+    uses: ./.github/workflows/native-roundtrip.yml
   build:
     needs: meta
     strategy:

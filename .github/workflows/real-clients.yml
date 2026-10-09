@@ -6,77 +6,14 @@ on:
   schedule:
     - cron: '0 5 * * 1'
   workflow_dispatch:
-  workflow_call:
   push:
     branches: [main]
     paths: ['app/relay/adapters/codex.py', 'app/relay/adapters/dsh*.py', 'scripts/smoke_*.py', 'tests/dsh_native_smoke.mjs', '.github/workflows/real-clients.yml']
 permissions:
   contents: read
 jobs:
-  windows-source:
-    name: Native round trip - Windows source
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-      - run: npm install -g @openai/codex
-      - run: python scripts/smoke_cross_device.py --phase windows-source --output outgoing
-      - uses: actions/upload-artifact@v6
-        with:
-          name: native-windows-source
-          path: outgoing/
-          if-no-files-found: error
-  ubuntu-restore:
-    name: Native round trip - Ubuntu restore and continue
-    needs: windows-source
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-      - run: npm install -g @openai/codex
-      - uses: actions/download-artifact@v7
-        with:
-          name: native-windows-source
-          path: incoming
-      - run: python scripts/smoke_cross_device.py --phase ubuntu --input incoming --output outgoing
-      - uses: actions/upload-artifact@v6
-        with:
-          name: native-ubuntu-return
-          path: outgoing/
-          if-no-files-found: error
-  windows-return:
-    name: Native round trip - Windows return and continue
-    needs: ubuntu-restore
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-      - run: npm install -g @openai/codex
-      - uses: actions/download-artifact@v7
-        with:
-          name: native-ubuntu-return
-          path: incoming
-      - run: python scripts/smoke_cross_device.py --phase windows-return --input incoming --output outgoing
-      - uses: actions/upload-artifact@v6
-        with:
-          name: native-windows-return
-          path: outgoing/
-          if-no-files-found: error
+  roundtrip:
+    uses: ./.github/workflows/native-roundtrip.yml
   smoke:
     name: smoke (${{ matrix.os_name }})
     runs-on: ${{ matrix.runner }}
