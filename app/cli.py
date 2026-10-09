@@ -279,6 +279,35 @@ def cmd_serve(args):
         open_browser=not args.no_browser and bootstrap.effective_open_browser(_CFG))
 
 
+def cmd_history(args):
+    from relay import oplog
+    rows = oplog.list_operations(args.limit)
+    if args.json:
+        _print_json({"ok": True, "operations": rows})
+        return
+    if not rows:
+        print("还没有操作记录。")
+        return
+    for row in rows:
+        state = "已撤销" if row["undone"] else ("失败" if row["status"] == "failed" else "完成")
+        flag = "可撤销" if row["undoable"] else ("—" if row["undone"] else "不可撤销")
+        print(f"{row['id']}  {row['time']}  {row['kind']:<15} {row['source'] or ''} → {row['target'] or ''}  [{state}/{flag}]")
+        print(f"    {row['title'] or row['session'] or ''}  {row['path'] or ''}")
+
+
+def cmd_undo(args):
+    from relay import oplog
+    result = oplog.undo(args.id, force=args.force)
+    if args.json:
+        _print_json(result)
+        return
+    print(f"✓ 已撤销 {args.id}：删除 {len(result['removed'])} 个文件，截回 {len(result['truncated'])} 个索引文件")
+    for row in result["kept"]:
+        print(f"  ⚠ 保留 {row['path']}：{row['reason']}")
+    if not result["complete"]:
+        print("  有文件被保留；确认可以丢弃后可加 --force 重试。")
+
+
 def cmd_doctor(args):
     """换机器后先跑这个：看 Python 找没找到、各个来源的目录在哪。"""
     code = bootstrap.print_report(_CFG)
@@ -448,6 +477,17 @@ def build_parser():
     p5.add_argument('--dry-run', action='store_true', help='只预览保真度，不写入文件')
     p5.add_argument('--preview-token', help='执行已确认的预览；内容变化则拒绝')
     p5.set_defaults(func=cmd_transfer)
+
+    history = sub.add_parser("history", help="查看写入目标软件的操作记录")
+    history.add_argument("--limit", type=int, default=20)
+    history.add_argument("--json", action="store_true")
+    history.set_defaults(func=cmd_history)
+
+    undo = sub.add_parser("undo", help="撤销一次迁移 / 恢复：删除新建文件、截回被追加的索引；写入后被改动的文件会保留")
+    undo.add_argument("id", help="history 中显示的操作 ID")
+    undo.add_argument("--force", action="store_true", help="连同写入后又被修改的新建文件一起删除")
+    undo.add_argument("--json", action="store_true")
+    undo.set_defaults(func=cmd_undo)
 
     p6 = sub.add_parser("doctor", help="环境体检（换机器后先跑这个）")
     p6.set_defaults(func=cmd_doctor)
