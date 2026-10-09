@@ -50,6 +50,30 @@ class PluginTests(unittest.TestCase):
         plugins.disable('sample')
         self.assertNotIn('sample',registry.all_keys())
 
+    def test_check_reports_each_step_without_saving_anything(self):
+        result=plugins.check('sample',self.path)
+        self.assertTrue(result['ok'],result)
+        self.assertTrue(any('read(one)' in row['check'] and row['ok'] for row in result['checks']))
+        self.assertNotIn('sample',plugins.entries)
+        self.assertEqual(device.read().get('plugins',[]),[])
+
+    def test_check_flags_bad_names_missing_files_and_broken_plugins(self):
+        self.assertFalse(plugins.check('Bad Name',self.path)['ok'])
+        self.assertFalse(plugins.check('claude',self.path)['ok'])
+        self.assertFalse(plugins.check('sample',self.root/'missing.py')['ok'])
+        duplicate=PLUGIN.replace('        yield SessionInfo(self.name, "one", "Sample", "", "", None, None, 0, 1, "fixture")',
+            '        for _ in range(2):\n            yield SessionInfo(self.name, "one", "Sample", "", "", None, None, 0, 1, "fixture")')
+        self.path.write_text(duplicate,encoding='utf-8')
+        failed=[row['check'] for row in plugins.check('sample',self.path)['checks'] if not row['ok']]
+        self.assertEqual(failed,['会话 ID 唯一'])
+        self.path.write_text(PLUGIN.replace('turns=[ir.Turn(ir.USER, [ir.Block.text_block("plugin fixture")])]','turns=[]'),encoding='utf-8')
+        self.assertFalse(plugins.check('sample',self.path)['ok'])
+        self.path.write_text(PLUGIN+'\nraise RuntimeError("boom")\n',encoding='utf-8')
+        broken=plugins.check('sample',self.path)
+        self.assertFalse(broken['ok'])
+        self.assertIn('boom',broken['checks'][-1]['detail'])
+        self.assertNotIn('sample',plugins.entries)
+
     def test_changed_bytes_and_api_mismatch_refuse_execution(self):
         plugins.enable('sample',self.path)
         self.path.write_text(PLUGIN+'\nraise RuntimeError("must not execute changed code")\n',encoding='utf-8')
@@ -83,3 +107,44 @@ class PluginTests(unittest.TestCase):
             self.assertEqual(len(device.merge({})['plugins']),1)
         with patch.object(device,'identity',return_value='device-b'):
             self.assertEqual(device.merge({})['plugins'],[])
+
+
+class ShippedExampleTests(unittest.TestCase):
+    """The example adapters are documentation: keep them loadable, correct and passing `plugins check`."""
+
+    EXAMPLES = Path(__file__).resolve().parents[1] / 'examples'
+
+    def load(self, filename):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('example_' + filename[:-3], self.EXAMPLES / filename)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.Adapter()
+
+    def test_examples_read_a_synthetic_sample_and_export_markdown(self):
+        from relay.adapters.markdown import render
+        samples = {'jsonl_adapter.py': ('chat.jsonl', '{"role":"user","content":"hi"}\n{"role":"assistant","content":"hello"}\n'),
+                   'plaintext_adapter.py': ('note.txt', 'plain text')}
+        for filename, (name, content) in samples.items():
+            with tempfile.TemporaryDirectory() as folder:
+                adapter = self.load(filename)
+                adapter.home = folder
+                (Path(folder) / name).write_text(content, encoding='utf-8')
+                rows = list(adapter.discover())
+                self.assertEqual([row.id for row in rows], [name])
+                self.assertIn(content[:2] if filename.startswith('plain') else 'hello', render(adapter.read(name)))
+
+    def test_examples_pass_the_contract_self_check(self):
+        for name, filename in (('jsonl', 'jsonl_adapter.py'), ('plaintext', 'plaintext_adapter.py')):
+            result = plugins.check(name, self.EXAMPLES / filename)
+            self.assertTrue(result['ok'], result)
+
+    def test_jsonl_example_names_the_bad_line_and_rejects_paths(self):
+        with tempfile.TemporaryDirectory() as folder:
+            adapter = self.load('jsonl_adapter.py')
+            adapter.home = folder
+            (Path(folder) / 'bad.jsonl').write_text('{"role":"user","content":"ok"}\nnot json\n', encoding='utf-8')
+            with self.assertRaisesRegex(ValueError, '第 2 行'):
+                adapter.read('bad.jsonl')
+            with self.assertRaisesRegex(ValueError, '.jsonl'):
+                adapter.read('../etc/passwd')

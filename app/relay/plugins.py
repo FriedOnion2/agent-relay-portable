@@ -76,6 +76,61 @@ def enable(name, path):
     return info
 
 
+def check(name, path, sample=3):
+    """开发插件时的自检：不保存任何配置，只在隔离进程里跑一遍接口并报告每一项。"""
+    from .adapters.markdown import render as render_markdown
+    checks = []
+
+    def record(label, ok, detail=''):
+        checks.append({'check': label, 'ok': bool(ok), 'detail': str(detail)})
+        return ok
+
+    path = Path(path).expanduser().resolve()
+    if not record('名称格式', isinstance(name, str) and re.fullmatch(r'[a-z][a-z0-9_-]{0,47}', name),
+                  '小写字母开头，只含小写字母、数字、下划线、连字符，最长 48'):
+        return {'ok': False, 'checks': checks}
+    from .locations import SOURCES
+    if not record('不覆盖内置来源', name not in SOURCES and not name.startswith(('windows_', 'ubuntu_')), name):
+        return {'ok': False, 'checks': checks}
+    if not record('文件', path.is_file() and path.suffix == '.py' and path.stat().st_size <= 1024 * 1024,
+                  '需要不超过 1 MiB 的 .py 文件'):
+        return {'ok': False, 'checks': checks}
+    saved = dict(entries)
+    entries[name] = {'name': name, 'path': str(path), 'api_version': API_VERSION,
+                     'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
+    try:
+        adapter = PluginAdapter(name)
+        try:
+            info = adapter.info()
+        except Exception as exc:
+            record('加载并调用 info()', False, exc)
+            return {'ok': False, 'checks': checks}
+        record('加载并调用 info()', True, '名称与 api_version 匹配')
+        record('info() 说明目录是否可用', 'available' in info, 'available=%s' % info.get('available'))
+        try:
+            rows = list(adapter.discover())
+        except Exception as exc:
+            record('discover() 返回会话列表', False, exc)
+            return {'ok': False, 'checks': checks}
+        record('discover() 返回会话列表', True, '%d 个会话' % len(rows))
+        record('会话 ID 唯一', len({row.id for row in rows}) == len(rows), '重复的 ID 会让 read(id) 不确定')
+        readable = [row for row in rows if row.readable][:max(1, sample)]
+        if not readable:
+            record('read() 读取样本', True, '没有可读会话，跳过（请准备一个合成样本再自检）')
+        for row in readable:
+            try:
+                conv = adapter.read(row.id)
+                text = render_markdown(conv)
+                ok = bool(conv.turns) and isinstance(text, str)
+                record('read(%s) 返回非空会话并可导出 Markdown' % row.id, ok, '%d 轮' % len(conv.turns))
+            except Exception as exc:
+                record('read(%s)' % row.id, False, exc)
+    finally:
+        entries.clear()
+        entries.update(saved)
+    return {'ok': all(row['ok'] for row in checks), 'checks': checks}
+
+
 def disable(name):
     saved = device.read()
     saved['plugins'] = [row for row in saved.get('plugins', []) if row.get('name') != name]
