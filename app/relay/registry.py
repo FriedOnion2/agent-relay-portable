@@ -113,6 +113,12 @@ def read_conversation(source: str, sid: str) -> ir.Conversation:
     return get(source).read(sid)
 
 
+def _write_roots(adapter) -> List[str]:
+    """写入会落在哪些目录里（用于操作记录）。"""
+    roots = getattr(adapter, "roots", None) or [getattr(adapter, "root", None) or getattr(adapter, "home", None)]
+    return [str(root) for root in roots if root]
+
+
 def transfer(source: str, sid: str, target: str, cwd: str | None = None,
              session_id: str | None = None, remap_tools: bool = True,
              include_thinking: bool = True, new_title: str | None = None,
@@ -140,8 +146,12 @@ def transfer(source: str, sid: str, target: str, cwd: str | None = None,
     if redact_secrets:
         from . import sensitive
         conv = sensitive.redact_conversation(conv)
-    path = dst.write(conv, cwd=cwd, session_id=session_id,
-                     remap_tools=remap_tools, include_thinking=include_thinking)
+    from . import oplog
+    with oplog.track("transfer", _write_roots(dst), source=source, target=target, session=sid,
+                     title=conv.title) as record:
+        path = dst.write(conv, cwd=cwd, session_id=session_id,
+                         remap_tools=remap_tools, include_thinking=include_thinking)
+        record["path"] = str(path)
     return {
         "ok": True,
         "from": {"source": source, "id": sid, "path": conv.path, "title": conv.title},

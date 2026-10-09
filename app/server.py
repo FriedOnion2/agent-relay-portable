@@ -129,6 +129,10 @@ class Handler(BaseHTTPRequestHandler):
                                   limit=int((q.get('limit') or ['50'])[0]), offset=int((q.get('offset') or ['0'])[0])))
             if path == '/api/job':
                 return self._json(self.server.jobs.status())
+            if path == '/api/operations':
+                from relay import oplog
+                limit = int((q.get('limit') or ['100'])[0])
+                return self._json({'ok':True, 'log':str(oplog.log_path()), 'operations':oplog.list_operations(limit)})
             if path == '/api/environment':
                 from relay import device, plugins
                 return self._json({'ok':True, **device.environment(),
@@ -232,6 +236,11 @@ class Handler(BaseHTTPRequestHandler):
             if u.path == '/api/extract':
                 from relay.extraction import extract
                 return self._json(self.server.jobs.start('extract', lambda progress,cancel:extract(progress=progress,cancel=cancel)))
+            if u.path == '/api/undo':
+                from relay import oplog
+                if not isinstance(body.get('id'), str) or not body['id']:
+                    return self._error('缺少操作 ID')
+                return self._json(oplog.undo(body['id'], force=body.get('force') is True))
             if u.path == '/api/job-cancel':
                 return self._json(self.server.jobs.cancel(body.get('id')))
             if u.path == '/api/export-draft':
