@@ -421,6 +421,14 @@ def cmd_plugins(args):
         if not args.name:
             raise ValueError('请填写插件名')
         result = plugins.disable(args.name)
+    elif args.action == 'check':
+        if not args.name or not args.path:
+            raise ValueError('自检需填写插件名与 Python 文件')
+        result = plugins.check(args.name, args.path)
+        for row in result['checks']:
+            print('%s %s%s' % ('✅' if row['ok'] else '❌', row['check'], '：' + row['detail'] if row['detail'] else ''))
+        print('自检通过。' if result['ok'] else '自检未通过。')
+        return 0 if result['ok'] else 1
     else:
         result = {'ok':True, 'enabled':list(plugins.entries.values()), 'errors':plugins.errors,
                   'note':'只启用可信插件；独立进程与超时不是安全沙箱。换设备需重新启用。'}
@@ -678,8 +686,8 @@ def build_parser():
     device.add_argument('--agent', choices=AGENTS)
     device.add_argument('--home', help='存在的本机目录；省略或空字符串则恢复自动探测')
     device.set_defaults(func=cmd_device)
-    plugin = sub.add_parser('plugins', help='启用/禁用可信社区读取插件；不会自动发现执行代码')
-    plugin.add_argument('action', choices=['list','enable','disable'], nargs='?', default='list')
+    plugin = sub.add_parser('plugins', help='启用/禁用/自检可信社区读取插件；不会自动发现执行代码')
+    plugin.add_argument('action', choices=['list','enable','disable','check'], nargs='?', default='list')
     plugin.add_argument('name', nargs='?')
     plugin.add_argument('path', nargs='?')
     plugin.set_defaults(func=cmd_plugins)

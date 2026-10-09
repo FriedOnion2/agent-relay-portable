@@ -6,6 +6,8 @@ API v1 复用 `relay.adapters.base.BaseAdapter` 与 `relay.ir.Conversation`。�
 
 社区首版支持可信的单个 `.py` 文件，使用标准库与 `relay` 接口。它可以读取、导出和作为通用转换来源，不能通过 AgentRelay 原生打包、原生恢复、写入或管理 Skill。不自动扫描执行插件，不通过 pip 自动发现；源码和冻结程序都使用相同 worker 入口。
 
+想接入新的工具？见 [为新的 AI 工具写读取插件](writing-a-plugin.md)，其中有第二个示例和 `plugins check` 自检命令。
+
 ## 使用示例
 
 在便携根目录创建 `example-conversations/`，放入 UTF-8 `.txt` 文件。仓库提供 [示例](../examples/plaintext_adapter.py)，Release 用户需单独下载这个示例文件。
