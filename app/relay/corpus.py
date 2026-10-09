@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 
 from . import archive, device, ir, registry, session_store
-from .paths import parse_iso
+from .paths import iso, parse_iso
 from .runtime import project_root
 
 VERSION = 1
@@ -153,8 +153,13 @@ class Corpus:
             return dict(ok=True, exists=False, documents=0, schema=VERSION)
         try:
             count = db.execute('SELECT count(*) FROM docs').fetchone()[0]
+            try:
+                file_updated_at = iso(int(self.path.stat().st_mtime * 1000))
+            except OSError:
+                file_updated_at = None
             return dict(ok=True, exists=True, documents=count, schema=VERSION, path=str(self.path),
-                        thinking_documents=db.execute('SELECT count(*) FROM docs WHERE thinking_enabled=1').fetchone()[0])
+                        thinking_documents=db.execute('SELECT count(*) FROM docs WHERE thinking_enabled=1').fetchone()[0],
+                        file_updated_at=file_updated_at)
         finally:
             db.close()
 

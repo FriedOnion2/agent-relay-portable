@@ -37,6 +37,10 @@ class HttpTests(unittest.TestCase):
         status, body = self.request("GET", "/")
         self.assertEqual(status, 200)
         self.assertIn(b"AgentRelay", body)
+        self.assertIn(b'/static/workflow.css', body)
+        status, css = self.request("GET", "/static/workflow.css")
+        self.assertEqual(status, 200)
+        self.assertIn(b".task-panel", css)
 
     def test_corpus_reads_are_readonly_and_export_requires_confirmation(self):
         from relay import corpus

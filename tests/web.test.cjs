@@ -66,7 +66,7 @@ test('progress uses Chinese counts and reviewed evidence links follow the actual
   assert.equal(t.el('#confirmDraft').checked,false);
 });
 
-function setup({automaticPreview=true,confirmed=true}={}){
+function setup({automaticPreview=true,confirmed=true,randomUUID}={}){
   class Element {
     constructor(){ this.children=[]; this.value=''; this.checked=true; this.disabled=false;
       this.style={}; this.dataset={}; this.classList={add(){}, remove(){}}; this._html=''; }
@@ -85,14 +85,14 @@ function setup({automaticPreview=true,confirmed=true}={}){
     createElement(){return new Element();},
     createTextNode(text){return {textContent:text};},
   };
-  const context = vm.createContext({document, encodeURIComponent, Blob, URL, navigator:{}, location:{origin:'http://127.0.0.1:18945'}, confirm(){return confirmed;},
+  const context = vm.createContext({document, encodeURIComponent, Blob, URL, navigator:{}, crypto:randomUUID?{randomUUID}:undefined, location:{origin:'http://127.0.0.1:18945'}, confirm(){return confirmed;},
     setTimeout(){return 1;}, clearTimeout(){},
     fetch(url,options){
       if(url==='/api/preview' && automaticPreview){previews.push({url,options});return Promise.resolve({ok:true,status:200,json:async()=>({ok:true,token:'verified-fixture',target:'claude',blockers:[],warnings:[]})});}
       return new Promise((resolve,reject)=>requests.push({url,options,resolve,reject}));
     },
   });
-  vm.runInContext(script + '\n globalThis.app={selections,selectAll,storeBatch,state,loadSessions,openSession,doTransfer,doImportWindows,updateActions,bind,buildTarget,buildTabs,loadSources,storeCurrent,refreshStorage,restoreStored,buildSkillAgents,loadSkills,refreshSkillPackages,storeSelectedSkill,restoreSelectedSkill,corpusState,searchCorpus,openCorpusDocument,renderDraftCandidates,exportDraft,updateDraftAction,startCorpusJob,pollCorpusJob,cancelCorpusJob,setLang,tr,ts,applyStatic,renderChips,renderList,renderDetail,EN,EN_SERVER,doBatch,openHistory,refreshHistory,renderHistory,undoOperation,getLang:()=>lang};',context);
+  vm.runInContext(script + '\n globalThis.app={workflow,showPage,renderOperationResult,selectPackage,selections,selectAll,storeBatch,state,loadSessions,openSession,doTransfer,doImportWindows,updateActions,bind,buildTarget,buildTabs,loadSources,storeCurrent,refreshStorage,restoreStored,buildSkillAgents,loadSkills,refreshSkillPackages,storeSelectedSkill,restoreSelectedSkill,corpusState,searchCorpus,openCorpusDocument,renderDraftCandidates,exportDraft,updateDraftAction,startCorpusJob,pollCorpusJob,cancelCorpusJob,setLang,tr,ts,applyStatic,renderChips,renderList,renderDetail,EN,EN_SERVER,doBatch,openHistory,refreshHistory,renderHistory,undoOperation,getLang:()=>lang};',context);
   const response = (index,body,status=200)=>requests[index].resolve({ok:status<400,status,json:async()=>body});
   return {app:context.app, elements, requests, previews, response, document, el:document.querySelector};
 }
@@ -560,6 +560,7 @@ test('English mode translates client strings and known server messages, and zh r
   assert.equal(t.app.tr('已选 {n} 项', {n: 3}), '3 selected');
   assert.equal(t.app.ts('请求体过大'), 'Request body too large');
   assert.equal(t.app.ts('未知块 foo'), 'Unknown block foo');
+  assert.match(t.app.ts('SDK 与 Claude Code 共用会话存储；此入口显示共享记录，无法仅凭日志确认创建者。'), /^The SDK and Claude Code share/);
   assert.equal(t.app.ts('没收录的服务端消息'), '没收录的服务端消息');
   t.app.setLang('zh');
   assert.equal(t.el('#btnLang').textContent, 'English');
@@ -710,4 +711,67 @@ test('secret-scan warnings from the server are translated', () => {
   assert.match(t.app.ts(zh), /^Found 2 suspected secrets/);
   assert.match(t.app.ts('检测到 1 处疑似敏感信息（JWT 1 处），写入时将替换为 [REDACTED:类型]。'), /replaced with \[REDACTED:type\]/);
   assert.match(t.app.ts('检测到 1 处疑似敏感信息（JWT 1 处）：原生迁移原样复制会话文件，不支持脱敏。'), /native migration copies/);
+});
+
+test('task navigation shows one workspace, preserves selection and distinguishes saving from conversion', () => {
+  const t=setup();t.app.bind();t.app.state.current={id:'selected',source:'codex'};
+  t.app.showPage('home');
+  assert.equal(t.el('#homePanel').style.display,'');assert.equal(t.el('#sessionsPanel').style.display,'none');
+  t.el('#chooseToStore').onclick();
+  assert.equal(t.app.workflow.page,'sessions');assert.equal(t.app.state.current.id,'selected');
+  assert.equal(t.el('#migrationSetup').style.display,'none');assert.equal(t.el('#btnGo').style.display,'none');
+  t.el('#btnSessions').onclick();
+  assert.equal(t.el('#migrationSetup').style.display,'');assert.equal(t.el('#btnSessions')['aria-current'],'page');
+  assert.equal(t.app.workflow.carrying,false);
+  t.app.showPage('skills');
+  assert.equal(t.el('#sessionsPanel').style.display,'none');assert.equal(t.el('#skillPanel').style.display,'');
+});
+
+test('a slow package listing cannot overwrite a newer storage root or select an unverified package', async () => {
+  const t=setup();t.el('#storageRoot').value='/old';const old=t.app.refreshStorage();
+  t.el('#storageRoot').value='/new';const latest=t.app.refreshStorage();
+  t.response(1,{ok:true,packages:[{agent:'codex',path:'/new/p.zip',session:{title:'latest'}}]});await latest;
+  t.response(0,{ok:true,packages:[{agent:'claude',path:'/old/p.zip'}]});await old;
+  const row=t.el('#storageList').children[0];assert.match(row.children[0].textContent,/latest/);
+  row.children[1].onclick();assert.equal(t.el('#packagePath').value,'/new/p.zip');
+  assert.equal(t.el('#restoreCwd').value,''); // source cwd never becomes the default destination
+});
+
+test('restoring an independent copy previews the same new ID before writing, and cancellation never writes', async () => {
+  const t=setup({automaticPreview:false,randomUUID:()=> 'new-id'});
+  t.el('#restoreConflict').value='new';t.el('#packagePath').value='/p.zip';t.el('#restoreCwd').value='/local';
+  const restoring=t.app.restoreStored();const plan=JSON.parse(t.requests[0].options.body);
+  assert.equal(t.requests[0].url,'/api/preview');assert.equal(plan.session_id,'new-id');
+  t.response(0,{ok:true,token:'copy-preview',blockers:[],target:'codex'});await flush();
+  const write=JSON.parse(t.requests[1].options.body);
+  assert.equal(write.session_id,'new-id');assert.equal(write.preview_token,'copy-preview');
+  t.response(1,{ok:false,error:'目标会话 ID 已存在'},409);await restoring;
+  assert.match(t.el('#restoreError').textContent,/创建独立副本/);
+  const canceled=setup({confirmed:false,randomUUID:()=> 'copy'});
+  canceled.el('#restoreConflict').value='new';canceled.el('#packagePath').value='/p.zip';canceled.el('#restoreCwd').value='/local';
+  await canceled.app.restoreStored();assert.equal(canceled.requests.length,0);assert.equal(canceled.previews.length,1);
+});
+
+test('generic migration retains the sent ID and keeps a safe, translated result after navigation', async () => {
+  const t=setup({randomUUID:()=> 'native-id'});t.app.state.current={id:'s',source:'codex'};
+  t.app.state.target='claude';const migrating=t.app.doTransfer();await flush();
+  const body=JSON.parse(t.requests[0].options.body);assert.equal(body.session_id,'native-id');
+  assert.equal(JSON.parse(t.previews[0].options.body).session_id,'native-id');
+  t.response(0,{ok:true,to:{source:'claude',path:'/new/<img>.jsonl',cwd:'/work'}});await migrating;
+  assert.equal(t.app.workflow.result.result.to.native_id,'native-id');
+  t.app.showPage('home');assert.equal(t.el('#operationResult').style.display,'');
+  assert.match(t.el('#operationResult').children[1].children[1].textContent,/<img>/);
+  t.app.setLang('en');assert.equal(t.el('#operationResult').children[0].textContent,'Session migrated');
+  assert.equal(t.el('#operationResult').children[1].children[1].innerHTML,'');
+});
+
+test('export-to-package handoff uses the successfully exported directory without an implicit write', async () => {
+  const t=setup();t.app.bind();t.app.corpusState.selected='draft';
+  t.el('#confirmDraft').checked=true;t.el('#draftDirectory').value='C:\\reviewed';t.el('#draftMarkdown').value='reviewed text';
+  const exporting=t.app.exportDraft();t.response(0,{ok:true,path:'C:\\reviewed\\release-check\\SKILL.md'});await exporting;
+  assert.equal(t.el('#storeExportedDraft').style.display,'');t.el('#storeExportedDraft').onclick();
+  assert.equal(t.app.workflow.page,'skills');assert.equal(t.el('#skillPath').value,'C:\\reviewed\\release-check');
+  assert.equal(t.requests.length,2);assert.match(t.requests[1].url,/^\/api\/stored-skills/);
+  assert.equal(t.requests.some(r=>r.url==='/api/store-skill'),false);
+  t.response(1,{ok:true,packages:[],root:'/storage'});await flush();
 });

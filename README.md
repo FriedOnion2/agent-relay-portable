@@ -10,9 +10,9 @@
 
 **在本机浏览、导出和迁移 AI 编程助手的对话与 Skill，并可打包到移动盘，在另一台设备恢复。**
 
-支持 **WorkBuddy、DeepSeek Harness（DSH）、CodeBuddy、Claude Code、Claude Agent SDK、OpenAI Codex**，提供中文网页和命令行，适用于 Windows、macOS、Ubuntu / Linux。
+支持 **WorkBuddy、DeepSeek Harness（DSH）、CodeBuddy、Claude Code、Claude Agent SDK、OpenAI Codex**，提供中英文网页和命令行，适用于 Windows、macOS、Ubuntu / Linux。
 
-![AgentRelay 界面：按来源浏览会话、预览内容、一键迁移或导出](docs/images/list-preview.png)
+![AgentRelay 任务首页：迁移会话、跨设备搬运、全文搜索与 Skill 资产](docs/images/task-home.jpg)
 
 > 🔒 **数据只在本机处理。** 服务只监听本机地址，不上传会话，不调用模型；迁移前先预览“保留 / 降级 / 丢弃 / 未知”，确认后才写入。
 
@@ -22,7 +22,6 @@
 - **跨软件迁移**：把会话转换到 WorkBuddy、DSH、Claude Code、Codex，保留可表达的正文、思考和工具历史。
 - **跨设备存储**：把对话、Skill 保存为原生 ZIP 包，复制到另一台设备后恢复到对应软件。
 - **全文搜索**：本地 SQLite/FTS5 索引，支持中文短词、中英混合与来源 / 项目 / 时间 / 工具筛选。
-  ![全文搜索](docs/images/search.png)
 - **提炼 Skill 草稿**：从多条相似的历史会话提炼带证据的 Skill 草稿，由你审核后导出，不自动安装或执行。
 - **Windows ↔ Ubuntu**：双系统间搬迁同款软件的原生记录。
 
@@ -77,6 +76,7 @@ Ubuntu / macOS 可用 `Ubuntu首次准备.sh` / `Mac首次准备.command` 自动
 
 | 主题 | 文档 |
 |---|---|
+| 网页任务导航、恢复与草稿打包 | [docs/web-workflow.md](docs/web-workflow.md) |
 | 下载、安装、启动与退出 | [docs/install.md](docs/install.md) |
 | 批量存储、跨软件 / 双系统迁移与预览 | [docs/storage-and-migration.md](docs/storage-and-migration.md) |
 | 配置与数据目录 | [docs/configuration.md](docs/configuration.md) |
