@@ -23,6 +23,7 @@
 - ruff、CodeQL、Dependabot。
 
 ### Fixed
+- macOS 打包在本机临时目录生成运行库，清理生成包的 Finder 元数据，并在签名后及归档前严格验证，避免同步目录导致无效签名的应用被发布。
 - Codex 通用迁移保留客户端可见的思考、工具参数与结果；标题索引失败时回滚会话文件，列表与读取共用内容计数规则。
 - 迁移到 Codex 的会话在真实 Codex 中重建出完整 items（session_meta 补 `history_mode: paginated`）。
 - 迁移到 Codex 的会话可在真实 Codex 中续聊（正确的 `model_provider` 与 turn 事件）。

@@ -7,22 +7,34 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def sign_macos_app(app):
+    # Generated bundles can inherit FinderInfo/resource forks from copied files.
+    # Only clean the build output; never modify the source interpreter or checkout.
+    subprocess.run(['xattr', '-cr', str(app)], check=True)
+    subprocess.run(['codesign', '--force', '--sign', '-', str(app)], check=True)
+    subprocess.run(['codesign', '--verify', '--strict', str(app)], check=True)
+
+
 def build(tag, output):
     if not tag.startswith('v') or any(c not in '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-' for c in tag):
         raise ValueError('Expected a version tag such as v0.2.0-dev.1')
+    # Documents/Desktop may be managed by a file provider that adds bundle xattrs.
+    # Keep all intermediate apps outside synced folders and clean up on failure too.
+    with tempfile.TemporaryDirectory(prefix='AgentRelay-build-') as folder:
+        return _build(tag, output, Path(folder))
+
+
+def _build(tag, output, work):
     system = {'Darwin': 'macos', 'Windows': 'windows', 'Linux': 'linux'}[platform.system()]
     arch = {'AMD64': 'x64', 'x86_64': 'x64', 'arm64': 'arm64', 'aarch64': 'arm64'}[platform.machine()]
     name = 'AgentRelay-%s-%s-%s' % (tag, system, arch)
-    work = ROOT / 'build' / name
-    if work.exists():
-        shutil.rmtree(work)
-    work.mkdir(parents=True)
     output.mkdir(parents=True, exist_ok=True)
     subprocess.run([
         sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean', '--onedir', '--windowed' if system == 'macos' else '--console',
@@ -47,7 +59,7 @@ def build(tag, output):
         info['LSUIElement'] = True
         info['CFBundleGetInfoString'] = 'AgentRelay: local conversation and Skill storage'
         (app / 'Contents/Info.plist').write_bytes(plistlib.dumps(info))
-        subprocess.run(['codesign', '--force', '--sign', '-', str(app)], check=True)
+        sign_macos_app(app)
         binary = binary_dir / 'AgentRelay'
     else:
         shutil.copytree(compiled, stage, dirs_exist_ok=True, symlinks=True)
@@ -60,6 +72,8 @@ def build(tag, output):
             archive.add(stage, arcname=name)
     elif system == 'macos':
         asset = output / (name + '.zip')
+        # Verify once more after running the relocated distribution.
+        subprocess.run(['codesign', '--verify', '--strict', str(app)], check=True)
         subprocess.run(['ditto', '-c', '-k', '--keepParent', str(stage), str(asset)], check=True)
     else:
         asset = output / (name + '.zip')
