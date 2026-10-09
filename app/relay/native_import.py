@@ -490,13 +490,17 @@ def _migrate(source, target, sid, cwd, session_id, dsh_compression, mode, target
     preview.check_token(preview_token, plan['token'])
     notes = ["已保留原生记录；项目元数据已映射，历史正文与工具参数中的路径不自动替换。",
              "未复制账号、凭据、应用设置、附件或子代理旁路文件；请在目标软件中核对续聊。"]
-    if source.source == "dsh":
-        path, native_id = _native_dsh(source, target, conv, cwd, session_id, dsh_compression)
-    elif source.source == "codebuddy" and conv.meta.get("source_format") == "codebuddy-ide-manifest":
-        path, native_id = _native_ide(source, target, conv, cwd, session_id)
-        notes.append("CodeBuddy IDE 使用已有原生工作区并更新 conversations 索引；重启软件查看。")
-    else:
-        path, native_id = _native_jsonl(source, target, conv, cwd, session_id)
+    from . import oplog, registry
+    with oplog.track(mode, registry._write_roots(target), source=source.name, target=target_name,
+                     session=sid, title=conv.title) as record:
+        if source.source == "dsh":
+            path, native_id = _native_dsh(source, target, conv, cwd, session_id, dsh_compression)
+        elif source.source == "codebuddy" and conv.meta.get("source_format") == "codebuddy-ide-manifest":
+            path, native_id = _native_ide(source, target, conv, cwd, session_id)
+            notes.append("CodeBuddy IDE 使用已有原生工作区并更新 conversations 索引；重启软件查看。")
+        else:
+            path, native_id = _native_jsonl(source, target, conv, cwd, session_id)
+        record["path"] = str(path)
     if source.source == "codex":
         notes.append("Codex CLI 可按 ID 恢复；Desktop 的数据库索引未自动更新。")
     if source.source == "claude_sdk":

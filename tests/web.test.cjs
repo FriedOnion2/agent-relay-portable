@@ -92,9 +92,9 @@ function setup({automaticPreview=true,confirmed=true}={}){
       return new Promise((resolve,reject)=>requests.push({url,options,resolve,reject}));
     },
   });
-  vm.runInContext(script + '\n globalThis.app={selections,selectAll,storeBatch,state,loadSessions,openSession,doTransfer,doImportWindows,updateActions,bind,buildTarget,buildTabs,loadSources,storeCurrent,refreshStorage,restoreStored,buildSkillAgents,loadSkills,refreshSkillPackages,storeSelectedSkill,restoreSelectedSkill,corpusState,searchCorpus,openCorpusDocument,renderDraftCandidates,exportDraft,updateDraftAction,startCorpusJob,pollCorpusJob,cancelCorpusJob};',context);
+  vm.runInContext(script + '\n globalThis.app={selections,selectAll,storeBatch,state,loadSessions,openSession,doTransfer,doImportWindows,updateActions,bind,buildTarget,buildTabs,loadSources,storeCurrent,refreshStorage,restoreStored,buildSkillAgents,loadSkills,refreshSkillPackages,storeSelectedSkill,restoreSelectedSkill,corpusState,searchCorpus,openCorpusDocument,renderDraftCandidates,exportDraft,updateDraftAction,startCorpusJob,pollCorpusJob,cancelCorpusJob,setLang,tr,ts,applyStatic,renderChips,renderList,renderDetail,EN,EN_SERVER,getLang:()=>lang};',context);
   const response = (index,body,status=200)=>requests[index].resolve({ok:status<400,status,json:async()=>body});
-  return {app:context.app, elements, requests, previews, response, el:document.querySelector};
+  return {app:context.app, elements, requests, previews, response, document, el:document.querySelector};
 }
 
 test('a late session-list response cannot replace the newly selected source',async()=>{
@@ -526,4 +526,86 @@ test('late Skill scans cannot overwrite the latest directory and its selections'
   t.app.selectAll('skills',true);
   t.response(0,{ok:true,skills:[{path:'/old/skill',name:'old'}]});await old;
   assert.deepEqual([...t.app.selections.skills.selected],['/new/skill']);
+});
+
+// ---------- 界面语言 ----------
+test('every UI string has an English translation', () => {
+  const body = html.split('<script>')[0].split('</head>')[1];
+  const strings = new Set();
+  for (const m of body.matchAll(/>([^<>]*[\u4e00-\u9fff][^<>]*)</g)) strings.add(m[1].trim());
+  for (const m of body.matchAll(/\s(?:placeholder|title|aria-label)="([^"]*[\u4e00-\u9fff][^"]*)"/g)) strings.add(m[1].trim());
+  strings.add(html.match(/<title>([^<]*)<\/title>/)[1]);
+  for (const m of script.matchAll(/\btr\('((?:[^'\\]|\\.)*)'/g)) strings.add(m[1].replace(/\\n/g, '\n').replace(/\\\\/g, '\\'));
+  const t = setup();
+  const missing = [...strings].filter(zh => t.app.EN[zh] === undefined && !zh.startsWith('Switch language'));
+  assert.deepEqual(missing, []);
+  // placeholders in a translation must match the source
+  for (const [zh, en] of Object.entries(t.app.EN)) {
+    const vars = s => (s.match(/\{\w+\}/g) || []).sort().join();
+    assert.equal(vars(en), vars(zh), zh);
+  }
+});
+
+test('English mode translates client strings and known server messages, and zh restores them', () => {
+  const t = setup();
+  assert.equal(t.app.getLang(), 'zh');
+  t.app.state.sources = [{name: 'codex', label: 'OpenAI Codex', can_write: true, available: true}, {name: 'claude', label: 'Claude Code', can_write: true, available: true}];
+  t.app.state.source = 'claude';
+  t.app.buildTarget();
+  assert.equal(t.el('#target').children[0].textContent.startsWith('迁移到 '), true);
+  t.app.setLang('en');
+  assert.equal(t.app.getLang(), 'en');
+  assert.match(t.el('#target').children[0].textContent, /^Migrate to /);
+  assert.equal(t.el('#btnLang').textContent, '中文');
+  assert.equal(t.app.tr('已选 {n} 项', {n: 3}), '3 selected');
+  assert.equal(t.app.ts('请求体过大'), 'Request body too large');
+  assert.equal(t.app.ts('未知块 foo'), 'Unknown block foo');
+  assert.equal(t.app.ts('没收录的服务端消息'), '没收录的服务端消息');
+  t.app.setLang('zh');
+  assert.equal(t.el('#btnLang').textContent, 'English');
+  assert.equal(t.app.tr('已选 {n} 项', {n: 3}), '已选 3 项');
+  assert.equal(t.app.ts('请求体过大'), '请求体过大');
+});
+
+test('switching language re-renders the session list and the open conversation without refetching', async () => {
+  const t = setup();
+  const loading = t.app.loadSessions();
+  t.response(0, {ok: true, sessions: [{id: 'a', title: '', turns: 2, updated: 'now', size_str: '1 KB'}]});
+  await loading;
+  assert.match(t.el('#list').children[0].innerHTML, /未命名会话/);
+  assert.match(t.el('#list').children[0].innerHTML, /2 轮/);
+  const opening = t.app.openSession({id: 'a'});
+  t.response(1, {ok: true, info: {title: '', source: 'codex', stats: {turns: 1, tool_call: 0, thinking: 0}, notes: ['预览描述文件转换效果，不会安装工具或执行历史调用。']},
+    turns: [{role: 'user', blocks: []}]});
+  await opening;
+  const before = t.requests.length;
+  t.app.setLang('en');
+  assert.equal(t.requests.length, before);
+  assert.match(t.el('#list').children[0].innerHTML, /Untitled session/);
+  assert.match(t.el('#list').children[0].innerHTML, /2 turns/);
+  const hero = t.el('#content').children[0].innerHTML;
+  assert.match(hero, /Untitled session/);
+  assert.match(hero, /Turns 1 · Tool calls 0 · Thinking 0/);
+  assert.match(hero, /The preview describes the file conversion/);
+  assert.equal(t.el('#content').children[1].children[0].children[1].children[0].innerHTML.includes('User'), true);
+});
+
+test('static page text and attributes are translated and restored from the remembered Chinese original', () => {
+  const t = setup();
+  const text = {nodeValue: '  对话存储 ', parentNode: {tagName: 'BUTTON'}};
+  const script = {nodeValue: '全选当前列表', parentNode: {tagName: 'SCRIPT'}};
+  const plain = {nodeValue: 'AgentRelay', parentNode: {tagName: 'DIV'}};
+  const input = {attrs: {placeholder: '搜索标题 / 目录 / id…', title: 'abc'}, getAttribute(n) { return n in this.attrs ? this.attrs[n] : null; }, setAttribute(n, v) { this.attrs[n] = v; }};
+  t.document.createTreeWalker = () => { const nodes = [text, script, plain]; return {nextNode: () => nodes.shift() || null}; };
+  t.document.querySelectorAll = () => [input];
+  t.app.setLang('en');
+  assert.equal(text.nodeValue, '  Conversation storage ');
+  assert.equal(script.nodeValue, '全选当前列表');
+  assert.equal(plain.nodeValue, 'AgentRelay');
+  assert.equal(input.attrs.placeholder, 'Search title / directory / id…');
+  assert.equal(input.attrs.title, 'abc');
+  t.document.createTreeWalker = () => { const nodes = [text]; return {nextNode: () => nodes.shift() || null}; };
+  t.app.setLang('zh');
+  assert.equal(text.nodeValue, '  对话存储 ');
+  assert.equal(input.attrs.placeholder, '搜索标题 / 目录 / id…');
 });

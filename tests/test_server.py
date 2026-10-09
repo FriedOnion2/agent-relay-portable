@@ -240,6 +240,24 @@ class HttpTests(unittest.TestCase):
                 self.assertEqual(self.request("POST", "/api/restore-skill", json.dumps(payload), headers)[0], 400)
                 restore.assert_not_called()
 
+    def test_operations_route_lists_history_and_undo_validates_input(self):
+        headers = {"Content-Type":"application/json"}
+        with patch("relay.oplog.list_operations", return_value=[{"id":"op-1"}]) as listing:
+            status, raw = self.request("GET", "/api/operations?limit=5")
+            self.assertEqual(status, 200)
+            self.assertEqual(json.loads(raw)["operations"], [{"id":"op-1"}])
+            listing.assert_called_once_with(5)
+        with patch("relay.oplog.undo", return_value={"ok":True, "complete":True}) as undo:
+            self.assertEqual(self.request("POST", "/api/undo", json.dumps({"id":"op-1", "force":True}), headers)[0], 200)
+            undo.assert_called_once_with("op-1", force=True)
+            self.assertEqual(self.request("POST", "/api/undo", json.dumps({"id":"op-1", "force":"yes"}), headers)[0], 200)
+            undo.assert_called_with("op-1", force=False)
+        with patch("relay.oplog.undo") as undo:
+            self.assertEqual(self.request("POST", "/api/undo", json.dumps({}), headers)[0], 400)
+            undo.assert_not_called()
+        with patch("relay.oplog.undo", side_effect=KeyError("找不到这条操作记录")):
+            self.assertEqual(self.request("POST", "/api/undo", json.dumps({"id":"missing"}), headers)[0], 400)
+
 
 if __name__ == "__main__":
     unittest.main()
