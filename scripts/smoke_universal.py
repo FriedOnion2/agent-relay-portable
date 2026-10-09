@@ -89,6 +89,7 @@ def smoke(asset):
                     if actual is None:
                         time.sleep(.2)
                 assert actual is not None, 'Universal launcher did not become ready'
+                assert b'.task-panel' in request(actual, '/static/workflow.css'), 'Universal task stylesheet missing'
                 environment = request(actual, '/api/environment')
                 assert environment['runtime']['bundled'] and environment['runtime']['zstandard']
                 binary = environment['runtime']['executable']
