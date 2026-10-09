@@ -303,6 +303,16 @@ class PathsTests(unittest.TestCase):
             adapter.find_path("")
 
 
+class CliParserTests(unittest.TestCase):
+    def test_subcommands_are_registered_once(self):
+        # Python 3.11+ 对重复的子命令名直接抛 ArgumentError，3.10 及以下会静默覆盖；按源码检查，所有版本都能发现
+        import re
+        source = (Path(cli.__file__)).read_text(encoding='utf-8')
+        names = re.findall(r'sub\.add_parser\("([^"]+)"', source)
+        self.assertEqual([n for n in set(names) if names.count(n) > 1], [])
+        cli.build_parser()
+
+
 class BootstrapTests(unittest.TestCase):
     def test_config_bom_validation(self):
         with tempfile.TemporaryDirectory() as root:

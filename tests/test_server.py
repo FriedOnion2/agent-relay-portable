@@ -103,6 +103,7 @@ class HttpTests(unittest.TestCase):
                 self.assertEqual(status, 200)
                 self.assertTrue(json.loads(raw)['ok'])
 
+
     def test_diff_route_compares_two_sessions_and_validates_input(self):
         from relay import ir
         headers = {'Content-Type':'application/json'}

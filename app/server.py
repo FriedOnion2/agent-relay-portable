@@ -326,6 +326,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(import_windows(body["source"], body["id"], body["cwd"],
                                   session_id=body.get("session_id") or None,
                                   dsh_compression=body.get("dsh_compression") or "zstd", preview_token=body.get('preview_token')))
+
             if u.path == "/api/diff":
                 from relay import diff
                 for key in ("source", "id", "source2", "id2"):

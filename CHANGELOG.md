@@ -6,6 +6,9 @@
 ## [Unreleased]
 
 ### Added
+- 网页界面：「操作记录」面板（查看写入记录、一键撤销，被改动的文件默认保留并可二次确认强制撤销）、「批量迁移所选」（先预演再确认）、「脱敏密钥」选项；预览对话框会提示疑似敏感信息。均支持中英文。
+- 批量迁移：`relay batch`（API `/api/batch`）按条件或 ID 列表批量转换，默认只预演，`--yes` 才写入；目标 ID 确定性派生，重复执行自动识别已迁移的会话（`--on-conflict skip|new|fail`），单条失败不拖垮整批，输出逐条进度与汇总。
+- 敏感信息扫描：预览会提示会话里疑似的 API 密钥、令牌、私钥和口令（只显示类型、位置和长度）；`relay scan` 单独扫描；迁移与导出支持 `--redact-secrets`（API：`redact_secrets`），写入时替换为 `[REDACTED:类型]`。
 - 插件开发体验：新增 `plugins check`（隔离进程里逐项自检，不保存配置）、第二个示例 `examples/jsonl_adapter.py` 和 [插件编写指南](docs/writing-a-plugin.md)。
 - 可用 `pipx install` / `pip install` 安装，提供 `relay` / `agent-relay` 命令；安装后的数据放在每用户目录（`RELAY_PORTABLE_ROOT` 可改），不写进 site-packages；CI 在三个系统上验证 wheel 安装。
 - 计划任务（每日格式体检、每周真实客户端兼容性）失败时自动开 / 更新带 `format-drift` 标签的 issue，客户端改了存储格式不再靠人盯 Actions 页面。
@@ -14,8 +17,6 @@
 - 网页界面支持中文 / English 切换（右上角按钮；记住选择，按浏览器语言自动选择，`?lang=en` 可强制）。服务端返回的已知提示一并翻译，未收录的保持原文。
 - 页面内迁移保真度预览对话框。
 - 真实客户端冒烟测试（Codex / DSH）在 Linux、macOS、Windows 上每周运行，并生成支持表。
-- 批量迁移：`relay batch`（API `/api/batch`）按条件或 ID 列表批量转换，默认只预演，`--yes` 才写入；目标 ID 确定性派生，重复执行自动识别已迁移的会话（`--on-conflict skip|new|fail`），单条失败不拖垮整批，输出逐条进度与汇总。
-- 敏感信息扫描：预览会提示会话里疑似的 API 密钥、令牌、私钥和口令（只显示类型、位置和长度）；`relay scan` 单独扫描；迁移与导出支持 `--redact-secrets`（API：`redact_secrets`），写入时替换为 `[REDACTED:类型]`。
 - CI 增加 mypy 类型检查与覆盖率统计（下限 75%），ruff 规则加入 bugbear 等。
 - `relay --version`；推送 `v*` tag 自动构建并发布 Release，说明取自本文件，附构建来源证明。
 - LICENSE（MIT）、SECURITY、CONTRIBUTING、CODE_OF_CONDUCT、CODEOWNERS、issue / PR 模板。
