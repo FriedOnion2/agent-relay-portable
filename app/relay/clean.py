@@ -123,12 +123,3 @@ def looks_like_system_prompt(text: str) -> bool:
     low = text.lower().lstrip()
     # 用户的长消息仍然是正文，不能仅凭长度判为系统提示。
     return any(low.startswith(h) for h in _DEV_HINTS)
-
-
-def markdown_escape(text: str) -> str:
-    return (text or "").replace("\\", "\\\\").replace("`", "\\`")
-
-
-def to_markdown_blocks(text: str) -> str:
-    """把裸文本包装一下，避免markdown渲染时格式塌掉。"""
-    return text or ""

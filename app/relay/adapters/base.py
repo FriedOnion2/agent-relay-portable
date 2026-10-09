@@ -48,6 +48,8 @@ class SessionInfo:
     readable: bool = True
     error: str = ""
     shared_store: bool = False
+    native_id: str = ""
+    variant_count: int = 1
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
@@ -153,12 +155,17 @@ class BaseAdapter:
         """通过 会话id（或文件名的模糊匹配）定位会话文件。"""
         if not isinstance(sid, str) or not sid.strip():
             raise ValueError("缺少会话 ID")
+        exact = []
         matches = []
         for s in self.discover():
-            if s.id == sid:
-                return s.path
-            if sid in os.path.basename(s.path):
+            if s.id == sid or s.native_id == sid:
+                exact.append(s.path)
+            elif sid in os.path.basename(s.path):
                 matches.append(s.path)
+        if len(exact) > 1:
+            raise ValueError("同一会话 ID 有多个记录，请使用列表中的独立选择 ID")
+        if exact:
+            return exact[0]
         if len(matches) > 1:
             raise ValueError("会话 ID 匹配多条记录，请使用完整 ID")
         return matches[0] if matches else None
@@ -226,13 +233,6 @@ class BaseAdapter:
         }
 
     @staticmethod
-    def _title_from_conv(conv: ir.Conversation, fallback="未命名会话") -> str:
-        if conv.title:
-            return conv.title
-        t = conv.first_user_text(50)
-        return t or fallback
-
-    @staticmethod
     def _iter_files(root: str, pattern: str):
         if not os.path.isdir(root):
             return
@@ -255,11 +255,6 @@ class BaseAdapter:
                     "updated_ms": int(st.st_mtime * 1000)}
         except OSError:
             return {"size": 0, "created_ms": None, "updated_ms": None}
-
-
-def summarize_for_list(conv: ir.Conversation) -> Dict[str, int]:
-    """从完整会话里算会话列表需要的统计（用于无法廉价取标题的场景）。"""
-    return conv.stats()
 
 
 class ReadOnlyAdapter(BaseAdapter):

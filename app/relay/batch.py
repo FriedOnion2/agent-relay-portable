@@ -48,7 +48,7 @@ def run(source: str, target: str, ids: Optional[Sequence[str]] = None, keyword: 
     if source.startswith(("windows_", "ubuntu_")) and not cwd:
         raise ValueError("从跨系统来源批量迁出需指定存在的本机项目目录")
     rows = select(source, ids, keyword, limit)
-    existing = {row.id for row in dst.discover()}
+    existing = {row.native_id or row.id for row in dst.discover()}
     items: List[Dict[str, Any]] = []
     stopped = False
     for index, row in enumerate(rows, 1):

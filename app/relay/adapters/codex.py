@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import json
 import os
+import hashlib
+from collections import Counter
 from typing import Any, Dict, Iterable, List, Optional
 
 from .. import ir
@@ -77,11 +79,38 @@ class CodexAdapter(BaseAdapter):
         return out
 
     def discover(self) -> Iterable[SessionInfo]:
+        rows = list(self._rollouts())
+        counts = Counter(row.id for row in rows)
+        for row in rows:
+            row.native_id = row.id
+            row.variant_count = counts[row.id]
+            if row.variant_count > 1:
+                row.id = self._selector(row)
+            yield row
+
+    def _rollouts(self) -> Iterable[SessionInfo]:
         names = self._name_index()
         for path in self._iter_files(self.home, "rollout-*.jsonl"):
             info = self._peek(path, names)
             if info:
                 yield info
+
+    def _selector(self, row: SessionInfo) -> str:
+        # Root-relative identity survives a mounted home or a moved native ZIP.
+        relative = os.path.relpath(row.path, self.root).replace("\\", "/")
+        suffix = hashlib.sha256(relative.encode("utf-8")).hexdigest()[:16]
+        return (row.native_id or row.id) + "@" + suffix
+
+    def find_path(self, sid: str) -> Optional[str]:
+        if isinstance(sid, str) and "@" in sid:
+            # Keep a previously selected rollout addressable even when its
+            # sibling disappears; resolve only enumerated files, never a path
+            # supplied by a caller. Hash collisions are rejected, not guessed.
+            matches = [row.path for row in self._rollouts() if self._selector(row) == sid]
+            if len(matches) > 1:
+                raise ValueError("选择 ID 匹配多条记录，已停止读取")
+            return matches[0] if matches else None
+        return super().find_path(sid)
 
     def _peek(self, path: str, names: Dict[str, Dict[str, str]]) -> Optional[SessionInfo]:
         st = self._stat(path)

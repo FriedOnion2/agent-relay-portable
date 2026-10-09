@@ -49,4 +49,6 @@ python app/cli.py extract-skills
 python app/cli.py export-draft reviewed.md --directory /existing/drafts --confirm
 ```
 
+`search` 结果中的 `key` 是便携缓存的记录标识。将它传给 `indexed-session` 可直接读取缓存正文，即使原设备目录已离线；`show <agent> <id>` 则读取当前来源目录中的原会话，两者用途不同。
+
 `--include-thinking` 必须在 index 与 search/indexed-session 分别显式开启。CLI 提炼只输出 JSON 中的 Markdown，不落盘；导出命令未指定 `--confirm` 会拒绝写入。

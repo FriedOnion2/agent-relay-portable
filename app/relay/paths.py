@@ -104,17 +104,6 @@ def slug_for(cwd: str) -> str:
     return s[0].lower() + s[1:]
 
 
-def normalize_cwd(cwd: str) -> str:
-    """统一成正斜杠的绝对路径字符串。"""
-    if not cwd:
-        return ""
-    return os.path.normpath(str(cwd)).replace("\\", "/")
-
-
-def expand(p: str) -> str:
-    return os.path.expanduser(p)
-
-
 def is_windows_path(p: str) -> bool:
     """是否 Windows 风格路径（带盘符，如 C:\\Users 或 C:/Users）。"""
     return bool(p) and len(p) >= 2 and p[1] == ":"

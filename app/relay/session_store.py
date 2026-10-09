@@ -64,7 +64,10 @@ def store_session(agent, sid, root=None):
                 add(path, ("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows)).encode("utf-8"))
     manifest = {"kind":KIND, "agent":native, "created_at":iso(), "platform":platform.system(),
                 "source":agent, "root_count":len(roots), "entry":entry,
-                "session":{"id":sid, "title":conv.title, "cwd":conv.cwd, "format":conv.meta.get("source_format"),
+                # A ZIP contains only the chosen rollout. Keep its native ID
+                # as the lookup key so older v1 package readers can restore it.
+                "session":{"id":conv.id if native == "codex" else sid, "selection_id":sid, "native_id":conv.id,
+                           "title":conv.title, "cwd":conv.cwd, "format":conv.meta.get("source_format"),
                            "stats":conv.stats()},
                 "notes":["原生会话及所需标题/工作区索引；不含账号设置、凭据、附件或子代理旁路文件。"]}
     path = archive.storage_root(root) / "conversations" / native / (uuid.uuid4().hex + ".zip")

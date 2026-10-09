@@ -559,13 +559,26 @@ test('late Skill scans cannot overwrite the latest directory and its selections'
 });
 
 // ---------- 界面语言 ----------
+function translationStrings(source){
+  const strings=[];
+  for(const m of source.matchAll(/\btr\(\s*('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")/g)){
+    strings.push(vm.runInNewContext(m[1]));
+  }
+  return strings;
+}
+
+test('translation coverage recognizes both quote styles and escaped literals',()=>{
+  assert.deepEqual(translationStrings(`tr('中文'); tr("英文"); tr('换行\\n正文'); tr('单\\'引号');`),
+    ['中文','英文','换行\n正文',"单'引号"]);
+});
+
 test('every UI string has an English translation', () => {
   const body = html.split('<script>')[0].split('</head>')[1];
   const strings = new Set();
   for (const m of body.matchAll(/>([^<>]*[\u4e00-\u9fff][^<>]*)</g)) strings.add(m[1].trim());
   for (const m of body.matchAll(/\s(?:placeholder|title|aria-label)="([^"]*[\u4e00-\u9fff][^"]*)"/g)) strings.add(m[1].trim());
   strings.add(html.match(/<title>([^<]*)<\/title>/)[1]);
-  for (const m of script.matchAll(/\btr\('((?:[^'\\]|\\.)*)'/g)) strings.add(m[1].replace(/\\n/g, '\n').replace(/\\\\/g, '\\'));
+  for (const text of translationStrings(script)) strings.add(text);
   const t = setup();
   const missing = [...strings].filter(zh => t.app.EN[zh] === undefined && !zh.startsWith('Switch language'));
   assert.deepEqual(missing, []);
@@ -574,6 +587,25 @@ test('every UI string has an English translation', () => {
     const vars = s => (s.match(/\{\w+\}/g) || []).sort().join();
     assert.equal(vars(en), vars(zh), zh);
   }
+});
+
+test('same-native-ID rollouts remain separate selections and open the chosen selector',async()=>{
+  const t=setup();t.app.state.source='codex';t.app.state.listRequest=1;
+  const rows=['first','second'].map((name,index)=>({id:'native@'+name,native_id:'native',variant_count:2,
+    title:'same title',turns:index+1,path:'/sessions/'+name+'.jsonl',updated:'today',size_str:'1 KB'}));
+  t.app.state.sessions=rows;t.app.selections.sessions.rows=rows;
+  t.app.renderList();
+  for(const [index,element] of t.el('#list').children.entries()){
+    assert.match(element.innerHTML,/同 ID 的 2 份记录/);
+    assert.ok(element.innerHTML.includes(rows[index].path));
+  }
+  t.app.selectAll('sessions',true);
+  assert.deepEqual([...t.app.selections.sessions.selected],['native@first','native@second']);
+  const opened=t.app.openSession(rows[1]);
+  assert.match(t.requests[0].url,/id=native%40second/);
+  t.response(0,{ok:true,info:{title:'same title',stats:{}},turns:[]});
+  await opened;
+  assert.equal(t.app.state.current.id,'native@second');
 });
 
 test('English mode translates client strings and known server messages, and zh restores them', () => {

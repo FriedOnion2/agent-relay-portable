@@ -40,17 +40,6 @@ def media_root() -> Path:
     return project_root()
 
 
-def log_dir() -> Path:
-    """日志写在盘上，不在主机上留东西。"""
-    p = media_root() / "logs"
-    try:
-        p.mkdir(exist_ok=True)
-    except OSError:
-        p = app_root() / "logs"
-        p.mkdir(exist_ok=True)
-    return p
-
-
 def config_path() -> Path:
     return media_root() / "config.json"
 
@@ -199,15 +188,6 @@ DEFAULT_CONFIG = {
 }
 
 
-def write_default_config(force: bool = False) -> Path:
-    p = config_path()
-    if p.exists() and not force:
-        return p
-    p.write_text(json.dumps(DEFAULT_CONFIG, ensure_ascii=False, indent=2) + "\n",
-                 encoding="utf-8")
-    return p
-
-
 def _merge_device(cfg):
     from relay import device
     try:
@@ -326,7 +306,7 @@ def probe_agent_homes() -> list[dict]:
 
 # ---------------------------------------------------------------- 体检报告
 
-def report(verbose: bool = True, cfg: dict | None = None) -> dict:
+def report(cfg: dict | None = None) -> dict:
     py = find_python()
     cfg = cfg if cfg is not None else load_config()
     apply_config(cfg)

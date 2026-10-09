@@ -1,3 +1,0 @@
-[console_scripts]
-agent-relay = cli:main
-relay = cli:main

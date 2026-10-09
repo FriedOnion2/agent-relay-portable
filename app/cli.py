@@ -182,6 +182,9 @@ def cmd_list(args):
     for i, r in enumerate(rows, 1):
         sid = r["id"]
         print(f"{i:>3}  {sid:<38} {r['updated']:<20} {r['turns']:>4}  {r['title'][:50]}")
+        if r.get("variant_count", 1) > 1:
+            print(f"     同 ID 的 {r['variant_count']} 份记录；原生 ID：{r['native_id']}")
+            print(f"     文件：{r['path']}")
         if r.get("error"):
             print(f"     读取受限：{r['error']}")
     print(f"\n共 {len(rows)} 条")
@@ -733,7 +736,6 @@ def main(argv=None):
             import traceback
             traceback.print_exc()
         return 1
-    return 0
 
 
 if __name__ == "__main__":

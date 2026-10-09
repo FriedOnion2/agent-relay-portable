@@ -391,6 +391,9 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 // 中文原文即键。tr(原文, 变量) 翻译客户端文案；ts(服务端消息) 按原文精确匹配翻译已知的服务端消息，未收录的保持原样。
 // 页面静态文字由 applyStatic() 按文本节点/属性精确匹配翻译。新增界面文字时请同步补充 EN（tests/web.test.cjs 会检查）。
 const EN = {
+  '同 ID 的 {n} 份记录':'{n} records with the same native ID',
+  '原生 ID：{id}':'Native ID: {id}',
+  '文件：{path}':'File: {path}',
   '索引文件更新：{time}':'Index file updated: {time}',
   '已复制':'Copied',
   '该 ID 已存在。选择「创建独立副本」后重新预览，可保留原会话。':'This ID already exists. Choose “Create an independent copy” and preview again to keep the original session.',
@@ -618,6 +621,8 @@ const EN = {
 };
 // 服务端返回的固定消息（预览项、警告、错误）。按原文精确匹配；带变量的用 EN_PATTERNS，其余保持中文原样。
 const EN_SERVER = {
+  '同一会话 ID 有多个记录，请使用列表中的独立选择 ID':'Several records share this session ID. Use a distinct selection ID from the list.',
+  '选择 ID 匹配多条记录，已停止读取':'The selection ID matches several records; reading was stopped.',
   '目标目录扫描不完整（读取失败或文件过多），无法安全撤销':'The target directory scan is incomplete (a read failed or there are too many files); undo is disabled to protect existing data',
   '源内容、目标目录或选项已变化，请重新预览后确认':'The source, target directory or options changed; preview again and confirm',
   '预览源文件超过存储包限制':'The source file for the preview exceeds the package limit',
@@ -1099,8 +1104,10 @@ function renderList(){
         <span title="${esc(tr('更新时间'))}">${esc(s.updated)}</span>
         <span>${esc(s.readable===false?tr('读取受限'):s.turns===1?tr('1 轮'):tr('{n} 轮',{n:s.turns}))}</span>
         ${s.shared_store?'<span>'+esc(tr('Claude 共享记录'))+'</span>':''}
+        ${s.variant_count>1?'<span>'+esc(tr('同 ID 的 {n} 份记录',{n:s.variant_count}))+'</span>':''}
         <span>${esc(s.size_str)}</span>
-      </div>`;
+      </div>
+      ${s.variant_count>1?'<div class="meta">'+esc(tr('原生 ID：{id}',{id:s.native_id}))+'</div><div class="meta">'+esc(tr('文件：{path}',{path:s.path}))+'</div>':''}`;
     el.appendChild(selectionCheckbox('sessions',s));
     el.title = `${s.id}\n${s.cwd||''}\n${s.path}\n${ts(s.error)||''}`;
     if(state.current && state.current.id === s.id) el.classList.add('on');

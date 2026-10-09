@@ -5,6 +5,12 @@
 
 ## [Unreleased]
 
+### Fixed
+- Codex 同一原生 ID 的多个 rollout 现在提供独立选择 ID，CLI / UI 标注记录数与文件路径；使用有歧义的原生 ID 会停止读取、导出或迁移，避免静默选中第一份记录。单份记录仍可用原生 ID；选择 ID 随 Agent 根目录搬迁保持有效。
+- 原生会话包保留所选 rollout 的选择 ID 与原生 ID；列表多选、批量转换和离线索引可分别处理同 ID 的记录，预览 token 继续校验实际源文件。
+- 移除被提交的覆盖率数据库与 egg-info 元数据，补充忽略规则和 CI 仓库卫生检查。
+- 删除确认没有仓库调用的内部辅助函数、未使用的报告参数与 CLI 不可达返回；保留插件自检契约。英文翻译覆盖检查兼容单双引号与转义字符串。
+
 ## [1.0.0] - 2026-10-10
 
 首个正式版。Windows、Ubuntu 22.04 和 macOS ARM / Intel 提供统一离线总包；已验证的真实客户端与文件层支持范围见 [兼容状态](https://github.com/FriedOnion2/agent-relay-portable/blob/v1.0.0/docs/compatibility.md)。
