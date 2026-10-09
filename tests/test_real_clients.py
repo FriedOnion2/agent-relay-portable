@@ -12,7 +12,8 @@ SCRIPTS = Path(__file__).resolve().parents[1] / 'scripts'
 
 
 def run(script):
-    result = subprocess.run([sys.executable, str(SCRIPTS / script)], capture_output=True, text=True, timeout=300)
+    result = subprocess.run([sys.executable, str(SCRIPTS / script)], capture_output=True, text=True,
+                            encoding='utf-8', timeout=300)
     if result.returncode == 77:
         raise unittest.SkipTest(result.stdout.strip())
     return result

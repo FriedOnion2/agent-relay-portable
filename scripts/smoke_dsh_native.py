@@ -29,7 +29,7 @@ def dsh_modules():
     # Windows / some prefixes put the shim next to a global node_modules instead of under lib/.
     npm = shutil.which('npm')
     if npm:
-        root = subprocess.run([npm, 'root', '-g'], capture_output=True, text=True).stdout.strip()
+        root = subprocess.run([npm, 'root', '-g'], capture_output=True, text=True, encoding='utf-8').stdout.strip()
         if root:
             candidates += [Path(root) / '@deepseek-ai' / 'dsh' / 'node_modules', Path(root)]
     for candidate in candidates:
@@ -50,12 +50,13 @@ def main():
         return 77
     from relay.adapters.dsh import DshAdapter
     from test_dsh_write import conversation
-    version = subprocess.run([shutil.which('dsh'), '--version'], capture_output=True, text=True).stdout.strip()
+    version = subprocess.run([shutil.which('dsh'), '--version'], capture_output=True,
+                             text=True, encoding='utf-8').stdout.strip()
     with tempfile.TemporaryDirectory() as home:
         adapter = DshAdapter(home=home)
         adapter.write(conversation(), session_id=SESSION_ID, remap_tools=False)
         result = subprocess.run(['node', str(ROOT / 'tests' / 'dsh_native_smoke.mjs'), str(modules), home, SESSION_ID],
-                                capture_output=True, text=True, timeout=120)
+                                capture_output=True, text=True, encoding='utf-8', timeout=120)
     if result.returncode != 0:
         print('FAIL (dsh %s):\n%s%s' % (version, result.stdout[-1500:], result.stderr[-1500:]))
         return 1

@@ -45,6 +45,10 @@ GitHub Actions 的「Real client compatibility」工作流每周一并在相关�
 
 实际每个系统的通过情况以最近一次工作流运行摘要为准。
 
+Codex 冒烟测试逐项核对两轮会话的正文、可读思考、工具参数、成功结果和失败结果，不能仅靠轮次与项目数量判通过。
+测试会先关闭客户端输入、等待进程和输出读取线程退出，再清理临时目录；Windows 的短暂文件占用做有限重试，持续失败仍报告错误。
+子进程输出按 UTF-8 捕获，避免中文 Windows 默认 GBK 编码把真实错误遮蔽。
+
 ## 格式漂移告警
 
 两个计划任务（每日的 `format-health`、每周的 `real-clients`）失败时，`alert` 作业会调用 `scripts/drift_issue.py`：
