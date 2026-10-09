@@ -27,6 +27,8 @@
 
 ## 快速开始
 
+**正式版：[v1.0.0](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v1.0.0)**。各 Agent 的实测范围见下方支持表与 [兼容状态](docs/compatibility.md)。
+
 **普通用户**：到 [Releases](https://github.com/FriedOnion2/agent-relay-portable/releases) 下载 `AgentRelay-<版本>-universal.zip`，完整解压后运行启动器。总包内置 Python 与依赖，**无需另装 Python / Node.js，首次启动不联网下载**。不要选择 GitHub 自动生成的 Source code 压缩包。
 
 | 设备 | 启动入口 | 支持范围 |

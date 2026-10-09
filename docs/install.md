@@ -4,7 +4,7 @@ Release 总包与源码两种启动方式、端口与退出说明。回到 [READ
 
 ## Release 下载即用
 
-正式版：暂未发布（发布后在 [Releases](https://github.com/FriedOnion2/agent-relay-portable/releases/latest) 的 Latest）。**滚动开发版**：[`dev`](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/dev)（每次合并到 `main` 自动更新，始终只有这一个，可能不稳定）。
+正式版：[v1.0.0](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v1.0.0)（Latest）。**滚动开发版**：[`dev`](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/dev)（每次合并到 `main` 自动更新，始终只有这一个，可能不稳定）。
 
 普通用户下载 [GitHub Releases](https://github.com/FriedOnion2/agent-relay-portable/releases) 中的
 **`AgentRelay-<版本>-universal.zip`**，完整解压后按当前设备运行启动器。一个总包同时包含

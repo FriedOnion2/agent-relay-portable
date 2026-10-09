@@ -1,14 +1,18 @@
 # Changelog
 
-格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本（当前为 `0.x` 开发阶段，接口可能调整）。
+格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本（`1.x` 不兼容的公开接口或存储格式调整升主版本）。
 每个 Release 的完整说明见 [Releases](https://github.com/FriedOnion2/agent-relay-portable/releases)。
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-10
+
+首个正式版。Windows、Ubuntu 22.04 和 macOS ARM / Intel 提供统一离线总包；已验证的真实客户端与文件层支持范围见 [兼容状态](https://github.com/FriedOnion2/agent-relay-portable/blob/v1.0.0/docs/compatibility.md)。
+
 ### Added
 - 正式发布增加真实 Codex 的 Windows → Ubuntu 22.04 → Windows 原生包往返门槛：每站恢复历史、通过本地测试接口续聊、重启回读，核对工具与思考及 ID 冲突保护；无需登录、不调用付费模型，仅使用临时合成数据。
 - 网页主流程：任务首页与来源状态、互斥任务导航、独立会话保存流程、恢复时显式本机项目映射与 ID 策略、跨页面保留的迁移结果；搜索展示索引概况，已审核导出的草稿可转到 Skill 打包表单，仍需单独确认存储。
-- 发布规则：始终只有一个滚动开发版（固定 tag `dev`，每次合并到 `main` 自动重建并替换）；正式版只用 `vX.Y.Z` tag。`main` 上的版本号恒为 `X.Y.Z-dev`。规则见 `docs/maintainers.md`。
+- 发布规则：始终只有一个滚动开发版（固定 tag `dev`，每次合并到 `main` 自动重建并替换）；正式版只用 `vX.Y.Z` tag。`main` 通常使用 `X.Y.Z-dev`，正式发布准备期间暂用对应正式版本。规则见 `docs/maintainers.md`。
 - 网页界面：「操作记录」面板（查看写入记录、一键撤销，被改动的文件默认保留并可二次确认强制撤销）、「批量迁移所选」（先预演再确认）、「脱敏密钥」选项；预览对话框会提示疑似敏感信息。均支持中英文。
 - 批量迁移：`relay batch`（API `/api/batch`）按条件或 ID 列表批量转换，默认只预演，`--yes` 才写入；目标 ID 确定性派生，重复执行自动识别已迁移的会话（`--on-conflict skip|new|fail`），单条失败不拖垮整批，输出逐条进度与汇总。
 - 敏感信息扫描：预览会提示会话里疑似的 API 密钥、令牌、私钥和口令（只显示类型、位置和长度）；`relay scan` 单独扫描；迁移与导出支持 `--redact-secrets`（API：`redact_secrets`），写入时替换为 `[REDACTED:类型]`。

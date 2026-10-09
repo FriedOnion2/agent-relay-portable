@@ -76,12 +76,20 @@ class ReleaseNotesTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 release_notes.meta('v1.3.0-dev', '')
 
-    def test_repository_main_is_in_dev_state_and_templates_render(self):
-        # main 上的 __version__ 总是 X.Y.Z-dev；正式发布的 PR 才改成 X.Y.Z 并写入 CHANGELOG。
-        self.assertRegex(__version__, r'^\d+\.\d+\.\d+-dev$')
-        text = release_notes.render('', 'o/r', dev_sha='b' * 40)
-        self.assertIn('滚动开发版', text)
-        self.assertIn('v%s.bbbbbbb' % __version__, text)
+    def test_repository_version_has_matching_notes_and_templates_render(self):
+        # Release preparation temporarily uses a stable version on main; it
+        # must have matching notes before the version tag can publish it.
+        self.assertRegex(__version__, r'^\d+\.\d+\.\d+(?:-dev)?$')
+        if __version__.endswith('-dev'):
+            text = release_notes.render('', 'o/r', dev_sha='b' * 40)
+            self.assertIn('滚动开发版', text)
+            self.assertIn('v%s.bbbbbbb' % __version__, text)
+        else:
+            text = release_notes.render('v' + __version__, 'o/r')
+            self.assertIn('AgentRelay-v%s-universal.zip' % __version__, text)
+            self.assertIn('更新内容', text)
+        self.assertNotIn('{changelog}', text)
+        self.assertNotIn('{tag}', text)
 
     def test_cli_reports_version(self):
         out = subprocess.run([sys.executable, str(ROOT / 'app' / 'cli.py'), '--version'],
