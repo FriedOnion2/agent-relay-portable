@@ -274,7 +274,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self._error('缺少来源 / 会话 ID / 目标')
                 return self._json(preview.conversion(body.get('source'), body.get('id'), body.get('target'),
                            body.get('cwd') or None, body.get('session_id') or None,
-                           body.get('remap_tools', True), body.get('include_thinking', True), body.get('title') or None))
+                           body.get('remap_tools', True), body.get('include_thinking', True), body.get('title') or None,
+                           bool(body.get('redact_secrets', False))))
             if u.path == "/api/shutdown":
                 self._json({"ok": True})
                 # shutdown must run outside the serve_forever thread.
@@ -326,6 +327,24 @@ class Handler(BaseHTTPRequestHandler):
                         return self._error("缺少 source / id / source2 / id2")
                 return self._json(diff.compare(registry.read_conversation(body["source"], body["id"]),
                                                registry.read_conversation(body["source2"], body["id2"])))
+
+            if u.path == "/api/batch":
+                from relay import batch
+                if not (body.get("source") and body.get("target")):
+                    return self._error("缺少 source / target")
+                ids = body.get("ids") or []
+                if not isinstance(ids, list) or any(not isinstance(x, str) for x in ids):
+                    return self._error("ids 必须是字符串数组")
+                try:
+                    limit = int(body.get("limit") or 100)
+                except (TypeError, ValueError):
+                    return self._error("limit 必须是整数")
+                return self._json(batch.run(
+                    body["source"], body["target"], ids=ids, keyword=str(body.get("keyword") or ""), limit=limit,
+                    cwd=body.get("cwd") or None, on_conflict=body.get("on_conflict") or "skip",
+                    redact_secrets=bool(body.get("redact_secrets", False)),
+                    remap_tools=bool(body.get("remap_tools", True)), include_thinking=bool(body.get("include_thinking", True)),
+                    dry_run=body.get("dry_run", True) is not False, stop_on_error=bool(body.get("stop_on_error", False))))
             if u.path == "/api/transfer":
                 source = body.get("source")
                 sid = body.get("id")
@@ -340,6 +359,7 @@ class Handler(BaseHTTPRequestHandler):
                     include_thinking=bool(body.get("include_thinking", True)),
                     new_title=body.get("title") or None,
                     preview_token=body.get('preview_token'),
+                    redact_secrets=bool(body.get('redact_secrets', False)),
                 )
                 return self._json(res)
             if u.path == "/api/export-md":
@@ -347,8 +367,14 @@ class Handler(BaseHTTPRequestHandler):
                     body.get("source"), body.get("id"),
                     include_thinking=bool(body.get("include_thinking", True)),
                     include_tools=bool(body.get("include_tools", True)),
+                    redact_secrets=bool(body.get("redact_secrets", False)),
                 )
                 return self._json({"ok": True, "markdown": md})
+            if u.path == "/api/scan":
+                from relay import sensitive
+                if not body.get("source") or not body.get("id"):
+                    return self._error("缺少来源 / 会话 ID")
+                return self._json(dict(ok=True, **sensitive.scan_conversation(registry.read_conversation(body["source"], body["id"]))))
             return self._error("unknown endpoint", 404)
         except FileExistsError as e:
             return self._error(str(e), 409)

@@ -114,6 +114,18 @@ class HttpTests(unittest.TestCase):
         self.assertFalse(json.loads(raw)['identical'])
         self.assertEqual(self.request('POST', '/api/diff', json.dumps({'source':'a', 'id':'1'}), headers)[0], 400)
 
+    def test_batch_route_dry_runs_by_default_and_validates_input(self):
+        headers = {'Content-Type':'application/json'}
+        with patch('relay.batch.run', return_value={'ok':True, 'items':[]}) as run:
+            status, _ = self.request('POST', '/api/batch', json.dumps({'source':'claude', 'target':'codex'}), headers)
+            self.assertEqual(status, 200)
+            self.assertTrue(run.call_args.kwargs['dry_run'])
+            self.assertEqual(run.call_args.kwargs['on_conflict'], 'skip')
+            self.request('POST', '/api/batch', json.dumps({'source':'claude', 'target':'codex', 'dry_run':False}), headers)
+            self.assertFalse(run.call_args.kwargs['dry_run'])
+        for body in ({'source':'claude'}, {'source':'claude', 'target':'codex', 'ids':'a'}, {'source':'claude', 'target':'codex', 'limit':'x'}):
+            self.assertEqual(self.request('POST', '/api/batch', json.dumps(body), headers)[0], 400)
+
     def test_health_failure_is_visible_and_device_home_requires_valid_directory(self):
         from relay import device
         with patch('relay.health.report', return_value={'ok':False, 'adapters':[{'status':'failed'}]}):
