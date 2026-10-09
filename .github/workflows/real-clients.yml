@@ -12,6 +12,8 @@ on:
 permissions:
   contents: read
 jobs:
+  roundtrip:
+    uses: ./.github/workflows/native-roundtrip.yml
   smoke:
     name: smoke (${{ matrix.os_name }})
     runs-on: ${{ matrix.runner }}
@@ -56,6 +58,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v7
         with:
+          pattern: smoke-*
           path: results
       - uses: actions/setup-python@v7
         with:
@@ -73,6 +76,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v7
         with:
+          pattern: smoke-*
           path: results
       - uses: actions/setup-python@v7
         with:
