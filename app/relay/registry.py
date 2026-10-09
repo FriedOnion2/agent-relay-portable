@@ -122,7 +122,7 @@ def _write_roots(adapter) -> List[str]:
 def transfer(source: str, sid: str, target: str, cwd: str | None = None,
              session_id: str | None = None, remap_tools: bool = True,
              include_thinking: bool = True, new_title: str | None = None,
-             preview_token: str | None = None) -> Dict[str, Any]:
+             preview_token: str | None = None, redact_secrets: bool = False) -> Dict[str, Any]:
     """把 source 的一个会话迁移到 target，返回会话信息与新文件路径。"""
     src = get(source)
     dst = get(target)
@@ -138,9 +138,14 @@ def transfer(source: str, sid: str, target: str, cwd: str | None = None,
         raise ValueError("源会话没有可迁移的内容（文件为空或无法解析），迁移已停止")
     from . import preview
     options = dict(cwd=cwd, session_id=session_id, remap_tools=remap_tools, include_thinking=include_thinking, new_title=new_title)
+    if redact_secrets:
+        options['redact_secrets'] = True
     plan = preview.report(conv, target, options, dst.home)
     preview.check_token(preview_token, plan['token'])
     conv = preview.prepare(conv, new_title)
+    if redact_secrets:
+        from . import sensitive
+        conv = sensitive.redact_conversation(conv)
     from . import oplog
     with oplog.track("transfer", _write_roots(dst), source=source, target=target, session=sid,
                      title=conv.title) as record:
@@ -158,7 +163,10 @@ def transfer(source: str, sid: str, target: str, cwd: str | None = None,
 
 
 def export_markdown(source: str, sid: str, include_thinking: bool = True,
-                    include_tools: bool = True, max_text: int = 0) -> str:
+                    include_tools: bool = True, max_text: int = 0, redact_secrets: bool = False) -> str:
     conv = get(source).read(sid)
+    if redact_secrets:
+        from . import sensitive
+        conv = sensitive.redact_conversation(conv)
     return render_markdown(conv, include_thinking=include_thinking,
                            include_tools=include_tools, max_text=max_text)
