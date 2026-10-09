@@ -543,12 +543,6 @@ def build_parser():
     pd.set_defaults(func=cmd_diff)
 
 
-    p4b = sub.add_parser("scan", help="扫描会话里的疑似密钥、令牌和口令（只显示类型、位置和长度）")
-    p4b.add_argument("agent", choices=read_agents)
-    p4b.add_argument("id")
-    p4b.add_argument("--json", action="store_true")
-    p4b.set_defaults(func=cmd_scan)
-
     p5 = sub.add_parser("transfer", help="迁移会话到另一个 agent")
     p5.add_argument("agent", choices=read_agents, help="来源 agent")
     p5.add_argument("id", help="源会话 id")
@@ -591,18 +585,6 @@ def build_parser():
     pb.add_argument("--yes", action="store_true", help="实际写入；不加则只预演")
     pb.add_argument("--json", action="store_true")
     pb.set_defaults(func=cmd_batch)
-
-
-    history = sub.add_parser("history", help="查看写入目标软件的操作记录")
-    history.add_argument("--limit", type=int, default=20)
-    history.add_argument("--json", action="store_true")
-    history.set_defaults(func=cmd_history)
-
-    undo = sub.add_parser("undo", help="撤销一次迁移 / 恢复：删除新建文件、截回被追加的索引；写入后被改动的文件会保留")
-    undo.add_argument("id", help="history 中显示的操作 ID")
-    undo.add_argument("--force", action="store_true", help="连同写入后又被修改的新建文件一起删除")
-    undo.add_argument("--json", action="store_true")
-    undo.set_defaults(func=cmd_undo)
 
     p6 = sub.add_parser("doctor", help="环境体检（换机器后先跑这个）")
     p6.set_defaults(func=cmd_doctor)
