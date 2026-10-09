@@ -61,3 +61,23 @@ jobs:
         with:
           python-version: '3.12'
       - run: python scripts/smoke_table.py results >> "$GITHUB_STEP_SUMMARY"
+  alert:
+    needs: smoke
+    # Only scheduled runs open issues; manual and push runs are watched by whoever started them.
+    if: always() && github.event_name == 'schedule' && needs.smoke.result == 'failure'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          path: results
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: python scripts/smoke_table.py results > table.md || true
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/drift_issue.py --workflow "Real client compatibility" --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --details-file table.md
