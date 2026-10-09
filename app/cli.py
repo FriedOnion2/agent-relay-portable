@@ -584,6 +584,18 @@ def build_parser():
     pb.add_argument("--json", action="store_true")
     pb.set_defaults(func=cmd_batch)
 
+
+    history = sub.add_parser("history", help="查看写入目标软件的操作记录")
+    history.add_argument("--limit", type=int, default=20)
+    history.add_argument("--json", action="store_true")
+    history.set_defaults(func=cmd_history)
+
+    undo = sub.add_parser("undo", help="撤销一次迁移 / 恢复：删除新建文件、截回被追加的索引；写入后被改动的文件会保留")
+    undo.add_argument("id", help="history 中显示的操作 ID")
+    undo.add_argument("--force", action="store_true", help="连同写入后又被修改的新建文件一起删除")
+    undo.add_argument("--json", action="store_true")
+    undo.set_defaults(func=cmd_undo)
+
     p6 = sub.add_parser("doctor", help="环境体检（换机器后先跑这个）")
     p6.set_defaults(func=cmd_doctor)
 
