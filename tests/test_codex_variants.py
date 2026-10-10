@@ -135,7 +135,10 @@ class CodexVariantsTests(unittest.TestCase):
             plans = [preview.conversion('codex', row.id, 'claude') for row in rows]
             self.assertNotEqual(plans[0]['token'], plans[1]['token'])
             selected = Path(rows[1].path)
-            selected.write_text(selected.read_text(encoding='utf-8').replace('variant 2', 'changed'), encoding='utf-8')
+            original = selected.read_text(encoding='utf-8')
+            changed = original.replace('variant', 'changed')
+            self.assertNotEqual(original, changed)
+            selected.write_text(changed, encoding='utf-8')
             with self.assertRaisesRegex(ValueError, '变化|改变'):
                 registry.transfer('codex', rows[1].id, 'claude', preview_token=plans[1]['token'])
             self.assertFalse(Path(target.home).exists())
