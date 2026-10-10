@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from ..messages import text as message_text
+
 import fnmatch
 import os
 import ntpath
@@ -48,6 +50,8 @@ class SessionInfo:
     readable: bool = True
     error: str = ""
     shared_store: bool = False
+    native_id: str = ""
+    variant_count: int = 1
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
@@ -152,15 +156,20 @@ class BaseAdapter:
     def find_path(self, sid: str) -> Optional[str]:
         """通过 会话id（或文件名的模糊匹配）定位会话文件。"""
         if not isinstance(sid, str) or not sid.strip():
-            raise ValueError("缺少会话 ID")
+            raise ValueError(message_text('err.missing_session_id'))
+        exact = []
         matches = []
         for s in self.discover():
-            if s.id == sid:
-                return s.path
-            if sid in os.path.basename(s.path):
+            if s.id == sid or s.native_id == sid:
+                exact.append(s.path)
+            elif sid in os.path.basename(s.path):
                 matches.append(s.path)
+        if len(exact) > 1:
+            raise ValueError(message_text('msg.several_records_share_this_session_id_use_a_distinct_selection_id_from_the_list'))
+        if exact:
+            return exact[0]
         if len(matches) > 1:
-            raise ValueError("会话 ID 匹配多条记录，请使用完整 ID")
+            raise ValueError(message_text('err.session_id_matches_multiple_records_use_the_full_id'))
         return matches[0] if matches else None
 
     def project_dir_for(self, cwd: str) -> str:
@@ -221,16 +230,9 @@ class BaseAdapter:
             "api_version": self.api_version,
             "community": False,
             "capabilities": ["read", "export", "native_store", "native_restore", "skill_store"] + (["write"] if self.can_write else []),
-            "write_note": "" if self.can_write else "支持读取、导出及迁出；尚不支持写入此来源",
+            "write_note": "" if self.can_write else message_text('msg.supports_reading_export_and_migration_out_writing_to_this_source_is_not_supported_yet'),
             "read_note": getattr(self, "read_note", ""),
         }
-
-    @staticmethod
-    def _title_from_conv(conv: ir.Conversation, fallback="未命名会话") -> str:
-        if conv.title:
-            return conv.title
-        t = conv.first_user_text(50)
-        return t or fallback
 
     @staticmethod
     def _iter_files(root: str, pattern: str):
@@ -257,13 +259,8 @@ class BaseAdapter:
             return {"size": 0, "created_ms": None, "updated_ms": None}
 
 
-def summarize_for_list(conv: ir.Conversation) -> Dict[str, int]:
-    """从完整会话里算会话列表需要的统计（用于无法廉价取标题的场景）。"""
-    return conv.stats()
-
-
 class ReadOnlyAdapter(BaseAdapter):
     can_write = False
 
     def write(self, conv, **kwargs):
-        raise ValueError(f"{self.label} 暂不支持作为迁移目标；可读取、导出或迁移到其他工具")
+        raise ValueError(message_text('err.label_does_not_support_migration_writes_yet_read_export_or_migrate_to_another_tool', label=self.label))

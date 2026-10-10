@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+from ..messages import text as message_text, error_text
+
 import json
 import os
 from typing import Any, Dict, Iterable, List, Optional
@@ -47,25 +49,25 @@ def active_chain(records):
     if not main_leaves:
         # A cycle is corrupt, not an empty conversation.
         if not leaves and any(r.get("type") in ("user", "assistant") for r in entries):
-            raise ValueError("Claude parentUuid 链存在循环，无法确定有效会话")
+            raise ValueError(message_text('err.claude_parentuuid_chain_contains_a_cycle_cannot_determine_the_valid_session'))
         return [r for r in records if r.get("type") in ("summary", "custom-title")], []
     current = max(main_leaves, key=lambda r:positions[r["uuid"]])
     chain, visited = [], set()
     while current:
         uid = current["uuid"]
         if uid in visited:
-            raise ValueError("Claude parentUuid 链存在循环")
+            raise ValueError(message_text('err.claude_parentuuid_chain_contains_a_cycle'))
         visited.add(uid)
         chain.append(current)
         parent = current.get("parentUuid")
         if parent and parent not in indexed:
-            raise ValueError("Claude parentUuid 链有缺失记录，无法完整迁移")
+            raise ValueError(message_text('err.claude_parentuuid_chain_has_missing_records_complete_migration_is_not_possible'))
         current = indexed.get(parent)
     chain.reverse()
     result = [r for r in records if r.get("type") in ("summary", "custom-title")]
     result.extend(r for r in chain if visible(r))
     omitted = len(entries) - len(chain)
-    notes = [f"按 Claude 当前 parentUuid 主链读取；省略 {omitted} 条其他分支或旧上下文记录。"] if omitted else []
+    notes = [message_text('msg.claude_branch_omitted', omitted=omitted)] if omitted else []
     return result, notes
 
 
@@ -121,7 +123,7 @@ class ClaudeAdapter(BaseAdapter):
                 st = self._stat(path)
                 info = SessionInfo(self.name, os.path.splitext(os.path.basename(path))[0],
                                    "Claude 读取受限", "", "", None, st["updated_ms"], st["size"], 0,
-                                   path, False, str(exc))
+                                   path, False, error_text(exc))
             if info:
                 yield info
 
@@ -131,7 +133,7 @@ class ClaudeAdapter(BaseAdapter):
         if conv.truncated and not conv.turns:
             return SessionInfo(self.name, conv.id, "Claude 读取受限", conv.cwd, conv.model or "",
                                None, st["updated_ms"], st["size"], 0, path, False,
-                               "首条消息超过读取限制，无法完整读取")
+                               message_text('err.claude_first_message_oversized'))
         if not conv.turns and not conv.title:
             return None
         return SessionInfo(
@@ -146,7 +148,7 @@ class ClaudeAdapter(BaseAdapter):
     def read(self, sid: str) -> ir.Conversation:
         path = self.find_path(sid)
         if not path:
-            raise FileNotFoundError(f"找不到 Claude 会话: {sid}")
+            raise FileNotFoundError(message_text('err.claude_session_not_found_sid', sid=sid))
         return self._parse(path)
 
     def _parse(self, path: str) -> ir.Conversation:
@@ -158,7 +160,7 @@ class ClaudeAdapter(BaseAdapter):
         )
         loaded = list(read_jsonl(path, MAX_SCAN_BYTES, strict=True))
         if any(r.get("session_id") and "sessionId" not in r for r, _ in loaded):
-            raise ValueError("这是 SDK/CLI stream 输出，不是可恢复的 Claude 原生 transcript")
+            raise ValueError(message_text('err.this_is_sdk_cli_stream_output_not_a_resumable_native_claude_transcript'))
         timestamps = [safe_ms(r.get("timestamp")) for r, _ in loaded]
         timestamps = [ts for ts in timestamps if ts is not None]
         if timestamps:

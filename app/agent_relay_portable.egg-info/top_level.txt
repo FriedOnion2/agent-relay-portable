@@ -1,6 +1,0 @@
-bootstrap
-cli
-portable
-relay
-relay_web
-server

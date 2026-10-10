@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+from ..messages import text as message_text
+
 import json
 import os
 from typing import Dict, Iterable, List, Optional
@@ -113,7 +115,7 @@ class WorkBuddyAdapter(BaseAdapter):
     def read(self, sid: str) -> ir.Conversation:
         path = self.find_path(sid)
         if not path:
-            raise FileNotFoundError(f"找不到 WorkBuddy 会话: {sid}")
+            raise FileNotFoundError(message_text('err.workbuddy_session_not_found_sid', sid=sid))
         return self._parse(path)
 
     def _parse(self, path: str) -> ir.Conversation:

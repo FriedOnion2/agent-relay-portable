@@ -15,6 +15,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install ruff==0.16.10
+      - run: python scripts/check_repository_hygiene.py
       - run: ruff check .
   mypy:
     runs-on: ubuntu-latest

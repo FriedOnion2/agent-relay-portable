@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from relay.messages import text as message_text, annotate, error_text
+
 import errno
 import json
 import os
@@ -60,11 +62,11 @@ class Handler(BaseHTTPRequestHandler):
         port = self.server.server_address[1]
         allowed = {f"127.0.0.1:{port}", f"localhost:{port}"}
         if self.headers.get("Host", "").lower() not in allowed:
-            self._error("只允许本机访问", 403)
+            self._error(message_text('msg.local_access_only'), 403)
             return False
         origin = self.headers.get("Origin")
         if origin and origin.lower() not in {"http://" + host for host in allowed}:
-            self._error("不允许跨站请求", 403)
+            self._error(message_text('msg.cross_site_requests_are_not_allowed'), 403)
             return False
         return True
 
@@ -81,10 +83,10 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _json(self, obj, code: int = 200):
-        self._send(code, json.dumps(obj, ensure_ascii=False, default=str).encode("utf-8"))
+        self._send(code, json.dumps(annotate(obj), ensure_ascii=False, default=str).encode("utf-8"))
 
-    def _error(self, msg: str, code: int = 400):
-        self._json({"ok": False, "error": msg}, code)
+    def _error(self, msg, code: int = 400):
+        self._json({"ok": False, "error": error_text(msg)}, code)
 
     def _static(self, rel: str):
         rel = unquote(rel).lstrip("/") or "index.html"
@@ -102,6 +104,7 @@ class Handler(BaseHTTPRequestHandler):
         ctype = {".html": "text/html; charset=utf-8",
                  ".js": "application/javascript; charset=utf-8",
                  ".css": "text/css; charset=utf-8",
+                 ".json": "application/json; charset=utf-8",
                  ".svg": "image/svg+xml"}.get(ext, "application/octet-stream")
         with open(path, "rb") as f:
             self._send(200, f.read(), ctype)
@@ -165,7 +168,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/sessions":
                 agent = (q.get("agent") or [""])[0]
                 if not agent:
-                    return self._error("缺少 agent 参数")
+                    return self._error(message_text('msg.missing_agent_parameter'))
                 rows = registry.list_sessions(agent, keyword=(q.get("q") or [""])[0])
                 return self._json({"ok": True, "agent": agent, "sessions": rows})
             if path == "/api/session":
@@ -196,46 +199,46 @@ class Handler(BaseHTTPRequestHandler):
                     (q.get("agent") or [""])[0], (q.get("id") or [""])[0])})
             return self._error("unknown endpoint", 404)
         except FileNotFoundError as e:
-            return self._error(str(e), 404)
+            return self._error(e, 404)
         except (ValueError, KeyError) as e:
-            return self._error(str(e), 400)
+            return self._error(e, 400)
         except Exception as e:
             if os.environ.get("RELAY_DEBUG"):
                 import traceback
                 traceback.print_exc()
-            return self._error(str(e), 500)
+            return self._error(e, 500)
 
     def do_POST(self):
         if not self._local_request():
             return
         u = urlparse(self.path)
         if self.headers.get_content_type() != "application/json":
-            return self._error("请求必须使用 application/json", 415)
+            return self._error(message_text('msg.the_request_must_use_application_json'), 415)
         try:
             n = int(self.headers.get("Content-Length") or 0)
             if n < 0:
-                return self._error("Content-Length 不能为负数")
+                return self._error(message_text('msg.content_length_cannot_be_negative'))
             if n > MAX_BODY:
-                return self._error("请求体过大", 413)
+                return self._error(message_text('msg.request_body_too_large'), 413)
             raw = self.rfile.read(n) if n else b"{}"
             body = json.loads(raw.decode("utf-8") or "{}")
             if not isinstance(body, dict):
-                return self._error("请求体必须是 JSON 对象")
+                return self._error(message_text('msg.the_request_body_must_be_a_json_object'))
             for key in ("source", "id", "target", "cwd", "session_id", "title", "dsh_compression", "project_path", "storage", "package", "agent", "path", "skills_dir", "name", 'mode', 'preview_token', 'home', 'markdown', 'directory'):
                 if key in body and body[key] is not None and not isinstance(body[key], str):
-                    return self._error(f"{key} 必须是字符串")
+                    return self._error(message_text('err.key_must_be_a_string', key=key))
             for key in ("remap_tools", "include_thinking", "include_tools", 'packages', 'confirmed'):
                 if key in body and type(body[key]) is not bool:
-                    return self._error(f"{key} 必须为 true 或 false")
+                    return self._error(message_text('err.key_must_be_true_or_false', key=key))
         except Exception as e:
-            return self._error(f"请求体解析失败: {e}")
+            return self._error(message_text('err.failed_to_parse_request_body_e', e=e))
 
         try:
             if u.path == '/api/index':
                 from relay.corpus import Corpus
                 sources = body.get('sources')
                 if sources is not None and (not isinstance(sources, list) or any(not isinstance(s,str) or s not in registry.all_keys() for s in sources)):
-                    return self._error('sources 必须是有效来源名称列表')
+                    return self._error(message_text('msg.sources_must_be_a_list_of_valid_source_names'))
                 return self._json(self.server.jobs.start('index', lambda progress,cancel:Corpus().update(
                     sources=sources, include_thinking=body.get('include_thinking',False),
                     packages=body.get('packages',True), progress=progress, cancel=cancel)))
@@ -245,7 +248,7 @@ class Handler(BaseHTTPRequestHandler):
             if u.path == '/api/undo':
                 from relay import oplog
                 if not isinstance(body.get('id'), str) or not body['id']:
-                    return self._error('缺少操作 ID')
+                    return self._error(message_text('err.missing_operation_id'))
                 return self._json(oplog.undo(body['id'], force=body.get('force') is True))
             if u.path == '/api/job-cancel':
                 return self._json(self.server.jobs.cancel(body.get('id')))
@@ -254,7 +257,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(export_draft(body.get('markdown'),body.get('directory'),body.get('confirmed',False)))
             if u.path == '/api/device-home':
                 if self.server.jobs.status()['status'] == 'running':
-                    return self._error('请先结束索引/提炼任务再更换本机目录')
+                    return self._error(message_text('msg.finish_the_index_distill_job_before_changing_the_directory'))
                 from relay import device
                 import bootstrap
                 saved = device.set_home(body.get('agent'), body.get('home') or '')
@@ -266,18 +269,18 @@ class Handler(BaseHTTPRequestHandler):
                 mode = body.get('mode') or 'convert'
                 if mode == 'restore-session':
                     if not body.get('package') or not body.get('cwd'):
-                        return self._error('缺少存储包路径 / 本机项目目录')
+                        return self._error(message_text('msg.missing_package_path_local_project_directory'))
                     return self._json(preview.package(body.get('package'), body.get('cwd'),
                                body.get('session_id') or None, body.get('dsh_compression') or 'zstd'))
                 if mode in ('import-windows', 'import-ubuntu', 'export-windows'):
                     if not body.get('source') or not body.get('id') or not body.get('cwd'):
-                        return self._error('缺少来源 / 会话 ID / 目标项目目录')
+                        return self._error(message_text('msg.missing_source_session_id_target_project_directory'))
                     return self._json(preview.native(body.get('source'), body.get('id'), mode, body.get('cwd'),
                            body.get('session_id') or None, body.get('project_path'), body.get('dsh_compression') or 'zstd'))
                 if mode != 'convert':
-                    return self._error('未知预览方式')
+                    return self._error(message_text('msg.unknown_preview_mode'))
                 if not body.get('source') or not body.get('id') or not body.get('target'):
-                    return self._error('缺少来源 / 会话 ID / 目标')
+                    return self._error(message_text('msg.missing_source_session_id_target'))
                 return self._json(preview.conversion(body.get('source'), body.get('id'), body.get('target'),
                            body.get('cwd') or None, body.get('session_id') or None,
                            body.get('remap_tools', True), body.get('include_thinking', True), body.get('title') or None,
@@ -290,29 +293,29 @@ class Handler(BaseHTTPRequestHandler):
             if u.path == "/api/store-skill":
                 from relay.skill_store import store_skill
                 if not body.get("agent") or not body.get("path"):
-                    return self._error("缺少 Agent / Skill 目录")
+                    return self._error(message_text('msg.missing_agent_skill_directory'))
                 return self._json(store_skill(body["agent"], body["path"], body.get("storage")))
             if u.path == "/api/restore-skill":
                 from relay.skill_store import restore_skill
                 if not body.get("package"):
-                    return self._error("缺少 Skill 包路径")
+                    return self._error(message_text('msg.missing_skill_package_path'))
                 return self._json(restore_skill(body["package"], body.get("agent") or None,
                                                 body.get("skills_dir") or None, body.get("name") or None))
             if u.path == "/api/store-session":
                 from relay.session_store import store_session
                 if not body.get("source") or not body.get("id"):
-                    return self._error("缺少 Agent / 会话 ID")
+                    return self._error(message_text('msg.missing_agent_session_id'))
                 return self._json(store_session(body["source"], body["id"], body.get("storage")))
             if u.path == "/api/restore-session":
                 from relay.session_store import restore_session
                 if not body.get("package") or not body.get("cwd"):
-                    return self._error("缺少存储包路径 / 本机目标项目目录")
+                    return self._error(message_text('msg.missing_package_path_local_target_project_directory'))
                 return self._json(restore_session(body["package"], body["cwd"], body.get("session_id") or None,
                                                   body.get("dsh_compression") or "zstd", body.get('preview_token')))
             if u.path in ("/api/import-ubuntu", "/api/export-windows"):
                 from relay.native_import import import_ubuntu, export_windows
                 if not (body.get("source") and body.get("id") and body.get("cwd")):
-                    return self._error("缺少来源 / 会话 ID / Windows 项目路径")
+                    return self._error(message_text('msg.missing_source_session_id_windows_project_path'))
                 options = dict(session_id=body.get("session_id") or None,
                                dsh_compression=body.get("dsh_compression") or "zstd", preview_token=body.get('preview_token'))
                 if u.path == "/api/export-windows":
@@ -322,7 +325,7 @@ class Handler(BaseHTTPRequestHandler):
             if u.path == "/api/import-windows":
                 from relay.native_import import import_windows
                 if not (body.get("source") and body.get("id") and body.get("cwd")):
-                    return self._error("缺少 Windows 来源 / 会话 ID / Ubuntu 项目目录")
+                    return self._error(message_text('msg.missing_windows_source_session_id_ubuntu_project_directory'))
                 return self._json(import_windows(body["source"], body["id"], body["cwd"],
                                   session_id=body.get("session_id") or None,
                                   dsh_compression=body.get("dsh_compression") or "zstd", preview_token=body.get('preview_token')))
@@ -331,21 +334,21 @@ class Handler(BaseHTTPRequestHandler):
                 from relay import diff
                 for key in ("source", "id", "source2", "id2"):
                     if not isinstance(body.get(key), str) or not body.get(key):
-                        return self._error("缺少 source / id / source2 / id2")
+                        return self._error(message_text('err.missing_source_id_source2_id2'))
                 return self._json(diff.compare(registry.read_conversation(body["source"], body["id"]),
                                                registry.read_conversation(body["source2"], body["id2"])))
 
             if u.path == "/api/batch":
                 from relay import batch
                 if not (body.get("source") and body.get("target")):
-                    return self._error("缺少 source / target")
+                    return self._error(message_text('err.missing_source_target'))
                 ids = body.get("ids") or []
                 if not isinstance(ids, list) or any(not isinstance(x, str) for x in ids):
-                    return self._error("ids 必须是字符串数组")
+                    return self._error(message_text('err.ids_must_be_an_array_of_strings'))
                 try:
                     limit = int(body.get("limit") or 100)
                 except (TypeError, ValueError):
-                    return self._error("limit 必须是整数")
+                    return self._error(message_text('err.limit_must_be_an_integer'))
                 return self._json(batch.run(
                     body["source"], body["target"], ids=ids, keyword=str(body.get("keyword") or ""), limit=limit,
                     cwd=body.get("cwd") or None, on_conflict=body.get("on_conflict") or "skip",
@@ -357,7 +360,7 @@ class Handler(BaseHTTPRequestHandler):
                 sid = body.get("id")
                 target = body.get("target")
                 if not (source and sid and target):
-                    return self._error("缺少 source / id / target")
+                    return self._error(message_text('msg.missing_source_id_target'))
                 res = registry.transfer(
                     source, sid, target,
                     cwd=body.get("cwd") or None,
@@ -380,34 +383,34 @@ class Handler(BaseHTTPRequestHandler):
             if u.path == "/api/scan":
                 from relay import sensitive
                 if not body.get("source") or not body.get("id"):
-                    return self._error("缺少来源 / 会话 ID")
+                    return self._error(message_text('err.missing_source_session_id'))
                 return self._json(dict(ok=True, **sensitive.scan_conversation(registry.read_conversation(body["source"], body["id"]))))
             return self._error("unknown endpoint", 404)
         except FileExistsError as e:
-            return self._error(str(e), 409)
+            return self._error(e, 409)
         except FileNotFoundError as e:
-            return self._error(str(e), 404)
+            return self._error(e, 404)
         except (ValueError, KeyError) as e:
-            return self._error(str(e), 400)
+            return self._error(e, 400)
         except Exception as e:
             if os.environ.get("RELAY_DEBUG"):
                 import traceback
                 traceback.print_exc()
-            return self._error(str(e), 500)
+            return self._error(e, 500)
 
 
 def create_server(host: str, port: int):
     if host not in ("127.0.0.1", "localhost"):
-        raise ValueError("服务只支持本机地址 127.0.0.1 或 localhost")
+        raise ValueError(message_text('err.the_server_only_supports_local_addresses_127_0_0_1_or_localhost'))
     if not 0 <= port <= 65535:
-        raise ValueError("端口必须在 0 到 65535 之间")
+        raise ValueError(message_text('err.port_must_be_between_0_and_65535'))
     for candidate in range(port, min(port + 6, 65536)):
         try:
             return RelayServer((host, candidate), Handler)
         except OSError as exc:
             if exc.errno != errno.EADDRINUSE and getattr(exc, "winerror", None) != 10048:
                 raise
-    raise OSError(errno.EADDRINUSE, f"端口 {port} 及后续端口均被占用，请先在旧页面点击「退出服务」后重试")
+    raise OSError(errno.EADDRINUSE, message_text('err.ports_occupied', port=port))
 
 
 def run(host: str = "127.0.0.1", port: int = 8745, open_browser: bool = True):

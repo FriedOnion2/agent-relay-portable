@@ -12,6 +12,9 @@ from dataclasses import replace
 from typing import Any, Dict, List, Tuple
 
 from . import ir
+from .messages import text as message_text, join_text
+
+_LABEL_CODES = {'private-key': 'msg.secret_private_key', 'anthropic-key': 'msg.secret_anthropic_key', 'openai-key': 'msg.secret_openai_key', 'github-token': 'msg.secret_github_token', 'aws-access-key': 'msg.secret_aws_access_key', 'google-api-key': 'msg.secret_google_api_key', 'slack-token': 'msg.secret_slack_token', 'stripe-key': 'msg.secret_stripe_key', 'tencent-key': 'msg.secret_tencent_key', 'aliyun-key': 'msg.secret_aliyun_key', 'jwt': 'msg.secret_jwt', 'bearer-token': 'msg.secret_bearer_token', 'url-credentials': 'msg.secret_url_credentials', 'secret-assignment': 'msg.secret_secret_assignment'}
 
 # (类型, 说明, 正则, 取值的分组号；0 表示整个匹配)
 RULES: List[Tuple[str, str, "re.Pattern[str]", int]] = [
@@ -50,7 +53,7 @@ def scan_text(text: str) -> List[Dict[str, Any]]:
         return []
     found: List[Dict[str, Any]] = []
     taken: List[Tuple[int, int]] = []
-    for kind, label, pattern, group in RULES:
+    for kind, _label, pattern, group in RULES:
         for match in pattern.finditer(text):
             start, end = match.span(group)
             if start < 0 or end <= start:
@@ -61,7 +64,7 @@ def scan_text(text: str) -> List[Dict[str, Any]]:
             if any(start < b and a < end for a, b in taken):
                 continue
             taken.append((start, end))
-            found.append({"kind": kind, "label": label, "start": start, "end": end, "length": end - start})
+            found.append({"kind": kind, "label": message_text(_LABEL_CODES[kind]), "start": start, "end": end, "length": end - start})
     found.sort(key=lambda row: row["start"])
     return found
 
@@ -109,4 +112,5 @@ def redact_conversation(conv: ir.Conversation) -> ir.Conversation:
 
 
 def summary_line(result: Dict[str, Any]) -> str:
-    return "、".join("%s %d 处" % (row["label"], row["count"]) for row in result["kinds"])
+    return join_text((message_text('msg.secret_count', label=row['label'], count=row['count'])
+                      for row in result['kinds']), '、')

@@ -87,10 +87,6 @@ class Turn:
         parts = [b.plain() for b in self.blocks if b.plain()]
         return "\n".join(parts).strip()
 
-    def all_text(self) -> str:
-        return "\n".join(b.text for b in self.blocks if b.text)
-
-
 @dataclass
 class Conversation:
     source: str = ""            # workbuddy | dsh | codebuddy | claude | claude_sdk | codex

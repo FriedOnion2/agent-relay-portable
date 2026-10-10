@@ -3,6 +3,8 @@
 History is a closed seed: historical tools have results, never pending work.
 Physical headers and each event occupy independent Zstandard frames.
 """
+
+from ..messages import text as message_text
 import json
 import os
 import re
@@ -133,15 +135,15 @@ def history_events(conv, include_thinking, remap_tools, created):
 
 def write_native(home, conv, cwd, session_id, remap_tools, include_thinking):
     if conv.truncated:
-        raise ValueError("源会话不完整，不能导入 DSH")
+        raise ValueError(message_text('err.incomplete_source_session_cannot_be_imported_into_dsh'))
     sid = validate_session_id(session_id if session_id is not None else uuid7())
     target_cwd = cwd if cwd is not None else conv.cwd or os.getcwd()
     if not Path(target_cwd).is_absolute():
-        raise ValueError("DSH 目标工作目录必须是当前系统的绝对路径，请填写目标工作目录")
+        raise ValueError(message_text('err.dsh_target_working_directory_must_be_an_absolute_path_on_this_system_enter_the_target_dire'))
     try:
         import zstandard as zstd
     except ImportError:
-        raise ValueError("导入 DSH 需要 zstandard；Mac 请运行 Mac安装依赖.command，其他系统安装 requirements-optional.txt") from None
+        raise ValueError(message_text('err.dsh_import_requires_zstandard_on_mac_run_mac_command_otherwise_install_requirements_option')) from None
     # Start from the source's own clock. Falling back to "now" first would make
     # the max() in history_events() flatten every event to the import time.
     stamps = [safe_ms(t.ts) for t in conv.turns if safe_ms(t.ts)]
@@ -158,7 +160,7 @@ def write_native(home, conv, cwd, session_id, remap_tools, include_thinking):
             frame = encoder.compress(line)
             encoded += len(frame)
             if total > MAX_LOG_BYTES or encoded > MAX_LOG_BYTES:
-                raise ValueError("生成的 DSH 日志超过 32 MiB，请缩减会话后再导入")
+                raise ValueError(message_text('err.generated_dsh_log_exceeds_32_mib_reduce_the_session_before_importing'))
             yield frame
     os.makedirs(home, exist_ok=True)
     lock = os.path.join(home, ".relay-" + sid + ".publish-lock")
@@ -167,7 +169,7 @@ def write_native(home, conv, cwd, session_id, remap_tools, include_thinking):
     try:
         for _, dirs, _ in os.walk(home):
             if sid in dirs:
-                raise FileExistsError("DSH 会话 ID 已存在：" + sid)
+                raise FileExistsError(message_text('err.dsh_session_id_already_exists_sid', sid=sid))
         try:
             atomic_write(path, frames(), encoding=None, overwrite=False)
         except Exception:

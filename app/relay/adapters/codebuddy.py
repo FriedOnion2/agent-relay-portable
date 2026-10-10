@@ -1,5 +1,7 @@
 """CodeBuddy CLI Tencent JSONL and CN IDE ordered message manifests."""
 from __future__ import annotations
+
+from ..messages import text as message_text, error_text
 import json
 import os
 import re
@@ -18,7 +20,7 @@ def object_value(value):
     if isinstance(value, str):
         value = json.loads(value)
     if not isinstance(value, dict):
-        raise ValueError("CodeBuddy message/extra 必须是 JSON 对象")
+        raise ValueError(message_text('err.codebuddy_message_extra_must_be_a_json_object'))
     return value
 
 
@@ -60,7 +62,7 @@ class CodeBuddyAdapter(ReadOnlyAdapter, WorkBuddyAdapter):
         if budget is not None:
             budget[0] += len(raw)
         if len(raw) > MAX_SCAN_BYTES or (budget and budget[0] > MAX_SCAN_BYTES):
-            raise ValueError("CodeBuddy 会话超过 32 MiB 读取限制")
+            raise ValueError(message_text('err.codebuddy_session_exceeds_the_32_mib_read_limit'))
         return object_value(json.loads(raw.decode("utf-8-sig")))
 
     def discover(self):
@@ -72,7 +74,7 @@ class CodeBuddyAdapter(ReadOnlyAdapter, WorkBuddyAdapter):
                     continue
                 conv = self._parse_source(path, format_name)
             except (ValueError, OSError, TypeError, AttributeError, KeyError) as exc:
-                error = str(exc)
+                error = error_text(exc)
             yield SessionInfo(self.name, sid, (conv.title if conv else "CodeBuddy 会话") or "未命名会话",
                               conv.cwd if conv else "", (conv.model or "") if conv else "",
                               safe_ms(conv.created_at) if conv else None,
@@ -85,7 +87,7 @@ class CodeBuddyAdapter(ReadOnlyAdapter, WorkBuddyAdapter):
                 conv = self._parse_source(path, format_name)
                 conv.id = identity
                 return conv
-        raise FileNotFoundError(f"找不到 CodeBuddy 会话: {sid}")
+        raise FileNotFoundError(message_text('err.codebuddy_session_not_found_sid', sid=sid))
 
     def _parse_source(self, path, format_name):
         if format_name == "cli":
@@ -96,7 +98,7 @@ class CodeBuddyAdapter(ReadOnlyAdapter, WorkBuddyAdapter):
         manifest = self._json(path, budget)
         refs = manifest.get("messages")
         if not isinstance(refs, list):
-            raise ValueError("不是 CodeBuddy IDE 会话 manifest")
+            raise ValueError(message_text('err.not_a_codebuddy_ide_session_manifest'))
         directory = os.path.dirname(path)
         conv = ir.Conversation(source=self.name, path=path, id=os.path.basename(directory),
                                meta={"source_format":"codebuddy-ide-manifest"})
@@ -112,11 +114,11 @@ class CodeBuddyAdapter(ReadOnlyAdapter, WorkBuddyAdapter):
         seen_results = set()
         for ref in refs:
             if not isinstance(ref, dict) or not isinstance(ref.get("id"), str):
-                raise ValueError("CodeBuddy message 引用无效")
+                raise ValueError(message_text('err.invalid_codebuddy_message_reference'))
             msg_id = validate_session_id(ref["id"])
             message_path = os.path.join(directory, "messages", msg_id + ".json")
             if not os.path.isfile(message_path):
-                raise ValueError("CodeBuddy 会话不完整：缺少引用的 message 文件")
+                raise ValueError(message_text('err.incomplete_codebuddy_session_a_referenced_message_file_is_missing'))
             env = self._json(message_path, budget)
             inner = object_value(env.get("message") or {})
             extra = object_value(env.get("extra") or {})

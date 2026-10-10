@@ -1,4 +1,6 @@
 """Explicitly trusted read adapters, isolated from the server by a worker process."""
+
+from .messages import text as message_text, error_text
 import hashlib
 import importlib.util
 import json
@@ -28,29 +30,29 @@ def configure(rows):
     for row in rows:
         try:
             if not isinstance(row, dict):
-                raise ValueError('插件配置必须是对象')
+                raise ValueError(message_text('err.plugin_configuration_must_be_an_object'))
             name = row.get('name')
             if not isinstance(name, str) or not re.fullmatch(r'[a-z][a-z0-9_-]{0,47}', name):
-                raise ValueError('插件名称无效')
+                raise ValueError(message_text('err.invalid_plugin_name'))
             if name in SOURCES or name.startswith(('windows_', 'ubuntu_')) or name in entries:
-                raise ValueError('插件不能覆盖内置来源或重复注册')
+                raise ValueError(message_text('err.plugins_cannot_override_built_in_sources_or_register_twice'))
             if row.get('api_version') != API_VERSION:
-                raise ValueError('插件接口版本不匹配')
+                raise ValueError(message_text('err.plugin_interface_version_does_not_match'))
             path = Path(row['path'])
             if not path.is_absolute():
                 path = project_root() / path
             digest = row.get('sha256', '')
             if not re.fullmatch(r'[0-9a-f]{64}', digest):
-                raise ValueError('插件缺少已确认的 SHA-256')
+                raise ValueError(message_text('err.plugin_lacks_a_confirmed_sha_256'))
             entries[name] = dict(row, path=str(path.resolve()))
         except (ValueError, KeyError, TypeError) as exc:
-            errors.append(str(exc))
+            errors.append(error_text(exc))
 
 
 def enable(name, path):
     path = Path(path).expanduser().resolve()
     if not path.is_file() or path.suffix != '.py' or path.stat().st_size > 1024 * 1024:
-        raise ValueError('请选择不超过 1 MiB 的可信 Python 插件文件')
+        raise ValueError(message_text('err.select_a_trusted_python_plugin_file_of_at_most_1_mib'))
     row = {'name':name, 'path':str(path), 'api_version':API_VERSION,
            'sha256':hashlib.sha256(path.read_bytes()).hexdigest()}
     try:
@@ -86,14 +88,14 @@ def check(name, path, sample=3):
         return ok
 
     path = Path(path).expanduser().resolve()
-    if not record('名称格式', isinstance(name, str) and re.fullmatch(r'[a-z][a-z0-9_-]{0,47}', name),
-                  '小写字母开头，只含小写字母、数字、下划线、连字符，最长 48'):
+    if not record(message_text('msg.name_format'), isinstance(name, str) and re.fullmatch(r'[a-z][a-z0-9_-]{0,47}', name),
+                  message_text('msg.starts_with_a_lowercase_letter_only_lowercase_letters_digits_underscores_and_hyphens_at_mo')):
         return {'ok': False, 'checks': checks}
     from .locations import SOURCES
-    if not record('不覆盖内置来源', name not in SOURCES and not name.startswith(('windows_', 'ubuntu_')), name):
+    if not record(message_text('msg.does_not_override_built_in_sources'), name not in SOURCES and not name.startswith(('windows_', 'ubuntu_')), name):
         return {'ok': False, 'checks': checks}
-    if not record('文件', path.is_file() and path.suffix == '.py' and path.stat().st_size <= 1024 * 1024,
-                  '需要不超过 1 MiB 的 .py 文件'):
+    if not record(message_text('msg.file'), path.is_file() and path.suffix == '.py' and path.stat().st_size <= 1024 * 1024,
+                  message_text('msg.a_py_file_of_at_most_1_mib_is_required')):
         return {'ok': False, 'checks': checks}
     saved = dict(entries)
     entries[name] = {'name': name, 'path': str(path), 'api_version': API_VERSION,
@@ -103,26 +105,26 @@ def check(name, path, sample=3):
         try:
             info = adapter.info()
         except Exception as exc:
-            record('加载并调用 info()', False, exc)
+            record(message_text('msg.load_and_call_info'), False, exc)
             return {'ok': False, 'checks': checks}
-        record('加载并调用 info()', True, '名称与 api_version 匹配')
-        record('info() 说明目录是否可用', 'available' in info, 'available=%s' % info.get('available'))
+        record(message_text('msg.load_and_call_info'), True, message_text('msg.name_and_api_version_match'))
+        record(message_text('msg.info_describes_directory_availability'), 'available' in info, 'available=%s' % info.get('available'))
         try:
             rows = list(adapter.discover())
         except Exception as exc:
-            record('discover() 返回会话列表', False, exc)
+            record(message_text('msg.discover_returns_a_session_list'), False, exc)
             return {'ok': False, 'checks': checks}
-        record('discover() 返回会话列表', True, '%d 个会话' % len(rows))
-        record('会话 ID 唯一', len({row.id for row in rows}) == len(rows), '重复的 ID 会让 read(id) 不确定')
+        record(message_text('msg.discover_returns_a_session_list'), True, message_text('msg.value_sessions', value=len(rows)))
+        record(message_text('msg.session_ids_are_unique'), len({row.id for row in rows}) == len(rows), message_text('msg.duplicate_ids_make_read_id_ambiguous'))
         readable = [row for row in rows if row.readable][:max(1, sample)]
         if not readable:
-            record('read() 读取样本', True, '没有可读会话，跳过（请准备一个合成样本再自检）')
+            record(message_text('msg.read_reads_the_sample'), True, message_text('msg.no_readable_sessions_skipped_prepare_a_synthetic_sample_before_self_check'))
         for row in readable:
             try:
                 conv = adapter.read(row.id)
                 text = render_markdown(conv)
                 ok = bool(conv.turns) and isinstance(text, str)
-                record('read(%s) 返回非空会话并可导出 Markdown' % row.id, ok, '%d 轮' % len(conv.turns))
+                record(message_text('msg.read_id_returns_a_nonempty_session_that_can_be_exported_to_markdown', id=row.id), ok, message_text('msg.value_turns', value=len(conv.turns)))
             except Exception as exc:
                 record('read(%s)' % row.id, False, exc)
     finally:
@@ -154,9 +156,9 @@ def _invoke(name, action, sid=None):
             deadline = time.monotonic() + TIMEOUT
             while process.poll() is None:
                 if time.monotonic() >= deadline:
-                    raise ValueError('社区插件调用超时，已停止工作进程')
+                    raise ValueError(message_text('err.community_plugin_call_timed_out_worker_stopped'))
                 if os.fstat(output.fileno()).st_size > MAX_OUTPUT or os.fstat(diagnostic.fileno()).st_size > MAX_OUTPUT:
-                    raise ValueError('社区插件输出超过 32 MiB，已停止工作进程')
+                    raise ValueError(message_text('err.community_plugin_output_exceeds_32_mib_worker_stopped'))
                 time.sleep(.05)
         finally:
             if not process.stdin.closed:
@@ -166,27 +168,27 @@ def _invoke(name, action, sid=None):
                 process.wait()
         if process.returncode:
             diagnostic.seek(0)
-            raise ValueError('社区插件调用失败：' + diagnostic.read(2000).decode('utf-8', 'replace')) from None
+            raise ValueError(message_text('err.community_plugin_call_failed_value', value=diagnostic.read(2000).decode('utf-8', 'replace'))) from None
         output.seek(0, 2)
         if output.tell() > MAX_OUTPUT:
-            raise ValueError('社区插件返回内容超过 32 MiB')
+            raise ValueError(message_text('err.community_plugin_response_exceeds_32_mib'))
         output.seek(0)
         value = json.load(output)
     if not isinstance(value, dict) or not value.get('ok'):
-        raise ValueError(value.get('error', '插件返回无效') if isinstance(value, dict) else '插件返回无效')
+        raise ValueError(message_text('err.invalid_plugin_response', detail=value.get('error') or message_text('msg.invalid_plugin_return') if isinstance(value, dict) else message_text('msg.invalid_plugin_return')))
     return value['data']
 
 
 def _conversation(value):
     if not isinstance(value, dict) or not isinstance(value.get('turns'), list):
-        raise ValueError('插件必须返回统一 Conversation')
+        raise ValueError(message_text('err.plugin_must_return_a_unified_conversation'))
     fields = {key: value[key] for key in ('source','id','title','cwd','model','created_at','updated_at','path','meta','truncated') if key in value}
     turns = []
     if len(value['turns']) > 100000:
-        raise ValueError('插件轮次数量超出限制')
+        raise ValueError(message_text('err.plugin_turn_count_exceeds_the_limit'))
     for row in value['turns']:
         if row.get('role') not in (ir.USER, ir.ASSISTANT, ir.SYSTEM):
-            raise ValueError('插件角色无效')
+            raise ValueError(message_text('err.invalid_plugin_role'))
         blocks = [ir.Block(**item) for item in row.get('blocks', [])]
         turns.append(ir.Turn(row['role'], blocks, row.get('ts'), row.get('model')))
     return ir.Conversation(turns=turns, **fields)
@@ -198,19 +200,19 @@ class PluginAdapter(BaseAdapter):
 
     def __init__(self, name):
         self.name = name
-        self.label = '社区：' + name
+        self.label = message_text('msg.community_name', name=name)
         self.home = None
 
     def info(self):
         data = _invoke(self.name, 'info')
         if data.get('name') != self.name or data.get('api_version') != API_VERSION:
-            raise ValueError('插件名称或接口版本不匹配')
+            raise ValueError(message_text('err.plugin_name_or_interface_version_does_not_match'))
         self.home = data.get('home')
-        self.label = '社区：' + str(data.get('label') or self.name)
+        self.label = message_text('msg.community_value', value=str(data.get('label') or self.name))
         return dict(data, label=self.label, can_read=True, can_write=False, community=True,
                     capabilities=['read', 'export', 'convert_source'], api_version=API_VERSION,
-                    read_note='可信社区 Python 插件；独立进程与超时隔离，不是安全沙箱。',
-                    write_note='首版社区插件仅作为读取与转换来源，不进行原生存储或写入')
+                    read_note=message_text('msg.trusted_community_python_plugin_isolated_process_and_timeout_not_a_security_sandbox'),
+                    write_note=message_text('msg.initial_community_plugins_are_read_and_conversion_sources_only_no_native_storage_or_writes'))
 
     def available(self):
         return bool(self.info().get('available'))
@@ -218,7 +220,7 @@ class PluginAdapter(BaseAdapter):
     def discover(self):
         rows = _invoke(self.name, 'discover')
         if not isinstance(rows, list) or len(rows) > 100000:
-            raise ValueError('插件会话列表无效或过大')
+            raise ValueError(message_text('err.plugin_session_list_is_invalid_or_too_large'))
         for row in rows:
             row = dict(row, source=self.name)
             yield SessionInfo(**{key:row[key] for key in SessionInfo.__dataclass_fields__ if key in row})
@@ -229,7 +231,7 @@ class PluginAdapter(BaseAdapter):
         return conv
 
     def write(self, conv, **kwargs):
-        raise ValueError('社区插件尚未开放写入；请选择内置可写目标')
+        raise ValueError(message_text('err.community_plugins_do_not_support_writes_yet_select_a_writable_built_in_target'))
 
 
 def worker():
@@ -242,10 +244,10 @@ def worker():
         spec = request['spec']
         path = Path(spec['path'])
         if path.stat().st_size > 1024 * 1024:
-            raise ValueError('插件文件过大')
+            raise ValueError(message_text('err.plugin_file_is_too_large'))
         raw = path.read_bytes()
         if hashlib.sha256(raw).hexdigest() != spec['sha256']:
-            raise ValueError('插件文件已改变，请检查内容并重新启用')
+            raise ValueError(message_text('err.plugin_file_has_changed_review_it_and_enable_it_again'))
         # Execute the exact bytes verified above; never reopen changed code.
         module_spec = importlib.util.spec_from_file_location('agentrelay_community', path)
         module = importlib.util.module_from_spec(module_spec)
@@ -255,7 +257,7 @@ def worker():
             exec(compile(raw, str(path), 'exec'), module.__dict__)
             adapter = module.Adapter()
             if adapter.name != spec['name'] or adapter.api_version != API_VERSION:
-                raise ValueError('插件名称或接口版本不匹配')
+                raise ValueError(message_text('err.plugin_name_or_interface_version_does_not_match'))
             action = request['action']
             if action == 'info':
                 data = adapter.info()
@@ -264,17 +266,17 @@ def worker():
                 data = []
                 for row in adapter.discover():
                     if len(data) >= 100000:
-                        raise ValueError('插件列表过大')
+                        raise ValueError(message_text('err.plugin_list_is_too_large'))
                     data.append(row.to_dict())
             elif action == 'read':
                 data = adapter.read(request['id']).to_dict()
             else:
-                raise ValueError('不支持的插件操作')
+                raise ValueError(message_text('err.unsupported_plugin_operation'))
         encoded = json.dumps({'ok':True, 'data':data}, ensure_ascii=False).encode('utf-8')
         if len(encoded) > MAX_OUTPUT:
-            raise ValueError('插件返回内容过大')
+            raise ValueError(message_text('err.plugin_response_is_too_large'))
         sys.stdout.buffer.write(encoded)
         return 0
     except Exception as exc:
-        print(str(exc), file=sys.stderr)
+        print(error_text(exc), file=sys.stderr)
         return 1

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .messages import text as message_text
+
 import os
 import secrets
 import tempfile
@@ -15,7 +17,7 @@ def uuid7(now_ms: int | None = None) -> str:
     if now_ms is None:
         now_ms = int(dt.datetime.now(dt.timezone.utc).timestamp() * 1000)
     if not 0 <= now_ms < (1 << 48):
-        raise ValueError("UUIDv7 时间戳超出 48 位范围")
+        raise ValueError(message_text('err.uuidv7_timestamp_exceeds_the_48_bit_range'))
     u = ((now_ms << 80) | (7 << 76) | (secrets.randbits(12) << 64)
          | (2 << 62) | secrets.randbits(62))
     h = f"{u:032x}"
@@ -104,17 +106,6 @@ def slug_for(cwd: str) -> str:
     return s[0].lower() + s[1:]
 
 
-def normalize_cwd(cwd: str) -> str:
-    """统一成正斜杠的绝对路径字符串。"""
-    if not cwd:
-        return ""
-    return os.path.normpath(str(cwd)).replace("\\", "/")
-
-
-def expand(p: str) -> str:
-    return os.path.expanduser(p)
-
-
 def is_windows_path(p: str) -> bool:
     """是否 Windows 风格路径（带盘符，如 C:\\Users 或 C:/Users）。"""
     return bool(p) and len(p) >= 2 and p[1] == ":"
@@ -184,7 +175,7 @@ def atomic_write(path: str, lines, encoding: str | None = "utf-8", overwrite: bo
 def validate_session_id(sid: str) -> str:
     """只允许安全的单个文件名，避免指定 ID 写到会话目录之外。"""
     if not isinstance(sid, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}", sid):
-        raise ValueError("会话 ID 只能包含字母、数字、下划线和短横线（最多 128 字符）")
+        raise ValueError(message_text('err.session_ids_may_only_contain_letters_digits_underscores_and_hyphens_at_most_128_characters'))
     return sid
 
 
@@ -205,7 +196,7 @@ def read_jsonl(path: str, max_bytes: int | None = None, strict: bool = False):
             try:
                 line = line.decode("utf-8-sig" if read == len(line) else "utf-8", "strict" if strict else "replace").strip()
             except UnicodeError as exc:
-                raise ValueError("JSONL 编码损坏，无法完整读取") from exc
+                raise ValueError(message_text('err.jsonl_encoding_is_corrupt_complete_reading_is_not_possible')) from exc
             if not line:
                 continue
             try:
@@ -213,8 +204,8 @@ def read_jsonl(path: str, max_bytes: int | None = None, strict: bool = False):
                 if isinstance(record, dict):
                     yield record, truncated
                 elif strict:
-                    raise ValueError("JSONL 每行必须是 JSON 对象")
+                    raise ValueError(message_text('err.every_jsonl_line_must_be_a_json_object'))
             except (ValueError, TypeError):
                 if strict:
-                    raise ValueError("JSONL 损坏或末行未写完，请等写入完成或使用完整备份") from None
+                    raise ValueError(message_text('err.jsonl_is_corrupt_or_its_last_line_is_incomplete_wait_for_writing_to_finish_or_use_a_comple')) from None
                 continue

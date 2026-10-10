@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from .messages import text as message_text, error_text
+
 import uuid
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
@@ -22,7 +24,7 @@ def target_id(source: str, sid: str, target: str) -> str:
 
 def select(source: str, ids: Optional[Sequence[str]] = None, keyword: str = "", limit: int = 100) -> List[Dict[str, Any]]:
     if limit < 1:
-        raise ValueError("limit 必须大于 0")
+        raise ValueError(message_text('err.limit_must_be_greater_than_0'))
     limit = min(limit, MAX_ITEMS)
     rows = registry.list_sessions(source, keyword=keyword, limit=10 ** 9)
     if ids:
@@ -30,7 +32,7 @@ def select(source: str, ids: Optional[Sequence[str]] = None, keyword: str = "", 
         by_id = {row["id"]: row for row in rows}
         missing = [sid for sid in wanted if sid not in by_id]
         if missing:
-            raise ValueError("找不到会话：" + "、".join(missing[:5]))
+            raise ValueError(message_text('err.session_not_found_value', value="、".join(missing[:5])))
         rows = [by_id[sid] for sid in wanted]
     return rows[:limit]
 
@@ -40,15 +42,15 @@ def run(source: str, target: str, ids: Optional[Sequence[str]] = None, keyword: 
         remap_tools: bool = True, include_thinking: bool = True, dry_run: bool = True,
         stop_on_error: bool = False, progress: Optional[Callable[[int, int, Dict[str, Any]], None]] = None) -> Dict[str, Any]:
     if on_conflict not in POLICIES:
-        raise ValueError("on_conflict 必须是 " + " / ".join(POLICIES))
+        raise ValueError(message_text('err.on_conflict_must_be_value', value=" / ".join(POLICIES)))
     registry.get(source)
     dst = registry.get(target)
     if not dst.can_write:
-        raise ValueError("%s 尚不支持作为迁移目标" % dst.label)
+        raise ValueError(message_text('err.label_does_not_support_migration_writes_yet', label=dst.label))
     if source.startswith(("windows_", "ubuntu_")) and not cwd:
-        raise ValueError("从跨系统来源批量迁出需指定存在的本机项目目录")
+        raise ValueError(message_text('err.batch_migration_from_a_cross_system_source_requires_an_existing_local_project_directory'))
     rows = select(source, ids, keyword, limit)
-    existing = {row.id for row in dst.discover()}
+    existing = {row.native_id or row.id for row in dst.discover()}
     items: List[Dict[str, Any]] = []
     stopped = False
     for index, row in enumerate(rows, 1):
@@ -58,12 +60,12 @@ def run(source: str, target: str, ids: Optional[Sequence[str]] = None, keyword: 
         try:
             if tid in existing and on_conflict != "new":
                 if on_conflict == "fail":
-                    raise FileExistsError("目标已存在同一来源会话的迁移结果：" + tid)
+                    raise FileExistsError(message_text('err.a_migration_result_for_this_source_session_already_exists_tid', tid=tid))
                 item["status"] = "skipped"
-                item["reason"] = "已迁移过（目标 ID %s 已存在）" % tid
+                item["reason"] = message_text('msg.batch_already_migrated', tid=tid)
             elif row.get("error"):
                 item["status"] = "failed"
-                item["error"] = "源会话不可读：" + str(row["error"])
+                item["error"] = message_text('err.source_unreadable', detail=error_text(row['error']))
             elif dry_run:
                 item["status"] = "would-migrate"
             else:
@@ -78,7 +80,7 @@ def run(source: str, target: str, ids: Optional[Sequence[str]] = None, keyword: 
                 existing.add(tid)
         except Exception as exc:  # 单条失败只记录，除非要求遇错即停
             item["status"] = "failed"
-            item["error"] = str(exc)
+            item["error"] = error_text(exc)
         items.append(item)
         if progress:
             progress(index, len(rows), item)

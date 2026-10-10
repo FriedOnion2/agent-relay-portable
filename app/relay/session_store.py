@@ -1,4 +1,6 @@
 """One native session per package, grouped by agent for device-to-device transfer."""
+
+from .messages import text as message_text, error_text
 import copy
 import json
 import platform
@@ -17,12 +19,12 @@ KIND = "agentrelay-session"
 def store_session(agent, sid, root=None):
     source = registry.get(agent)
     if source.info().get('community'):
-        raise ValueError('社区插件仅支持读取与转换；尚不支持原生会话打包')
+        raise ValueError(message_text('err.community_plugins_only_support_reading_and_conversion_native_session_packaging_is_not_avai'))
     native = getattr(source, "source", source.name)
     adapter = getattr(source, "adapter", source)
     conv = source.read(sid)
     if conv.truncated:
-        raise ValueError("源会话读取不完整，不能保存原生存储包")
+        raise ValueError(message_text('err.source_session_is_incomplete_cannot_save_a_native_storage_package'))
     roots = [Path(value).resolve() for value in getattr(adapter, "roots", [adapter.root])]
     files = {}
     total = 0
@@ -31,15 +33,15 @@ def store_session(agent, sid, root=None):
         path = Path(path)
         root_index = next((i for i, base in enumerate(roots) if native_import._inside(path, base)), None)
         if root_index is None:
-            raise ValueError("源会话文件不在 Agent 存储目录内")
+            raise ValueError(message_text('err.source_session_file_is_outside_the_agent_storage_directory'))
         relative = path.resolve().relative_to(roots[root_index]).as_posix()
         name = "root%d/" % root_index + relative
         if name not in files and len(files) >= archive.MAX_FILES:
-            raise ValueError("会话包文件过多")
+            raise ValueError(message_text('err.too_many_files_in_the_session_package'))
         data = archive.read_file(path) if data is None else data
         total += len(data) - (len(files[name][0]) if name in files else 0)
         if total > archive.MAX_TOTAL:
-            raise ValueError("会话包原始文件总大小超过 256 MiB")
+            raise ValueError(message_text('err.original_session_package_files_exceed_256_mib_in_total'))
         files[name] = (data, False)
         return name
     entry = add(conv.path)
@@ -53,7 +55,7 @@ def store_session(agent, sid, root=None):
         index = copy.deepcopy(adapter._json(str(workspace_index)))
         entries = [row for row in index.get("conversations", []) if isinstance(row, dict) and row.get("id") == path.parent.name]
         if len(entries) != 1:
-            raise ValueError("CodeBuddy 工作区索引缺少唯一会话条目")
+            raise ValueError(message_text('err.codebuddy_workspace_index_lacks_a_unique_session_entry'))
         index["conversations"] = entries
         add(workspace_index, (json.dumps(index, ensure_ascii=False) + "\n").encode("utf-8"))
     if native == "codex":
@@ -64,29 +66,32 @@ def store_session(agent, sid, root=None):
                 add(path, ("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows)).encode("utf-8"))
     manifest = {"kind":KIND, "agent":native, "created_at":iso(), "platform":platform.system(),
                 "source":agent, "root_count":len(roots), "entry":entry,
-                "session":{"id":sid, "title":conv.title, "cwd":conv.cwd, "format":conv.meta.get("source_format"),
+                # A ZIP contains only the chosen rollout. Keep its native ID
+                # as the lookup key so older v1 package readers can restore it.
+                "session":{"id":conv.id if native == "codex" else sid, "selection_id":sid, "native_id":conv.id,
+                           "title":conv.title, "cwd":conv.cwd, "format":conv.meta.get("source_format"),
                            "stats":conv.stats()},
-                "notes":["原生会话及所需标题/工作区索引；不含账号设置、凭据、附件或子代理旁路文件。"]}
+                "notes":[message_text('msg.native_session_and_required_title_workspace_indexes_excludes_account_settings_credentials_')]}
     path = archive.storage_root(root) / "conversations" / native / (uuid.uuid4().hex + ".zip")
     if any(native_import._inside(path, base) for base in roots):
-        raise ValueError("存储目录不能放在源 Agent 数据目录内")
+        raise ValueError(message_text('err.storage_directory_cannot_be_inside_the_source_agent_data_directory'))
     return archive.write_package(path, manifest, files)
 
 
 def store_sessions(agent, ids=None, all_sessions=False, root=None):
     ids = list(ids or [])
     if all_sessions and ids:
-        raise ValueError("--all 与指定会话 ID 不能同时使用")
+        raise ValueError(message_text('err.all_cannot_be_used_together_with_specific_session_ids'))
     if all_sessions:
         ids = [row.id for row in registry.get(agent).discover()]
     if not ids:
-        raise ValueError("请选择会话 ID 或 --all；没有可读取会话")
+        raise ValueError(message_text('err.select_session_ids_or_all_no_readable_sessions_found'))
     results, errors = [], []
     for sid in dict.fromkeys(ids):
         try:
             results.append(store_session(agent, sid, root))
         except (OSError, ValueError, KeyError) as exc:
-            errors.append({"id":sid, "error":str(exc)})
+            errors.append({"id":sid, "error":error_text(exc)})
     return {"ok":not errors, "stored":results, "errors":errors}
 
 
@@ -97,20 +102,20 @@ def restore_session(package, cwd, session_id=None, dsh_compression="zstd", previ
     manifest, files = archive.read_package(package, KIND)
     agent = manifest.get("agent")
     if agent not in registry._ADAPTERS:
-        raise ValueError("包中的 Agent 不支持原生恢复")
+        raise ValueError(message_text('err.agent_in_this_package_does_not_support_native_restore'))
     count = manifest.get("root_count")
     session = manifest.get("session")
     if type(count) is not int or count not in (1, 2) or not isinstance(session, dict) or not isinstance(session.get("id"), str):
-        raise ValueError("会话包元数据无效")
+        raise ValueError(message_text('msg.invalid_session_package_metadata'))
     entry = archive.safe_name(manifest.get("entry"))
     if entry not in files or any(not any(name.startswith("root%d/" % i) for i in range(count)) for name in files):
-        raise ValueError("会话包入口或 Agent 根目录声明无效")
+        raise ValueError(message_text('msg.invalid_session_package_entry_or_agent_root_declaration'))
     system = platform.system()
     if system == "Windows":
         cwd = native_import._windows_cwd(cwd)
     else:
         if not cwd or not Path(cwd).is_absolute() or not Path(cwd).is_dir():
-            raise ValueError("恢复需要当前设备上存在的绝对项目目录")
+            raise ValueError(message_text('msg.restoring_needs_an_absolute_project_directory_that_exists_on_this_device'))
         cwd = str(Path(cwd).resolve())
     with tempfile.TemporaryDirectory(prefix="agentrelay-session-") as temporary:
         archive.unpack(files, temporary)
@@ -120,7 +125,7 @@ def restore_session(package, cwd, session_id=None, dsh_compression="zstd", previ
             adapter.roots = roots
         conv = adapter.read(session["id"])
         if Path(conv.path).resolve() != (Path(temporary) / entry).resolve():
-            raise ValueError("会话包 ID 与声明入口不匹配")
+            raise ValueError(message_text('err.session_package_id_does_not_match_the_declared_entry'))
         if not conv.cwd and isinstance(session.get("cwd"), str):
             conv = replace(conv, cwd=session["cwd"])
         source = SimpleNamespace(source=agent, name=manifest.get("source") or agent, adapter=adapter,
@@ -128,5 +133,5 @@ def restore_session(package, cwd, session_id=None, dsh_compression="zstd", previ
         result = native_import._migrate(source, registry.get(agent), session["id"], cwd, session_id,
                         dsh_compression, "native-package-import", agent, system)
     result["from"]["path"] = str(Path(package).resolve())
-    result["notes"].append("已校验存储包所有文件；同 ID 不覆盖，不自动合并两端新增历史。")
+    result["notes"].append(message_text('msg.session_package_verified'))
     return result

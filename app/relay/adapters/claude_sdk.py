@@ -4,6 +4,7 @@ SDK APIs enumerate Claude sessions, not a distinct SDK-owned format. Never infer
 the creator from userType, agentName, isSidechain or process entrypoint variables.
 """
 from ..locations import resolve_home
+from ..messages import text as message_text
 from .base import ReadOnlyAdapter
 from .claude import ClaudeAdapter
 
@@ -11,7 +12,7 @@ from .claude import ClaudeAdapter
 class ClaudeSdkAdapter(ReadOnlyAdapter, ClaudeAdapter):
     name = "claude_sdk"
     label = "Claude Agent SDK"
-    read_note = "SDK 与 Claude Code 共用会话存储；此入口显示共享记录，无法仅凭日志确认创建者。"
+    read_note = message_text('ui.the_sdk_and_claude_code_share_one_session_store_this_tab_shows_the_shared_record')
 
     def __init__(self, home=None, clean=True):
         # Resolve this source's override independently, then reuse the native reader.

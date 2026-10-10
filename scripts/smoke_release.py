@@ -164,6 +164,34 @@ def smoke(binary):
                 assert actual, 'Packaged HTTP server did not start'
                 with opener.open('http://127.0.0.1:%d/static/workflow.css' % actual, timeout=5) as response:
                     assert b'.task-panel' in response.read(), 'Packaged task stylesheet missing'
+                catalogs = {}
+                for language in ('zh', 'en'):
+                    with opener.open('http://127.0.0.1:%d/static/locales.%s.json' % (actual, language), timeout=5) as response:
+                        assert response.headers.get_content_type() == 'application/json'
+                        catalogs[language] = json.load(response)
+                with opener.open('http://127.0.0.1:%d/static/i18n.js' % actual, timeout=5) as response:
+                    javascript = response.read().decode('utf-8')
+                invalid = urllib.request.Request('http://127.0.0.1:%d/api/preview' % actual, data=b'{}',
+                                                 headers={'Content-Type': 'application/json'})
+                try:
+                    opener.open(invalid, timeout=5).close()
+                    raise AssertionError('Empty preview request must fail')
+                except urllib.error.HTTPError as response:
+                    with response:
+                        assert response.code == 400
+                        error = json.load(response)
+                # Execute the shipped translator with the shipped catalogs and a real
+                # frozen-server error. Node is a build-time check, never a user dependency.
+                check = """const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const data=JSON.parse(fs.readFileSync(0,'utf8'));const context=vm.createContext({});
+vm.runInContext(data.javascript,context);const i=context.RelayI18n;
+i.configure(data.catalogs.zh,data.catalogs.en);
+assert.equal(i.message('zh',data.error.error_message),data.error.error);
+assert.equal(i.message('en',data.error.error_message),data.catalogs.en[data.error.error_message.code]);
+assert.notEqual(i.message('en',data.error.error_message),data.error.error);
+"""
+                subprocess.run(['node', '-e', check], input=json.dumps(dict(javascript=javascript, catalogs=catalogs, error=error)),
+                               text=True, encoding='utf-8', check=True, timeout=15)
                 request = urllib.request.Request('http://127.0.0.1:%d/api/shutdown' % actual, data=b'{}',
                                                  headers={'Content-Type': 'application/json'})
                 with opener.open(request, timeout=5) as response:

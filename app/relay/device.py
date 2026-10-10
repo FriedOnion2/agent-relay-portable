@@ -1,4 +1,6 @@
 """Device-local overrides beside portable data, never implicit plugin trust."""
+
+from .messages import text as message_text, error_text
 import hashlib
 import json
 import os
@@ -52,18 +54,18 @@ def read():
     if not path.exists():
         return {}
     if path.stat().st_size > 1024 * 1024:
-        raise ValueError('本机配置过大')
+        raise ValueError(message_text('msg.the_device_config_is_too_large'))
     value = json.loads(path.read_text(encoding='utf-8-sig'))
     if not isinstance(value, dict) or not isinstance(value.get('agent_homes', {}), dict):
-        raise ValueError('本机配置必须是对象，agent_homes 必须是对象')
+        raise ValueError(message_text('msg.the_device_config_and_agent_homes_must_be_objects'))
     for home in value.get('agent_homes', {}).values():
         if not isinstance(home, str):
-            raise ValueError('本机 Agent 目录必须是字符串')
+            raise ValueError(message_text('msg.agent_directories_must_be_strings'))
     for key in ('windows_user_home', 'ubuntu_user_home'):
         if key in value and not isinstance(value[key], str):
-            raise ValueError('本机用户目录必须是字符串')
+            raise ValueError(message_text('msg.user_directories_must_be_strings'))
     if not isinstance(value.get('plugins', []), list):
-        raise ValueError('plugins 必须是列表')
+        raise ValueError(message_text('msg.plugins_must_be_a_list'))
     return value
 
 
@@ -106,7 +108,7 @@ def merge(shared, local=None):
             path = project_root() / path
         result['agent_homes'][key] = str(path)
         if not path.is_dir():
-            message = '配置的 %s 目录不可访问：%s；请在环境与兼容面板重新选择，或启用本机自动探测' % (key, path)
+            message = message_text('msg.configured_key_directory_is_inaccessible_path_select_it_again_in_environment_compatibility', key=key, path=path)
             warnings.append(message)
             blocked_homes[key] = message
     profile_key = 'windows_user_home' if platform.system() == 'Linux' else 'ubuntu_user_home' if platform.system() == 'Windows' else None
@@ -114,10 +116,10 @@ def merge(shared, local=None):
     if profile:
         path = Path(profile).expanduser()
         if not path.is_absolute():
-            warnings.append(profile_key + ' 不是本机绝对路径，请用 windows-use / ubuntu-use 重新选择')
+            warnings.append(message_text('msg.profile_key_is_not_a_local_absolute_path_select_it_again_with_windows_use_ubuntu_use', profile_key=profile_key))
             result[profile_key] = ''
         elif not path.is_dir():
-            warnings.append('跨系统用户目录不可访问，请核对挂载或重新选择：' + str(path))
+            warnings.append(message_text('msg.cross_system_user_directory_is_inaccessible_check_the_mount_or_select_it_again_value', value=str(path)))
     # Plugin approvals are valid only on the device that enabled them.
     result['plugins'] = local.get('plugins', [])
     return result
@@ -126,11 +128,11 @@ def merge(shared, local=None):
 def set_home(agent, home):
     from .locations import SOURCES
     if agent not in SOURCES:
-        raise ValueError('请选择内置 Agent')
+        raise ValueError(message_text('msg.choose_a_built_in_agent'))
     if home:
         path = Path(home).expanduser()
         if not path.is_absolute() or not path.is_dir():
-            raise ValueError('请选择当前设备存在的绝对目录；留空则自动探测')
+            raise ValueError(message_text('msg.choose_an_absolute_directory_that_exists_on_this_device_leave_blank_to_auto_dete'))
         home = str(path.resolve())
     value = read()
     value.setdefault('agent_homes', {})[agent] = home or ''
@@ -147,7 +149,7 @@ def environment():
         os.unlink(path)
         writable = True
     except OSError as exc:
-        error = str(exc)
+        error = error_text(exc)
     try:
         free = shutil.disk_usage(root).free
     except OSError:
@@ -164,9 +166,9 @@ def environment():
         finally:
             database.close()
     except (ImportError, RuntimeError) as exc:
-        error = error or str(exc)
+        error = error or error_text(exc)
     except Exception as exc:
-        error = error or ('SQLite/FTS5：' + str(exc))
+        error = error or message_text('err.sqlite_fts5_failed', detail=error_text(exc))
     return {'device_id': identity(), 'system': platform.system(), 'architecture': platform.machine(),
             'data_root': str(root), 'config_path': str(config_path()), 'writable': writable,
             'runtime': {'bundled':bool(getattr(sys, 'frozen', False)),
@@ -174,6 +176,6 @@ def environment():
                         'directory':str(Path(sys.executable).resolve().parent),
                         'zstandard':importlib.util.find_spec('zstandard') is not None,
                         'sqlite':sqlite_version, 'fts5':fts5,
-                        'checksum':'总包启动器每次校验运行时压缩包 SHA-256；本面板不验证已解压文件。'},
+                        'checksum':message_text('msg.the_bundle_launcher_checks_the_runtime_archive_sha_256_on_every_start_this_panel')},
             'free_bytes': free, 'write_error': error, 'warnings': list(warnings),
-            'note': '换设备默认使用该主机目录；本机覆盖配置保存在 devices/，不会在其他设备自动启用。'}
+            'note': message_text('msg.a_new_device_uses_its_own_host_directories_by_default_local_overrides_are_stored')}

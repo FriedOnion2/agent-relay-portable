@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+from relay.messages import text as message_text
+
 import argparse
 import json
 import os
@@ -89,24 +91,24 @@ def cmd_windows_use(args):
     key = "ubuntu_user_home" if ubuntu else "windows_user_home"
     label = "Ubuntu" if ubuntu else "Windows"
     if platform.system() != ("Windows" if ubuntu else "Linux"):
-        raise ValueError("ubuntu-use 用于 Windows；windows-use 用于 Ubuntu / Linux")
+        raise ValueError(message_text('err.ubuntu_use_is_for_windows_windows_use_is_for_ubuntu_linux'))
     if args.clear and args.path:
-        raise ValueError("目录与 --clear 不能同时使用")
+        raise ValueError(message_text('err.a_directory_and_clear_cannot_be_used_together'))
     path = ""
     if not args.clear:
         if not args.path:
-            raise ValueError("请填写用户目录，或用 --clear 清除选择")
+            raise ValueError(message_text('err.enter_a_user_directory_or_use_clear_to_clear_the_selection'))
         profile = Path(args.path).expanduser()
         if not profile.is_absolute() or not profile.is_dir():
-            raise ValueError("请填写当前系统可访问且存在的用户目录绝对路径")
+            raise ValueError(message_text('err.enter_an_existing_absolute_user_directory_accessible_from_this_system'))
         if not os.access(profile, os.R_OK | os.X_OK):
-            raise ValueError(f"{label} 用户目录没有读取权限")
+            raise ValueError(message_text('err.the_label_user_directory_is_not_readable', label=label))
         path = str(profile)
     config = bootstrap.config_path()
     # Preserve unknown keys and refuse to replace a malformed local config.
     cfg = json.loads(config.read_text(encoding="utf-8-sig")) if config.exists() else {}
     if not isinstance(cfg, dict):
-        raise ValueError("config.json 不是 JSON 对象，请先修复配置")
+        raise ValueError(message_text('err.config_json_is_not_a_json_object_fix_the_configuration_first'))
     from relay import device
     local = device.read()
     local[key] = path
@@ -182,6 +184,9 @@ def cmd_list(args):
     for i, r in enumerate(rows, 1):
         sid = r["id"]
         print(f"{i:>3}  {sid:<38} {r['updated']:<20} {r['turns']:>4}  {r['title'][:50]}")
+        if r.get("variant_count", 1) > 1:
+            print(f"     同 ID 的 {r['variant_count']} 份记录；原生 ID：{r['native_id']}")
+            print(f"     文件：{r['path']}")
         if r.get("error"):
             print(f"     读取受限：{r['error']}")
     print(f"\n共 {len(rows)} 条")
@@ -415,15 +420,15 @@ def cmd_device(args):
 def cmd_plugins(args):
     if args.action == 'enable':
         if not args.name or not args.path:
-            raise ValueError('启用需填写插件名与可信 Python 文件')
+            raise ValueError(message_text('err.enabling_requires_a_plugin_name_and_trusted_python_file'))
         result = plugins.enable(args.name, args.path)
     elif args.action == 'disable':
         if not args.name:
-            raise ValueError('请填写插件名')
+            raise ValueError(message_text('err.enter_a_plugin_name'))
         result = plugins.disable(args.name)
     elif args.action == 'check':
         if not args.name or not args.path:
-            raise ValueError('自检需填写插件名与 Python 文件')
+            raise ValueError(message_text('err.self_check_requires_a_plugin_name_and_python_file'))
         result = plugins.check(args.name, args.path)
         for row in result['checks']:
             print('%s %s%s' % ('✅' if row['ok'] else '❌', row['check'], '：' + row['detail'] if row['detail'] else ''))
@@ -452,7 +457,7 @@ def cmd_corpus(args):
     else:
         path = Path(args.markdown)
         if path.stat().st_size > 1024 * 1024:
-            raise ValueError('草稿超过 1 MiB')
+            raise ValueError(message_text('err.draft_exceeds_1_mib'))
         result = export_draft(path.read_text(encoding='utf-8-sig'), args.directory, args.confirm)
     _print_json(result)
     return 0 if result.get('ok',True) else 1
@@ -708,7 +713,7 @@ def main(argv=None):
             from relay.ubuntu import PROFILE_ENV as UBUNTU_ENV, selected_profile as selected_ubuntu
             import platform
             if platform.system() != "Windows":
-                raise ValueError("--ubuntu-user 仅用于 Windows")
+                raise ValueError(message_text('err.ubuntu_user_is_only_available_on_windows'))
             os.environ[UBUNTU_ENV] = args.ubuntu_user
             _CFG["ubuntu_user_home"] = args.ubuntu_user
             selected_ubuntu()
@@ -717,7 +722,7 @@ def main(argv=None):
             import platform
             from relay.windows import PROFILE_ENV, selected_profile
             if platform.system() != "Linux":
-                raise ValueError("--windows-user 仅用于 Ubuntu / Linux")
+                raise ValueError(message_text('err.windows_user_is_only_available_on_ubuntu_linux'))
             os.environ[PROFILE_ENV] = args.windows_user
             _CFG["windows_user_home"] = args.windows_user
             selected_profile()  # validate before using it
@@ -733,7 +738,6 @@ def main(argv=None):
             import traceback
             traceback.print_exc()
         return 1
-    return 0
 
 
 if __name__ == "__main__":
