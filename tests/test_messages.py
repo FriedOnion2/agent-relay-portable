@@ -33,6 +33,9 @@ class MessageTests(unittest.TestCase):
             self.assertNotRegex(en[key].replace('Mac安装依赖.command', ''), r'[\u4e00-\u9fff]', key)
         for path in (ROOT / 'app').rglob('*.py'):
             for node in ast.walk(ast.parse(path.read_text(encoding='utf-8'))):
+                if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id in ('read_note', 'write_note') for target in node.targets):
+                    self.assertFalse(isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)
+                                     and re.search(r'[\u4e00-\u9fff]', node.value.value), str(path))
                 if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
                         and node.func.id == 'message_text' and node.args and isinstance(node.args[0], ast.Constant)):
                     key = node.args[0].value
@@ -108,6 +111,13 @@ class MessageTests(unittest.TestCase):
         status = annotate(jobs.status())
         self.assertEqual(status['status'], 'failed')
         self.assertEqual(status['error_message']['code'], 'msg.session_unreadable')
+
+    def test_sdk_shared_storage_note_is_structured(self):
+        from relay.adapters.claude_sdk import ClaudeSdkAdapter
+        with tempfile.TemporaryDirectory() as folder:
+            info = annotate(ClaudeSdkAdapter(home=folder).info())
+            self.assertEqual(info['read_note_message']['code'],
+                             'ui.the_sdk_and_claude_code_share_one_session_store_this_tab_shows_the_shared_record')
 
     def test_operation_log_keeps_message_metadata_after_restart(self):
         with tempfile.TemporaryDirectory() as folder, patch.object(oplog, 'log_path', return_value=Path(folder) / 'operations.jsonl'):
