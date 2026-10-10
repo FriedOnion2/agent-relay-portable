@@ -1,4 +1,6 @@
 """Locate writable portable data beside the source tree or packaged app."""
+
+from .messages import text as message_text
 import os
 import sys
 from pathlib import Path
@@ -10,7 +12,7 @@ def project_root():
         if portable:
             path = Path(portable).expanduser()
             if not path.is_absolute():
-                raise ValueError("RELAY_PORTABLE_ROOT 必须是绝对路径")
+                raise ValueError(message_text('err.relay_portable_root_must_be_an_absolute_path'))
             return path.resolve()
         executable = Path(sys.executable).resolve()
         # macOS executable lives in AgentRelay.app/Contents/MacOS/.
@@ -29,7 +31,7 @@ def installed_data_dir():
     if override:
         path = Path(override).expanduser()
         if not path.is_absolute():
-            raise ValueError("RELAY_PORTABLE_ROOT 必须是绝对路径")
+            raise ValueError(message_text('err.relay_portable_root_must_be_an_absolute_path'))
         return path.resolve()
     home = Path.home()
     if sys.platform == "win32":

@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+from .messages import text as message_text, join_text, error_text, annotate, restore_text
+
 import contextlib
 import hashlib
 import json
@@ -101,7 +103,7 @@ def _append(entry: Dict[str, Any]) -> None:
         flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT
         fd = os.open(path, flags, 0o600)
         with os.fdopen(fd, "a", encoding="utf-8") as handle:
-            handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            handle.write(json.dumps(annotate(entry), ensure_ascii=False) + "\n")
 
 
 def _read_entries() -> List[Dict[str, Any]]:
@@ -131,7 +133,7 @@ def track(kind: str, roots: Iterable[str | None], **meta: Any):
     try:
         yield record
     except BaseException as error:
-        _finish(record, before_files, before_dirs, complete, roots, "failed", str(error))
+        _finish(record, before_files, before_dirs, complete, roots, "failed", error_text(error))
         raise
     _finish(record, before_files, before_dirs, complete, roots, "ok", "")
 
@@ -158,12 +160,12 @@ def _finish(record, before_files, before_dirs, complete, roots, status, error):
         if not record["undoable"]:
             reasons = []
             if not (complete and after_complete):
-                reasons.append("目标目录扫描不完整（读取失败或文件过多），无法安全撤销")
+                reasons.append(message_text('msg.undo_scan_incomplete'))
             if len(created) > MAX_RECORDED or len(appended) > MAX_RECORDED:
-                reasons.append("变化的文件过多")
+                reasons.append(message_text('msg.undo_too_many_changes'))
             if other:
-                reasons.append("有已有文件被改写（不是追加）")
-            record["undo_blocked"] = "；".join(reasons)
+                reasons.append(message_text('msg.undo_existing_files_rewritten'))
+            record["undo_blocked"] = join_text(reasons, "；")
         if status == "failed" and not (created or appended or other):
             return                      # 校验失败、什么都没写：不留记录
         _append(record)
@@ -190,6 +192,7 @@ def list_operations(limit: int = 100) -> List[Dict[str, Any]]:
             "appended": [row["path"] for row in entry.get("appended", [])],
             "undoable": bool(entry.get("undoable")) and not undo and bool(entry.get("created") or entry.get("appended")),
             "undo_blocked": entry.get("undo_blocked", ""),
+            **{key:entry[key] for key in ("error_message", "undo_blocked_message") if key in entry},
             "undone": {"time": undo.get("time"), "removed": undo.get("removed"), "kept": undo.get("kept")} if undo else None,
         })
     rows.reverse()
@@ -211,29 +214,30 @@ def undo(op_id: str, force: bool = False) -> Dict[str, Any]:
     entries = _read_entries()
     entry = next((e for e in entries if e.get("id") == op_id and not e.get("undo_of")), None)
     if not entry:
-        raise KeyError("找不到这条操作记录")
+        raise KeyError(message_text('err.operation_record_not_found'))
     if any(e.get("undo_of") == op_id for e in entries):
-        raise ValueError("这条操作已经撤销过")
+        raise ValueError(message_text('err.this_operation_has_already_been_undone'))
     if not entry.get("undoable"):
-        raise ValueError("这条操作不能自动撤销：" + (entry.get("undo_blocked") or "没有记录到文件变化"))
+        reason = restore_text(entry.get('undo_blocked'), entry.get('undo_blocked_message'))
+        raise ValueError(message_text('err.this_operation_cannot_be_undone_automatically_value', value=reason or message_text('msg.no_file_changes_recorded')))
     roots = entry.get("roots") or []
     removed, kept, truncated = [], [], []
 
     for row in entry.get("created", []):
         path = row["path"]
         if not _inside(path, roots):
-            kept.append({"path": path, "reason": "不在记录的目标目录内，已跳过"})
+            kept.append({"path": path, "reason": message_text('msg.outside_the_recorded_target_directory_skipped')})
             continue
         if not os.path.lexists(path):
             continue
         if os.path.islink(path) or not os.path.isfile(path):
-            kept.append({"path": path, "reason": "不再是普通文件，已跳过"})
+            kept.append({"path": path, "reason": message_text('msg.no_longer_a_regular_file_skipped')})
             continue
         info = os.stat(path)
         same = info.st_size == row["size"] and (row.get("sha256") is None and info.st_mtime_ns == row["mtime_ns"]
                                                 or row.get("sha256") is not None and _sha256(path) == row["sha256"])
         if not same and not force:
-            kept.append({"path": path, "reason": "写入后又被修改（可能已在目标软件里续聊），为避免丢失新内容未删除"})
+            kept.append({"path": path, "reason": message_text('msg.modified_after_writing_possibly_resumed_in_the_target_app_kept_to_avoid_losing_new_content')})
             continue
         os.remove(path)
         removed.append(path)
@@ -241,11 +245,11 @@ def undo(op_id: str, force: bool = False) -> Dict[str, Any]:
     for row in entry.get("appended", []):
         path = row["path"]
         if not _inside(path, roots) or not os.path.isfile(path) or os.path.islink(path):
-            kept.append({"path": path, "reason": "文件不存在或不在目标目录内，已跳过"})
+            kept.append({"path": path, "reason": message_text('msg.file_is_missing_or_outside_the_target_directory_skipped')})
             continue
         info = os.stat(path)
         if info.st_size != row["size_after"] or info.st_mtime_ns != row["mtime_ns"]:
-            kept.append({"path": path, "reason": "写入后又被修改，未截回原长度"})
+            kept.append({"path": path, "reason": message_text('msg.modified_after_writing_not_truncated_to_the_original_length')})
             continue
         with open(path, "r+b") as handle:
             handle.truncate(row["size_before"])

@@ -6,6 +6,8 @@ It never launches an agent or copies account configuration.
 """
 from __future__ import annotations
 
+from .messages import text as message_text
+
 import copy
 import datetime as dt
 import json
@@ -34,15 +36,15 @@ def _jsonl(path):
     with Path(path).open("rb") as stream:
         raw = stream.read(MAX_BYTES + 1)
     if not raw or len(raw) > MAX_BYTES:
-        raise ValueError("原生会话为空或超过 32 MiB，无法完整迁移")
+        raise ValueError(message_text('err.native_session_is_empty_or_exceeds_32_mib_complete_migration_is_not_possible'))
     if not raw.endswith(b"\n"):
-        raise ValueError("原生会话末行未完整写入，请关闭源软件后重试")
+        raise ValueError(message_text('err.native_session_last_line_is_incomplete_close_the_source_app_and_retry'))
     try:
         rows = [json.loads(line) for line in raw.decode("utf-8-sig").splitlines() if line.strip()]
     except (ValueError, UnicodeError) as exc:
-        raise ValueError("原生会话含损坏记录，已停止迁移") from exc
+        raise ValueError(message_text('err.native_session_contains_corrupt_records_migration_stopped')) from exc
     if not rows or any(not isinstance(row, dict) for row in rows):
-        raise ValueError("原生 JSONL 每行必须是对象")
+        raise ValueError(message_text('err.every_native_jsonl_line_must_be_an_object'))
     return rows
 
 
@@ -111,7 +113,7 @@ def _check_destination(path, source):
     profile = getattr(source, "profile", None)
     if (profile and _inside(path, profile)) or any(
             _inside(path, root) or _inside(root, path) for root in source.roots):
-        raise ValueError("目标目录与来源重叠，已停止写入；请修正用户目录 / agent_homes / 环境变量")
+        raise ValueError(message_text('err.target_overlaps_the_source_writing_stopped_fix_user_directory_agent_homes_environment_vari'))
 
 
 def _map_path(value, old_cwd, new_cwd):
@@ -162,16 +164,16 @@ def _native_jsonl(source, target, conv, cwd, requested_id):
         except ValueError:
             canonical = ""
         if canonical != requested_id.lower():
-            raise ValueError("Claude / SDK / Codex 的新会话 ID 必须是 UUID，请使用网页的“生成新 ID”")
+            raise ValueError(message_text('err.new_claude_sdk_codex_session_ids_must_be_uuids_use_generate_new_id_in_the_web_interface'))
     if native == "codebuddy":
         writer = WorkBuddyAdapter(home=target.root)
         path = Path(writer.home) / writer.project_dir_for(cwd) / (sid + ".jsonl")
         # CodeBuddy exposes path-prefixed IDs, so check native file basenames.
         if any(Path(row.path).stem == sid for row in target.discover() if row.id.startswith("cli:")):
-            raise FileExistsError("目标 CodeBuddy CLI 会话 ID 已存在，请指定新 --session-id")
+            raise FileExistsError(message_text('err.target_codebuddy_cli_session_id_already_exists_choose_a_new_session_id'))
     else:
         if target.find_path(sid):
-            raise FileExistsError("目标会话 ID 已存在，请指定新 --session-id")
+            raise FileExistsError(message_text('err.target_session_id_already_exists_choose_a_new_session_id'))
         if native in ("claude", "claude_sdk"):
             path = Path(target.home) / _claude_project(target, cwd) / (sid + ".jsonl")
         elif native == "codex":
@@ -186,7 +188,7 @@ def _native_jsonl(source, target, conv, cwd, requested_id):
         if native == "codex" and row.get("type") in ("session_meta", "turn_context"):
             payload = row.get("payload")
             if not isinstance(payload, dict):
-                raise ValueError("Codex 会话元信息无效")
+                raise ValueError(message_text('err.invalid_codex_session_metadata'))
             _metadata(payload, conv.cwd, cwd, sid, old_id)
             if row["type"] == "session_meta":
                 payload["id"] = sid
@@ -217,14 +219,14 @@ def _native_jsonl(source, target, conv, cwd, requested_id):
                 index = Path(target.index_path)
                 original = index.read_bytes() if index.exists() else b""
                 if len(original) > MAX_BYTES:
-                    raise ValueError("目标 Codex 标题索引过大，已停止迁移")
+                    raise ValueError(message_text('err.target_codex_title_index_is_too_large_migration_stopped'))
                 current = _jsonl(index) if original else []
                 if any(str(row.get("id") or row.get("thread_id")) == sid for row in current):
-                    raise FileExistsError("目标 Codex 标题索引中已存在此 ID，请指定新 --session-id")
+                    raise FileExistsError(message_text('err.target_codex_title_index_already_contains_this_id_choose_a_new_session_id'))
                 _publish_jsonl(path, rows)
                 try:
                     if (index.read_bytes() if index.exists() else b"") != original:
-                        raise ValueError("Codex 标题索引正在变化，请关闭软件后重试")
+                        raise ValueError(message_text('err.codex_title_index_is_changing_close_the_app_and_retry'))
                     atomic_write(str(index), [json.dumps(row, ensure_ascii=False) for row in [*current, entry]])
                 except BaseException:
                     path.unlink()
@@ -244,42 +246,42 @@ def _native_dsh(source, target, conv, cwd, requested_id, compression):
                  and header["seedLength"] + 1 < len(rows)
                  and rows[header["seedLength"] + 1].get("type") == "session/end-seed")
     if version != 4 and not seeded_v0:
-        raise ValueError("DSH 同软件迁移要求完整 v4 或已关闭的 v0 seed；其他旧世代先用源系统 DSH 升级")
+        raise ValueError(message_text('err.same_app_dsh_migration_requires_complete_v4_or_a_closed_v0_seed_upgrade_older_generations_'))
     if (type(header.get("delegationDepth")) is not int or header["delegationDepth"] < 0
             or (version == 4 and type(header.get("isSeeded")) is not bool)):
-        raise ValueError("DSH 原生 header 缺少有效 delegationDepth / isSeeded，不能构造可恢复会话")
+        raise ValueError(message_text('err.native_dsh_header_lacks_valid_delegationdepth_isseeded_cannot_construct_a_resumable_sessio'))
     allowed = {"type", "version", "id", "createdAt", "cwd", "parentSession", "isSeeded",
                "origin", "delegationDepth", "agentPreset"}
     if seeded_v0:
         allowed.add("seedLength")
     if set(header) - allowed or type(header.get("createdAt")) is not int or header["createdAt"] < 0:
-        raise ValueError("DSH header 不符合官方 v4 原生格式")
+        raise ValueError(message_text('err.dsh_header_does_not_match_the_official_v4_native_format'))
     sid = validate_session_id(requested_id) if requested_id else header["id"]
     encoded = dsh_segment(sid)
     if not encoded or len(encoded) > 255:
-        raise ValueError("DSH 会话 ID 编码超出文件名限制")
+        raise ValueError(message_text('err.encoded_dsh_session_id_exceeds_the_filename_limit'))
     existing = [target.read(row.id).meta["header"]["id"] for row in target.discover() if row.readable]
     if sid in existing:
-        raise FileExistsError("目标 DSH 会话 ID 已存在，请指定新 --session-id")
+        raise FileExistsError(message_text('err.target_dsh_session_id_already_exists_choose_a_new_session_id'))
     if any(Path(path).parent.name == encoded for path, _ in target._candidates()):
-        raise FileExistsError("目标 DSH 已有相同 ID 的会话目录，即使读取受限也不会覆盖")
+        raise FileExistsError(message_text('err.target_dsh_already_has_a_session_directory_with_this_id_unreadable_directories_are_never_o'))
     parent = header.get("parentSession")
     if parent and parent not in existing:
-        raise ValueError("此 DSH 会话依赖父会话；请先迁移父会话并保留其原 ID")
+        raise ValueError(message_text('err.this_dsh_session_depends_on_a_parent_session_migrate_the_parent_first_and_keep_its_origina'))
     if header.get("origin") == "subagent":
-        raise ValueError("DSH 子代理会话需要完整主会话关系，暂不单独导入；可以导出 Markdown")
+        raise ValueError(message_text('err.a_dsh_subagent_session_needs_its_complete_parent_relationship_and_cannot_be_imported_alone'))
     header.update(id=sid, cwd=cwd)
     directory = Path(target.home) / dsh_project(cwd) / encoded
     _check_destination(directory, source)
     if directory.exists():
-        raise FileExistsError("目标 DSH 会话目录已存在")
+        raise FileExistsError(message_text('err.target_dsh_session_directory_already_exists'))
     filename = ("session.jsonl" if version == 0 else "session.v4.jsonl") + (".zstd" if compression == "zstd" else "")
     path = directory / filename
     if compression == "zstd":
         try:
             import zstandard as zstd
         except ImportError:
-            raise ValueError("DSH 原生导入需要 zstandard，请用启动器的 Python 安装 requirements-optional.txt") from None
+            raise ValueError(message_text('err.native_dsh_import_requires_zstandard_install_requirements_optional_txt_with_the_launcher_s')) from None
         compressor = zstd.ZstdCompressor(write_checksum=True)
         # The first independent frame must contain exactly the header line.
         data = compressor.compress((json.dumps(header, ensure_ascii=False) + "\n").encode("utf-8"))
@@ -344,8 +346,7 @@ def _native_ide(source, target, conv, cwd, requested_id):
         if row.readable and row.id.startswith("ide:") and _norm_cwd(row.cwd) == _norm_cwd(cwd):
             workspaces.add(Path(row.path).parent.parent)
     if len(workspaces) != 1:
-        raise ValueError("请先在目标系统 CodeBuddy IDE 的目标项目创建一条会话并关闭软件；"
-                         "需要唯一匹配的原生工作区，多个 profile 匹配时请显式配置 CodeBuddy Data 根目录")
+        raise ValueError(message_text('err.create_a_session_in_the_target_project_with_codebuddy_ide_on_the_target_system_and_close_t'))
     workspace = workspaces.pop()
     _check_destination(workspace, source)
     path = Path(conv.path)
@@ -356,7 +357,7 @@ def _native_ide(source, target, conv, cwd, requested_id):
     entry = next((copy.deepcopy(item) for item in source_index.get("conversations", [])
                   if isinstance(item, dict) and item.get("id") == path.parent.name), None)
     if entry is None:
-        raise ValueError("源 CodeBuddy 工作区索引缺少此会话，无法完整迁移")
+        raise ValueError(message_text('err.source_codebuddy_workspace_index_lacks_this_session_complete_migration_is_not_possible'))
     entry["id"] = sid
     _metadata(entry, conv.cwd, cwd, sid, path.parent.name)
     _metadata(manifest, conv.cwd, cwd, sid, path.parent.name)
@@ -381,14 +382,14 @@ def _native_ide(source, target, conv, cwd, requested_id):
             current = json.loads(original.decode("utf-8-sig"))
             conversations = current.get("conversations")
             if not isinstance(conversations, list):
-                raise ValueError("目标 CodeBuddy 工作区索引格式不支持")
+                raise ValueError(message_text('err.unsupported_target_codebuddy_workspace_index_format'))
             if destination.exists() or any(isinstance(item, dict) and item.get("id") == sid for item in conversations):
-                raise FileExistsError("目标 CodeBuddy IDE 会话已存在，请指定新 --session-id")
+                raise FileExistsError(message_text('err.target_codebuddy_ide_session_already_exists_choose_a_new_session_id'))
             stage = Path(tempfile.mkdtemp(prefix=".relay-", suffix=".partial", dir=str(workspace)))
             for relative, doc in documents.items():
                 _publish_jsonl(stage / relative, [doc])
             if index.read_bytes() != original:
-                raise ValueError("CodeBuddy 索引正在变化，请关闭软件后重试")
+                raise ValueError(message_text('err.codebuddy_index_is_changing_close_the_app_and_retry'))
             destination.mkdir()  # refuses even an existing empty session
             published = True
             if (stage / "messages").exists():
@@ -418,28 +419,28 @@ def context(mode, agent, cwd, project_path=None):
         from .ubuntu import UbuntuSource
         source = registry.get(agent if agent.startswith('ubuntu_') else 'ubuntu_' + agent)
         if not isinstance(source, UbuntuSource):
-            raise ValueError('请选择 Ubuntu 来源')
+            raise ValueError(message_text('err.select_an_ubuntu_source'))
         return source, registry.get(source.source), _windows_cwd(cwd), source.source, 'Windows'
     if mode == 'export-windows':
         from .windows import selected_profile
         if platform.system() != 'Linux':
-            raise ValueError('export-windows 在 Ubuntu / Linux 中运行')
+            raise ValueError(message_text('err.export_windows_runs_on_ubuntu_linux'))
         if agent not in registry._ADAPTERS:
-            raise ValueError('请选择本机 agent 来源')
+            raise ValueError(message_text('err.select_a_local_agent_source'))
         profile = selected_profile()
         if not profile or not Path(profile).is_dir():
-            raise ValueError('请先用 windows-use 选择可访问的 Windows 用户目录')
+            raise ValueError(message_text('err.select_an_accessible_windows_user_directory_with_windows_use_first'))
         local = registry.get(agent)
         source = SimpleNamespace(source=agent, adapter=local, name=agent, read=local.read,
                                  roots=getattr(local, 'roots', [getattr(local, 'root', local.home)]))
         return source, registry.get('windows_' + agent).adapter, _windows_cwd(cwd, project_path), 'windows_' + agent, 'Windows'
     if mode != 'import-windows':
-        raise ValueError('未知原生迁移方式')
+        raise ValueError(message_text('err.unknown_native_migration_mode'))
     source = registry.get(agent if agent.startswith("windows_") else "windows_" + agent)
     if not isinstance(source, WindowsSource):
-        raise ValueError("请选择 Windows 来源")
+        raise ValueError(message_text('err.select_a_windows_source'))
     if not cwd or not Path(cwd).is_absolute() or not Path(cwd).is_dir():
-        raise ValueError("需要存在的 Ubuntu 项目目录（--cwd /home/…）")
+        raise ValueError(message_text('err.an_existing_ubuntu_project_directory_is_required_cwd_home'))
     cwd = str(Path(cwd).resolve()).replace("\\", "/")
     target = registry.get(source.source)
     return source, target, cwd, source.source, 'Ubuntu'
@@ -447,19 +448,19 @@ def context(mode, agent, cwd, project_path=None):
 
 def _windows_cwd(cwd, project_path=None):
     if not isinstance(cwd, str) or not PureWindowsPath(cwd).is_absolute() or any(ord(c) < 32 for c in cwd):
-        raise ValueError("需要 Windows 绝对项目路径，例如 D:\\project，不能填写 Ubuntu 挂载路径")
+        raise ValueError(message_text('err.a_windows_absolute_project_path_such_as_d_project_is_required_do_not_use_an_ubuntu_mounted'))
     cwd = ntpath.normpath(cwd)
     for component in PureWindowsPath(cwd).parts[1:]:
         if re.search(r'[<>:"|?*]', component) or component.endswith((".", " ")):
-            raise ValueError("Windows 项目路径含无效文件名字符或结尾")
+            raise ValueError(message_text('err.windows_project_path_contains_invalid_filename_characters_or_endings'))
     if platform.system() == "Windows":
         accessible = Path(cwd)
     else:
         if not project_path or not Path(project_path).is_absolute():
-            raise ValueError("在 Ubuntu 写回 Windows 需另填 --project-path：项目在 Ubuntu 中的挂载路径")
+            raise ValueError(message_text('err.writing_back_to_windows_from_ubuntu_requires_project_path_the_project_mount_path_in_ubuntu'))
         accessible = Path(project_path)
     if not accessible.is_dir():
-        raise ValueError("目标项目目录不可访问；请核对 cwd / project_path 和分区挂载")
+        raise ValueError(message_text('err.target_project_directory_is_inaccessible_check_cwd_project_path_and_partition_mounts'))
     return cwd
 
 
@@ -479,17 +480,17 @@ def import_ubuntu(agent, sid, cwd, session_id=None, dsh_compression="zstd", prev
 
 def _migrate(source, target, sid, cwd, session_id, dsh_compression, mode, target_name, target_os, preview_token=None):
     if dsh_compression not in ("zstd", "none"):
-        raise ValueError("dsh_compression 必须是 zstd 或 none")
+        raise ValueError(message_text('err.dsh_compression_must_be_zstd_or_none'))
     for root in getattr(target, "roots", [getattr(target, "root", target.home)]):
         _check_destination(root, source)
     conv = source.read(sid)
     if conv.truncated:
-        raise ValueError("源会话超过读取限制，无法完整迁移")
+        raise ValueError(message_text('err.source_session_exceeds_the_read_limit_complete_migration_is_not_possible'))
     from . import preview
     plan = preview.report(conv, target_name, dict(cwd=cwd, session_id=session_id, dsh_compression=dsh_compression), target.home, native=True)
     preview.check_token(preview_token, plan['token'])
-    notes = ["已保留原生记录；项目元数据已映射，历史正文与工具参数中的路径不自动替换。",
-             "未复制账号、凭据、应用设置、附件或子代理旁路文件；请在目标软件中核对续聊。"]
+    notes = [message_text('msg.native_records_mapped'),
+             message_text('msg.native_resume_check')]
     from . import oplog, registry
     with oplog.track(mode, registry._write_roots(target), source=source.name, target=target_name,
                      session=sid, title=conv.title) as record:
@@ -497,14 +498,14 @@ def _migrate(source, target, sid, cwd, session_id, dsh_compression, mode, target
             path, native_id = _native_dsh(source, target, conv, cwd, session_id, dsh_compression)
         elif source.source == "codebuddy" and conv.meta.get("source_format") == "codebuddy-ide-manifest":
             path, native_id = _native_ide(source, target, conv, cwd, session_id)
-            notes.append("CodeBuddy IDE 使用已有原生工作区并更新 conversations 索引；重启软件查看。")
+            notes.append(message_text('msg.codebuddy_workspace_updated'))
         else:
             path, native_id = _native_jsonl(source, target, conv, cwd, session_id)
         record["path"] = str(path)
     if source.source == "codex":
-        notes.append("Codex CLI 可按 ID 恢复；Desktop 的数据库索引未自动更新。")
+        notes.append(message_text('msg.codex_desktop_index_unchanged'))
     if source.source == "claude_sdk":
-        notes.append("目标是 SDK 的 Claude 原生共享存储；由你的 SDK 应用设置 resume，创建者仍不可区分。")
+        notes.append(message_text('msg.sdk_resume_application'))
     resume = ""
     if source.source in ("claude", "codex"):
         command = "claude --resume" if source.source == "claude" else "codex resume"

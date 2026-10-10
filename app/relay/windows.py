@@ -1,6 +1,8 @@
 """Read mounted Windows profiles without changing the host's native stores."""
 from __future__ import annotations
 
+from .messages import text as message_text
+
 import os
 import platform
 import re
@@ -25,7 +27,7 @@ def selected_profile():
         return ""
     path = Path(value).expanduser()
     if not path.is_absolute():
-        raise ValueError("Windows 用户目录需要 Ubuntu 中的绝对挂载路径，不能填写 C:\\Users 路径")
+        raise ValueError(message_text('err.windows_user_directory_must_be_an_absolute_mounted_path_in_ubuntu_not_c_users'))
     return str(path)
 
 
@@ -97,8 +99,7 @@ class WindowsSource(ReadOnlyAdapter):
         self.home = self.adapter.home
         self.root = getattr(self.adapter, "root", self.home)
         self.roots = getattr(self.adapter, "roots", [self.home])
-        self.read_note = (f"Windows 只读来源：{profile}。仅读取与导出；迁出需指定 Ubuntu 项目目录。 "
-                          + getattr(self.adapter, "read_note", ""))
+        self.read_note = (message_text('msg.windows_read_only_source_profile_reading_and_export_only_migration_requires_an_ubuntu_proj', profile=profile, value=getattr(self.adapter, "read_note", "")))
 
     def available(self):
         return self.adapter.available()
@@ -107,11 +108,11 @@ class WindowsSource(ReadOnlyAdapter):
         result = super().info()
         result.update(homes=self.roots, windows_profile=self.profile,
                       native_import=True, native_target=self.source,
-                      write_note="浏览适配器只读；写回需使用 Ubuntu 本机来源的对应软件迁移入口")
+                      write_note=message_text('msg.browsing_adapters_are_read_only_to_write_back_use_the_migration_entry_for_the_correspondin'))
         if not Path(self.profile).is_dir():
-            result["error"] = "Windows 用户目录不可访问，请先挂载分区并核对路径"
+            result["error"] = message_text('msg.windows_user_directory_is_inaccessible_mount_the_partition_and_check_the_path_first')
         elif not os.access(self.profile, os.R_OK | os.X_OK):
-            result["error"] = "Windows 用户目录没有读取权限，请检查挂载权限"
+            result["error"] = message_text('msg.windows_user_directory_is_not_readable_check_mount_permissions')
         return result
 
     def discover(self):

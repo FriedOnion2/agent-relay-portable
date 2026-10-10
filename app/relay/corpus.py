@@ -3,6 +3,8 @@
 DELETE journaling keeps completed transactions in one movable SQLite file.
 Only an explicit update reads agent data; queries never create a database.
 """
+
+from .messages import text as message_text, error_text
 import hashlib
 import json
 import re
@@ -59,7 +61,7 @@ def _dependencies(adapter, row):
         manifest = native._json(row.path)
         refs = manifest.get('messages', [])
         if len(refs) > archive.MAX_FILES:
-            raise ValueError('CodeBuddy 引用文件过多')
+            raise ValueError(message_text('err.too_many_codebuddy_referenced_files'))
         from .paths import validate_session_id
         paths.extend(Path(row.path).parent / 'messages' / (validate_session_id(r['id']) + '.json') for r in refs)
         paths.append(Path(row.path).parent.parent / 'index.json')
@@ -129,7 +131,7 @@ class Corpus:
                 finally:
                     target.close()
             db.close()
-            raise ValueError('索引版本不兼容；已保留原库。更新写入前已备份，请使用匹配版本或另建索引。')
+            raise ValueError(message_text('err.incompatible_index_version_original_database_preserved_backed_up_before_updating_use_a_mat'))
         if write and version == 0:
             try:
                 db.executescript('''
@@ -183,12 +185,12 @@ class Corpus:
     def update(self, sources=None, include_thinking=False, packages=True, progress=None, cancel=None,
                max_documents=MAX_DOCUMENTS, max_seconds=MAX_SECONDS):
         if type(include_thinking) is not bool or type(packages) is not bool:
-            raise ValueError('索引开关必须为布尔值')
+            raise ValueError(message_text('err.index_options_must_be_booleans'))
         sources = registry.all_keys() if sources is None else sources
         if not isinstance(sources, list) or any(not isinstance(s, str) or s not in registry.all_keys() for s in sources):
-            raise ValueError('索引来源列表无效')
+            raise ValueError(message_text('err.invalid_index_source_list'))
         if not 1 <= max_documents <= MAX_DOCUMENTS or not 0 < max_seconds <= MAX_SECONDS:
-            raise ValueError('索引扫描限制无效')
+            raise ValueError(message_text('err.invalid_index_scan_limit'))
         state = dict(ok=True, processed=0, indexed=0, unchanged=0, errors=[], warnings=[], canceled=False, limited=False, source='')
         start, owner = time.monotonic(), self.owner
         def stopped():
@@ -239,7 +241,7 @@ class Corpus:
                     from . import plugins
                     adapter = registry.get(source) if source in plugins.entries else registry.get(source, clean=True)
                     if not adapter.available():
-                        state['warnings'].append(source + ' 离线；保留已有缓存')
+                        state['warnings'].append(message_text('msg.source_offline_cache_kept', source=source))
                         continue
                     native = getattr(adapter, 'adapter', adapter)
                     roots = getattr(native, 'roots', [getattr(native, 'root', native.home)])
@@ -253,7 +255,7 @@ class Corpus:
                         seen.add(key)
                         try:
                             if not row.readable:
-                                raise ValueError(row.error or '会话无法读取')
+                                raise ValueError(message_text('err.unreadable_session', detail=error_text(row.error) if row.error else message_text('msg.session_unreadable')))
                             dependency_stamp = _dependencies(adapter, row)
                             stamp = digest([dependency_stamp, row.title, row.cwd, include_thinking])
                             old = db.execute('SELECT stamp FROM docs WHERE key=?', (key,)).fetchone()
@@ -264,16 +266,16 @@ class Corpus:
                             else:
                                 conv = adapter.read(row.id)
                                 if dependency_stamp != _dependencies(adapter, row):
-                                    raise ValueError('源文件正在变化，请重新更新索引')
+                                    raise ValueError(message_text('err.source_file_is_changing_update_the_index_again'))
                                 self._put(db, key, scope, source, row.id, 'local', owner, row.path, stamp, conv, include_thinking)
                                 state['indexed'] += 1
                         except Exception as exc:
-                            state['errors'].append(dict(source=source, id=row.id, error=str(exc)))
+                            state['errors'].append(dict(source=source, id=row.id, error=error_text(exc)))
                         report()
                     if complete:
                         clean(scope, seen, roots)
                 except Exception as exc:
-                    state['errors'].append(dict(source=source, error=str(exc)))
+                    state['errors'].append(dict(source=source, error=error_text(exc)))
                 report()
             if packages and not stopped():
                 state['source'] = 'packages'
@@ -287,7 +289,7 @@ class Corpus:
                 with db:
                     db.execute("UPDATE docs SET offline=1 WHERE origin='package'")
                 if not storage.is_dir():
-                    state['warnings'].append('存储包目录离线；保留已有缓存')
+                    state['warnings'].append(message_text('msg.packages_offline_cache_kept'))
                     complete = False
                 else:
                     for path in (storage / 'conversations').glob('*/*.zip'):
@@ -309,10 +311,10 @@ class Corpus:
                             manifest, files = archive.read_package(path, session_store.KIND)
                             agent, count, session = manifest.get('agent'), manifest.get('root_count'), manifest.get('session')
                             if agent not in registry._ADAPTERS or type(count) is not int or count not in (1, 2) or not isinstance(session, dict):
-                                raise ValueError('存储包元数据无效')
+                                raise ValueError(message_text('err.invalid_storage_package_metadata'))
                             entry = archive.safe_name(manifest.get('entry'))
                             if entry not in files:
-                                raise ValueError('存储包缺少入口')
+                                raise ValueError(message_text('err.storage_package_entry_is_missing'))
                             with tempfile.TemporaryDirectory(prefix='relay-corpus-') as temporary:
                                 archive.unpack(files, temporary)
                                 roots = [str(Path(temporary) / ('root%d' % i)) for i in range(count)]
@@ -321,13 +323,13 @@ class Corpus:
                                     adapter.roots = roots
                                 conv = adapter.read(session['id'])
                                 if Path(conv.path).resolve() != (Path(temporary) / entry).resolve():
-                                    raise ValueError('会话 ID 与包入口不匹配')
+                                    raise ValueError(message_text('err.session_id_does_not_match_the_package_entry'))
                                 conv.cwd = conv.cwd or session.get('cwd') or ''
                                 self._put(db, key, scope, agent, session['id'], 'package', '', locator + '/' + relative,
                                           stamp, conv, include_thinking)
                             state['indexed'] += 1
                         except Exception as exc:
-                            state['errors'].append(dict(source='package', id=relative, error=str(exc)))
+                            state['errors'].append(dict(source='package', id=relative, error=error_text(exc)))
                         report()
                     if complete:
                         clean(scope, seen)
@@ -344,12 +346,12 @@ class Corpus:
 
     def search(self, query='', source='', project='', tool='', after='', before='', include_thinking=False, limit=50, offset=0):
         if any(not isinstance(v, str) for v in (query, source, project, tool, after, before)) or type(include_thinking) is not bool:
-            raise ValueError('搜索字段类型无效')
+            raise ValueError(message_text('err.invalid_search_field_type'))
         if len(query) > 256 or len(project) > 1000 or len(tool) > 200 or type(limit) is not int or not 1 <= limit <= 100 or type(offset) is not int or not 0 <= offset <= 10000:
-            raise ValueError('搜索范围过大')
+            raise ValueError(message_text('err.search_scope_is_too_large'))
         words = LEXEMES.findall(query.casefold())
         if len(words) > 32:
-            raise ValueError('搜索词过多')
+            raise ValueError(message_text('err.too_many_search_terms'))
         expressions = []
         for word in words:
             tokens = terms(word)
@@ -370,7 +372,7 @@ class Corpus:
             if value:
                 ms = parse_iso(value)
                 if ms is None:
-                    raise ValueError('时间过滤需要 ISO 日期')
+                    raise ValueError(message_text('err.time_filters_require_an_iso_date'))
                 if operator == '<=' and len(value) == 10:
                     ms += 86400000 - 1
                 where.append('updated_ms' + operator + '?'); args.append(ms)
@@ -402,7 +404,7 @@ class Corpus:
         try:
             row = db.execute('SELECT * FROM docs WHERE key=?', (key,)).fetchone() if db else None
             if row is None:
-                raise FileNotFoundError('索引中没有此会话')
+                raise FileNotFoundError(message_text('err.session_not_found_in_the_index'))
             value = self._public(row)
             value['can_open'] = False
             if row['origin'] == 'local' and row['device'] == self.owner and not row['offline']:

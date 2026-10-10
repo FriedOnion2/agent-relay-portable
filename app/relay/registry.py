@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .messages import text as message_text, join_text, error_text
+
 import os
 from typing import Any, Dict, List
 
@@ -26,12 +28,12 @@ _CACHE: Dict[str, BaseAdapter] = {}
 
 def get(source: str, **kw) -> BaseAdapter:
     if not isinstance(source, str) or not source.strip():
-        raise ValueError("缺少 agent 名称")
+        raise ValueError(message_text('err.missing_agent_name'))
     key = source.lower()
     from . import device, plugins
     if key in plugins.entries:
         if kw:
-            raise ValueError('社区插件目录由插件自身管理')
+            raise ValueError(message_text('err.community_plugin_directories_are_managed_by_the_plugins_themselves'))
         return plugins.PluginAdapter(key)
     if 'home' not in kw and key in device.blocked_homes:
         raise ValueError(device.blocked_homes[key])
@@ -40,9 +42,9 @@ def get(source: str, **kw) -> BaseAdapter:
         native = key.split("_", 1)[1]
         profile = selected_ubuntu() if ubuntu else selected_profile()
         if native not in _ADAPTERS or not profile:
-            raise KeyError("跨系统来源未配置，请先运行 windows-use / ubuntu-use")
+            raise KeyError(message_text('err.cross_system_source_is_not_configured_run_windows_use_ubuntu_use_first'))
         if kw.keys() - {"clean"}:
-            raise ValueError("跨系统来源的根目录由 windows_user_home / ubuntu_user_home 指定")
+            raise ValueError(message_text('err.cross_system_source_roots_are_set_by_windows_user_home_ubuntu_user_home'))
         cached = _CACHE.get(key)
         if not kw and cached and cached.profile == profile:
             return cached
@@ -51,7 +53,7 @@ def get(source: str, **kw) -> BaseAdapter:
             _CACHE[key] = a
         return a
     if key not in _ADAPTERS:
-        raise KeyError(f"未知 agent: {source}（可选: {', '.join(_ADAPTERS)}）")
+        raise KeyError(message_text('err.unknown_agent_source_available_value', source=source, value=', '.join(_ADAPTERS)))
     if not kw and key in _CACHE:
         return _CACHE[key]
     a = _ADAPTERS[key](**kw)
@@ -85,13 +87,13 @@ def sources_info() -> List[Dict[str, Any]]:
                 info["unreadable_count"] = sum(not row.readable for row in s)
                 errors = list(dict.fromkeys(row.error for row in s if row.error))
                 if errors:
-                    info["error"] = "; ".join(errors[:3])
+                    info["error"] = join_text(errors[:3], "; ")
             else:
                 info["session_count"] = 0
             out.append(info)
         except Exception as e:  # 单个 agent 出问题不能拖垮全局
             from . import plugins
-            out.append({"name": k, "available": False, "error": str(e), "session_count": 0,
+            out.append({"name": k, "available": False, "error": error_text(e), "session_count": 0,
                         "community":k in plugins.entries, "can_write":k in writable_keys()})
     return out
 
@@ -127,15 +129,15 @@ def transfer(source: str, sid: str, target: str, cwd: str | None = None,
     src = get(source)
     dst = get(target)
     if not dst.can_write:
-        raise ValueError(f"{dst.label} 尚不支持作为迁移目标")
+        raise ValueError(message_text('err.label_does_not_support_migration_writes_yet', label=dst.label))
     if isinstance(src, WindowsSource):
         if not cwd or not os.path.isabs(cwd) or not os.path.isdir(cwd):
-            raise ValueError("从跨系统来源迁出需指定存在的本机项目目录（--cwd）")
+            raise ValueError(message_text('err.migration_from_a_cross_system_source_requires_an_existing_local_project_directory_cwd'))
     conv = src.read(sid)
     if conv.truncated:
-        raise ValueError("源会话超过读取限制，迁移已停止；可导出已读取的部分内容")
+        raise ValueError(message_text('err.source_session_exceeds_the_read_limit_migration_stopped_you_can_export_the_portion_already'))
     if not conv.turns:
-        raise ValueError("源会话没有可迁移的内容（文件为空或无法解析），迁移已停止")
+        raise ValueError(message_text('err.source_session_has_no_migratable_content_empty_or_unparseable_file_migration_stopped'))
     from . import preview
     options = dict(cwd=cwd, session_id=session_id, remap_tools=remap_tools, include_thinking=include_thinking, new_title=new_title)
     if redact_secrets:

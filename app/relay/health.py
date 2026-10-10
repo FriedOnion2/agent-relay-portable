@@ -1,4 +1,6 @@
 """Honest, offline format checks; never equate fixtures with vendor resume."""
+
+from .messages import text as message_text, error_text
 import html
 import json
 import platform
@@ -15,8 +17,8 @@ def check(agent):
     from .adapters.workbuddy import WorkBuddyAdapter
     cls = _ADAPTERS[agent]
     row = {'agent':agent, 'label':cls.label, 'api_version':cls.api_version,
-           'coverage':'CodeBuddy CLI JSONL（不含 IDE）' if agent == 'codebuddy' else
-                      'DSH 生成的 v0 seed（不含全部世代）' if agent == 'dsh' else '当前 writer 生成的 JSONL',
+           'coverage':message_text('msg.codebuddy_cli_jsonl_no_ide') if agent == 'codebuddy' else
+                      message_text('msg.dsh_generated_v0_seed_not_every_generation') if agent == 'dsh' else message_text('msg.jsonl_produced_by_the_current_writer'),
            'evidence':'synthetic-roundtrip', 'fixture_version':1, 'client_version':None,
            'latest_client':'unknown', 'native_resume':'not-tested', 'write':bool(cls.can_write)}
     try:
@@ -35,18 +37,18 @@ def check(agent):
             writer.write(conv, cwd=str(root), session_id='11111111-1111-4111-8111-111111111111')
             discovered = list(adapter.discover())
             if len(discovered) != 1 or not discovered[0].readable:
-                raise ValueError('自检列表未返回唯一可读会话')
+                raise ValueError(message_text('msg.the_self_check_listing_did_not_return_exactly_one_readable_session'))
             restored = adapter.read(discovered[0].id)
-            text = '\n'.join(turn.text() for turn in restored.turns)
-            if not all(value in text for value in ('health fixture request', 'health fixture response', 'fixture result')):
-                raise ValueError('自检读取丢失预期内容')
+            content = '\n'.join(turn.text() for turn in restored.turns)
+            if not all(value in content for value in ('health fixture request', 'health fixture response', 'fixture result')):
+                raise ValueError(message_text('msg.the_self_check_read_lost_expected_content'))
             if restored.truncated or restored.stats()['tool_call'] != 1:
-                raise ValueError('自检工具调用数量错误或会话截断')
+                raise ValueError(message_text('msg.wrong_tool_call_count_or_truncated_session_in_the_self_check'))
             row.update(status='passed', read='passed', native_file_roundtrip='passed', error='')
     except ImportError as exc:
-        row.update(status='unavailable', read='not-tested', native_file_roundtrip='not-tested', error=str(exc))
+        row.update(status='unavailable', read='not-tested', native_file_roundtrip='not-tested', error=error_text(exc))
     except Exception as exc:
-        row.update(status='failed', read='failed', native_file_roundtrip='failed', error=str(exc))
+        row.update(status='failed', read='failed', native_file_roundtrip='failed', error=error_text(exc))
     return row
 
 
@@ -54,21 +56,21 @@ def report():
     from . import registry, plugins
     rows = [check(agent) for agent in registry._ADAPTERS]
     for name in plugins.entries:
-        rows.append({'agent':name, 'label':'社区：' + name, 'status':'not-tested',
+        rows.append({'agent':name, 'label':message_text('msg.community_name', name=name), 'status':'not-tested',
                      'evidence':'none', 'client_version':None, 'latest_client':'unknown',
                      'native_resume':'not-tested', 'read':'not-tested', 'write':False,
-                     'error':'社区插件需提供独立样本；内置自检不会执行插件'})
+                     'error':message_text('msg.community_plugins_must_supply_their_own_samples_the_built_in_self_check_does_not')})
     return {'ok':all(row['status'] == 'passed' for row in rows[:len(registry._ADAPTERS)]), 'checked_at':iso(),
             'system':platform.system(), 'architecture':platform.machine(), 'adapters':rows,
             'plugin_errors':list(plugins.errors),
-            'note':'仅使用临时合成样本验证格式读取与文件回读；未安装客户端、调用模型或验证最新版真实续聊。'}
+            'note':message_text('msg.only_temporary_synthetic_samples_are_used_to_verify_format_reading_and_file_read')}
 
 
 def export(result, directory):
     root = Path(directory)
     root.mkdir(parents=True, exist_ok=True)
     (root / 'health.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
-    rows = ''.join('<tr>' + ''.join('<td>' + html.escape(str(row.get(key) if row.get(key) is not None else '未知')) + '</td>'
+    rows = ''.join('<tr>' + ''.join('<td>' + html.escape(str(row.get(key) if row.get(key) is not None else message_text('ui.unknown'))) + '</td>'
                                   for key in ('label','status','evidence','coverage','client_version','native_resume','error')) + '</tr>'
                    for row in result['adapters'])
     document = '<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>AgentRelay 格式回归</title>'

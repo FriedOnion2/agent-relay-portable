@@ -14,6 +14,8 @@
 
 from __future__ import annotations
 
+from relay.messages import text as message_text, error_text
+
 import json
 import os
 import platform
@@ -194,7 +196,7 @@ def _merge_device(cfg):
         return device.merge(cfg)
     except (OSError, ValueError) as exc:
         result = device.merge(cfg, local={})
-        device.warnings.append('本机配置读取失败：' + str(exc))
+        device.warnings.append(message_text('msg.local_config_read_failed', detail=error_text(exc)))
         return result
 
 
@@ -205,33 +207,33 @@ def load_config() -> dict:
     try:
         cfg = json.loads(p.read_text(encoding="utf-8-sig"))
         if not isinstance(cfg, dict):
-            raise ValueError("配置必须是 JSON 对象")
+            raise ValueError(message_text('err.configuration_must_be_a_json_object'))
         homes = cfg.get("agent_homes", {})
         if not isinstance(homes, dict):
-            raise ValueError("agent_homes 必须是 JSON 对象")
+            raise ValueError(message_text('err.agent_homes_must_be_a_json_object'))
         for key in SOURCES:
             if key in homes and not isinstance(homes[key], str):
-                raise ValueError(f"agent_homes.{key} 必须是字符串")
+                raise ValueError(message_text('err.agent_homes_key_must_be_a_string', key=key))
         if "port" in cfg and (type(cfg["port"]) is not int or not 1 <= cfg["port"] <= 65535):
-            raise ValueError("port 必须是 1 到 65535 的整数")
+            raise ValueError(message_text('err.port_must_be_an_integer_from_1_to_65535'))
         if "open_browser" in cfg and type(cfg["open_browser"]) is not bool:
-            raise ValueError("open_browser 必须为 true 或 false")
+            raise ValueError(message_text('err.open_browser_must_be_true_or_false'))
         if "windows_user_home" in cfg and not isinstance(cfg["windows_user_home"], str):
-            raise ValueError("windows_user_home 必须是字符串")
+            raise ValueError(message_text('err.windows_user_home_must_be_a_string'))
         profile = (cfg.get("windows_user_home") or "").strip()
         if profile and platform.system() == "Linux" and not Path(profile).expanduser().is_absolute():
-            raise ValueError("windows_user_home 必须是 Ubuntu 中的绝对挂载路径")
+            raise ValueError(message_text('err.windows_user_home_must_be_an_absolute_mounted_path_in_ubuntu'))
         if "ubuntu_user_home" in cfg and not isinstance(cfg["ubuntu_user_home"], str):
-            raise ValueError("ubuntu_user_home 必须是字符串")
+            raise ValueError(message_text('err.ubuntu_user_home_must_be_a_string'))
         ubuntu = (cfg.get("ubuntu_user_home") or "").strip()
         if ubuntu and platform.system() == "Windows" and not Path(ubuntu).expanduser().is_absolute():
-            raise ValueError("ubuntu_user_home 必须是 Windows 可访问的绝对路径")
+            raise ValueError(message_text('err.ubuntu_user_home_must_be_an_absolute_path_accessible_from_windows'))
         return _merge_device(cfg)
     except Exception as e:
         print(f"⚠ config.json 解析失败，忽略此文件：{e}", file=sys.stderr)
         from relay import device
         result = _merge_device({})
-        device.warnings.append('共享配置读取失败：' + str(e))
+        device.warnings.append(message_text('msg.shared_config_read_failed', detail=error_text(e)))
         return result
 
 
@@ -296,7 +298,7 @@ def probe_agent_homes() -> list[dict]:
             errors = list(dict.fromkeys(row.error for row in rows if row.error))
         except Exception as exc:
             out.append({'key':key, 'label':key, 'root':'', 'data':'', 'found':False,
-                        'files':-1, 'errors':[str(exc)]})
+                        'files':-1, 'errors':[error_text(exc)]})
             continue
         out.append({"key":key, "label":adapter.label, "root":adapter.root if hasattr(adapter, "root") else adapter.home,
                     "data":"; ".join(getattr(adapter, "roots", [adapter.home])),

@@ -5,6 +5,8 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const html = fs.readFileSync(path.join(__dirname, '../app/web/index.html'), 'utf8');
+const catalogs=Object.fromEntries(['zh','en'].map(lang=>[lang,JSON.parse(fs.readFileSync(path.join(__dirname,'../app/web/locales.'+lang+'.json'),'utf8'))]));
+const i18nScript=fs.readFileSync(path.join(__dirname,'../app/web/i18n.js'),'utf8');
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1].split('\ninit().catch')[0];
 
 test('returning to search preserves the selected search and index sources',async()=>{
@@ -122,7 +124,9 @@ function setup({automaticPreview=true,confirmed=true,randomUUID}={}){
       return new Promise((resolve,reject)=>requests.push({url,options,resolve,reject}));
     },
   });
-  vm.runInContext(script + '\n globalThis.app={workflow,showPage,renderOperationResult,selectPackage,selections,selectAll,storeBatch,state,loadSessions,openSession,doTransfer,doImportWindows,updateActions,bind,buildTarget,buildTabs,loadSources,storeCurrent,refreshStorage,restoreStored,buildSkillAgents,loadSkills,refreshSkillPackages,storeSelectedSkill,restoreSelectedSkill,corpusState,searchCorpus,openCorpusDocument,renderDraftCandidates,exportDraft,updateDraftAction,startCorpusJob,pollCorpusJob,cancelCorpusJob,setLang,tr,ts,applyStatic,renderChips,renderList,renderDetail,EN,EN_SERVER,doBatch,openHistory,refreshHistory,renderHistory,undoOperation,getLang:()=>lang};',context);
+  vm.runInContext(i18nScript,context);
+  context.RelayI18n.configure(catalogs.zh,catalogs.en);
+  vm.runInContext(script + '\n globalThis.app={workflow,showPage,renderOperationResult,selectPackage,selections,selectAll,storeBatch,state,loadSessions,openSession,doTransfer,doImportWindows,updateActions,bind,buildTarget,buildTabs,loadSources,storeCurrent,refreshStorage,restoreStored,buildSkillAgents,loadSkills,refreshSkillPackages,storeSelectedSkill,restoreSelectedSkill,corpusState,searchCorpus,openCorpusDocument,renderDraftCandidates,exportDraft,updateDraftAction,startCorpusJob,pollCorpusJob,cancelCorpusJob,setLang,tr,ts,applyStatic,renderChips,renderList,renderDetail,doBatch,openHistory,refreshHistory,renderHistory,undoOperation,getLang:()=>lang};',context);
   const response = (index,body,status=200)=>requests[index].resolve({ok:status<400,status,json:async()=>body});
   return {app:context.app, elements, requests, previews, response, document, el:document.querySelector};
 }
@@ -572,21 +576,17 @@ test('translation coverage recognizes both quote styles and escaped literals',()
     ['中文','英文','换行\n正文',"单'引号"]);
 });
 
-test('every UI string has an English translation', () => {
-  const body = html.split('<script>')[0].split('</head>')[1];
-  const strings = new Set();
-  for (const m of body.matchAll(/>([^<>]*[\u4e00-\u9fff][^<>]*)</g)) strings.add(m[1].trim());
-  for (const m of body.matchAll(/\s(?:placeholder|title|aria-label)="([^"]*[\u4e00-\u9fff][^"]*)"/g)) strings.add(m[1].trim());
-  strings.add(html.match(/<title>([^<]*)<\/title>/)[1]);
-  for (const text of translationStrings(script)) strings.add(text);
-  const t = setup();
-  const missing = [...strings].filter(zh => t.app.EN[zh] === undefined && !zh.startsWith('Switch language'));
-  assert.deepEqual(missing, []);
-  // placeholders in a translation must match the source
-  for (const [zh, en] of Object.entries(t.app.EN)) {
-    const vars = s => (s.match(/\{\w+\}/g) || []).sort().join();
-    assert.equal(vars(en), vars(zh), zh);
+test('locale keys and placeholders match and every explicit UI key exists', () => {
+  assert.deepEqual(Object.keys(catalogs.zh).sort(),Object.keys(catalogs.en).sort());
+  for(const key of Object.keys(catalogs.zh)){
+    assert.match(key,/^(ui|msg|err)\.[a-z][a-z0-9_]*$/);
+    assert.doesNotMatch(key,/\.message(?:_\d+)?$/);
+    const slots=text=>(text.match(/\{\w+\}/g)||[]).sort();
+    assert.deepEqual(slots(catalogs.zh[key]),slots(catalogs.en[key]),key);
   }
+  const keys=[...translationStrings(script),...Array.from(html.matchAll(/data-i18n(?:-(?:title|placeholder|aria-label))?="([^"]+)"/g),m=>m[1])];
+  for(const key of keys)assert.ok(Object.hasOwn(catalogs.en,key),key);
+  assert.doesNotMatch(script,/EN_PATTERNS|EN_SERVER|const EN\b/);
 });
 
 test('same-native-ID rollouts remain separate selections and open the chosen selector',async()=>{
@@ -619,15 +619,15 @@ test('English mode translates client strings and known server messages, and zh r
   assert.equal(t.app.getLang(), 'en');
   assert.match(t.el('#target').children[0].textContent, /^Migrate to /);
   assert.equal(t.el('#btnLang').textContent, '中文');
-  assert.equal(t.app.tr('已选 {n} 项', {n: 3}), '3 selected');
-  assert.equal(t.app.ts('请求体过大'), 'Request body too large');
-  assert.equal(t.app.ts('未知块 foo'), 'Unknown block foo');
-  assert.match(t.app.ts('SDK 与 Claude Code 共用会话存储；此入口显示共享记录，无法仅凭日志确认创建者。'), /^The SDK and Claude Code share/);
+  assert.equal(t.app.tr('ui.n_selected', {n: 3}), '3 selected');
+  assert.equal(t.app.ts({code:'msg.request_body_too_large',params:{},fallback:'请求体过大'}), 'Request body too large');
+  assert.equal(t.app.ts({code:'msg.unknown_block_kind',params:{kind:'foo'},fallback:'未知块 foo'}), 'Unknown block foo');
+  assert.match(t.app.ts({code:'ui.the_sdk_and_claude_code_share_one_session_store_this_tab_shows_the_shared_record',params:{},fallback:'SDK 与 Claude Code 共用会话存储；此入口显示共享记录，无法仅凭日志确认创建者。'}), /^The SDK and Claude Code share/);
   assert.equal(t.app.ts('没收录的服务端消息'), '没收录的服务端消息');
   t.app.setLang('zh');
   assert.equal(t.el('#btnLang').textContent, 'English');
-  assert.equal(t.app.tr('已选 {n} 项', {n: 3}), '已选 3 项');
-  assert.equal(t.app.ts('请求体过大'), '请求体过大');
+  assert.equal(t.app.tr('ui.n_selected', {n: 3}), '已选 3 项');
+  assert.equal(t.app.ts({code:'msg.request_body_too_large',params:{},fallback:'请求体过大'}), '请求体过大');
 });
 
 test('switching language re-renders the session list and the open conversation without refetching', async () => {
@@ -638,7 +638,7 @@ test('switching language re-renders the session list and the open conversation w
   assert.match(t.el('#list').children[0].innerHTML, /未命名会话/);
   assert.match(t.el('#list').children[0].innerHTML, /2 轮/);
   const opening = t.app.openSession({id: 'a'});
-  t.response(1, {ok: true, info: {title: '', source: 'codex', stats: {turns: 1, tool_call: 0, thinking: 0}, notes: ['预览描述文件转换效果，不会安装工具或执行历史调用。']},
+  t.response(1, {ok: true, info: {title: '', source: 'codex', stats: {turns: 1, tool_call: 0, thinking: 0}, notes: ['预览描述文件转换效果，不会安装工具或执行历史调用。'], notes_messages:[{code:'msg.the_preview_describes_the_file_conversion_it_installs_no_tools_and_runs_no_histo',params:{},fallback:'预览描述文件转换效果，不会安装工具或执行历史调用。'}]},
     turns: [{role: 'user', blocks: []}]});
   await opening;
   const before = t.requests.length;
@@ -653,24 +653,16 @@ test('switching language re-renders the session list and the open conversation w
   assert.equal(t.el('#content').children[1].children[0].children[1].children[0].innerHTML.includes('User'), true);
 });
 
-test('static page text and attributes are translated and restored from the remembered Chinese original', () => {
-  const t = setup();
-  const text = {nodeValue: '  对话存储 ', parentNode: {tagName: 'BUTTON'}};
-  const script = {nodeValue: '全选当前列表', parentNode: {tagName: 'SCRIPT'}};
-  const plain = {nodeValue: 'AgentRelay', parentNode: {tagName: 'DIV'}};
-  const input = {attrs: {placeholder: '搜索标题 / 目录 / id…', title: 'abc'}, getAttribute(n) { return n in this.attrs ? this.attrs[n] : null; }, setAttribute(n, v) { this.attrs[n] = v; }};
-  t.document.createTreeWalker = () => { const nodes = [text, script, plain]; return {nextNode: () => nodes.shift() || null}; };
-  t.document.querySelectorAll = () => [input];
-  t.app.setLang('en');
-  assert.equal(text.nodeValue, '  Conversation storage ');
-  assert.equal(script.nodeValue, '全选当前列表');
-  assert.equal(plain.nodeValue, 'AgentRelay');
-  assert.equal(input.attrs.placeholder, 'Search title / directory / id…');
-  assert.equal(input.attrs.title, 'abc');
-  t.document.createTreeWalker = () => { const nodes = [text]; return {nextNode: () => nodes.shift() || null}; };
-  t.app.setLang('zh');
-  assert.equal(text.nodeValue, '  对话存储 ');
-  assert.equal(input.attrs.placeholder, '搜索标题 / 目录 / id…');
+test('static bindings keep their keys when Chinese copy changes and do not touch user text',()=>{
+  const t=setup();
+  const label={dataset:{i18n:'ui.cross_device_conversation_storage'},textContent:'修改过的中文',getAttribute(){return null;}};
+  const input={dataset:{},attrs:{'data-i18n-placeholder':'ui.search_title_directory_id',placeholder:'修改过的提示'},
+    getAttribute(name){return this.attrs[name]??null;},setAttribute(name,value){this.attrs[name]=value;}};
+  t.document.querySelectorAll=()=>[label,input];
+  t.app.setLang('en');assert.equal(label.textContent,'Cross-device conversation storage');
+  assert.equal(input.attrs.placeholder,'Search title / directory / id…');
+  t.app.setLang('zh');assert.equal(label.textContent,'跨设备对话存储');
+  assert.equal(t.app.ts('对话存储'),'对话存储');
 });
 
 // ---------- 批量迁移 / 操作记录 / 脱敏 ----------
@@ -768,11 +760,30 @@ test('history text uses textContent so session titles cannot inject markup', () 
 
 test('secret-scan warnings from the server are translated', () => {
   const t = setup();
-  const zh = '检测到 2 处疑似敏感信息（私钥 2 处）：迁移会原样复制到目标软件。可勾选「脱敏密钥」或加 --redact-secrets。';
   t.app.setLang('en');
-  assert.match(t.app.ts(zh), /^Found 2 suspected secrets/);
-  assert.match(t.app.ts('检测到 1 处疑似敏感信息（JWT 1 处），写入时将替换为 [REDACTED:类型]。'), /replaced with \[REDACTED:type\]/);
-  assert.match(t.app.ts('检测到 1 处疑似敏感信息（JWT 1 处）：原生迁移原样复制会话文件，不支持脱敏。'), /native migration copies/);
+  const descriptor=(code)=>({code,params:{value:2,value2:'private key'},fallback:'changed Chinese copy'});
+  assert.match(t.app.ts(descriptor('msg.detected_value_suspected_secrets_value2_migration_copies_them_into_the_target_app_unchange')),/Detected 2 suspected secrets/);
+  assert.match(t.app.ts(descriptor('msg.detected_value_suspected_secrets_value2_writes_will_replace_them_with_redacted_type')),/replace them with \[REDACTED:type\]/);
+  assert.match(t.app.ts(descriptor('msg.detected_value_suspected_secrets_value2_native_migration_copies_session_files_unchanged_an')),/native migration copies/);
+});
+
+test('structured nested warnings and unknown errors render without inspecting Chinese content',()=>{
+  const t=setup();t.app.setLang('en');
+  const nested={code:'msg.secret_count',params:{count:2,label:{code:'msg.secret_private_key',params:{},fallback:'改过的原文'}},fallback:'旧原文'};
+  assert.equal(t.app.ts(nested),'Private key 2 occurrences');
+  assert.equal(t.app.ts({code:'vendor.unknown',params:{},fallback:'vendor detail'}),'vendor detail');
+  assert.equal(t.app.ts({code:'msg.secret_count',params:{},fallback:'incomplete descriptor'}),'incomplete descriptor');
+  assert.throws(()=>t.app.tr('ui.missing_key'),/Unknown message code/);
+});
+
+test('locale loading uses local resources and rejects missing translations and parameter drift',async()=>{
+  const t=setup();const runtime=vm.createContext({fetch:async url=>({ok:true,json:async()=>url.includes('.zh.')?catalogs.zh:catalogs.en})});
+  vm.runInContext(i18nScript,runtime);await runtime.RelayI18n.load();
+  assert.equal(runtime.RelayI18n.translate('en','msg.session_unreadable'),'Session cannot be read');
+  assert.throws(()=>runtime.RelayI18n.configure(catalogs.zh,{}),/Locale keys differ/);
+  assert.throws(()=>runtime.RelayI18n.configure(catalogs.zh,{...catalogs.en,'msg.secret_count':'{missing}'}),/Invalid locale entry/);
+  runtime.fetch=async()=>({ok:false});await assert.rejects(runtime.RelayI18n.load(),/Cannot load locale/);
+  assert.equal(t.app.ts('user supplied 中文'),'user supplied 中文');
 });
 
 test('task navigation shows one workspace, preserves selection and distinguishes saving from conversion', () => {

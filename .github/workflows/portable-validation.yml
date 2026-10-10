@@ -1,0 +1,30 @@
+name: Portable package validation
+on:
+  pull_request:
+    paths: ['app/**', 'scripts/build_release.py', 'scripts/smoke_release.py', 'requirements-release.txt', '.github/workflows/portable-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  frozen:
+    name: frozen (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {runner: windows-latest, target: windows-x64}
+          - {runner: ubuntu-22.04, target: linux-x64}
+          - {runner: macos-14, target: macos-arm64}
+          - {runner: macos-15-intel, target: macos-x64}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - run: python -m pip install -r requirements-release.txt
+      - name: Build relocated runtime and run CLI, storage, HTTP and i18n smoke checks
+        run: python scripts/build_release.py --tag v1.0.1-dev.validation

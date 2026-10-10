@@ -25,7 +25,7 @@ py-modules = ["bootstrap", "cli", "server", "portable"]
 packages = ["relay", "relay.adapters", "relay_web"]
 
 [tool.setuptools.package-data]
-relay_web = ["*.html", "*.css", "*.js", "*.svg", "*.png", "*.ico"]
+relay_web = ["*.html", "*.css", "*.js", "*.json", "*.svg", "*.png", "*.ico"]
 
 [tool.setuptools.dynamic]
 version = { attr = "relay.__version__" }

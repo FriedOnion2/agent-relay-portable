@@ -1,5 +1,7 @@
 """DeepSeek Harness historical log reader and native import adapter."""
 from __future__ import annotations
+
+from ..messages import text as message_text, error_text
 import json
 import os
 import re
@@ -27,11 +29,11 @@ def blocks(content):
     if isinstance(content, str):
         return [ir.Block.text_block(content)]
     if content is not None and not isinstance(content, list):
-        raise ValueError("消息 content 必须是文本或块列表")
+        raise ValueError(message_text('err.message_content_must_be_text_or_a_block_list'))
     out = []
     for b in content or []:
         if not isinstance(b, dict):
-            raise ValueError("消息块必须是 JSON 对象")
+            raise ValueError(message_text('err.message_blocks_must_be_json_objects'))
         kind = b.get("type")
         if kind == "text":
             out.append(ir.Block.text_block(b.get("text", "")))
@@ -59,12 +61,12 @@ def read_records(path):
     with open(path, "rb") as f:
         raw = f.read(MAX_SCAN_BYTES + 1)
     if len(raw) > MAX_SCAN_BYTES:
-        raise ValueError("DSH 日志超过 32 MiB 读取限制")
+        raise ValueError(message_text('err.dsh_log_exceeds_the_32_mib_read_limit'))
     if path.endswith(".zstd"):
         try:
             import zstandard as zstd
         except ImportError:
-            raise ValueError("已识别 DSH 压缩会话；请安装 requirements-optional.txt 的 zstandard") from None
+            raise ValueError(message_text('err.compressed_dsh_session_detected_install_zstandard_from_requirements_optional_txt')) from None
         decoded = bytearray()
         try:
             offset = 0
@@ -75,20 +77,20 @@ def read_records(path):
                     offset += len(chunk)
                     data = decoder.decompress(chunk)
                     if len(decoded) + len(data) > MAX_SCAN_BYTES:
-                        raise ValueError("DSH 解压内容超过 32 MiB 读取限制")
+                        raise ValueError(message_text('err.decompressed_dsh_content_exceeds_the_32_mib_read_limit'))
                     decoded.extend(data)
                 if not decoder.eof:
-                    raise ValueError("DSH 压缩帧不完整，请等会话写入完成后重试")
+                    raise ValueError(message_text('err.incomplete_dsh_compressed_frame_wait_until_the_session_finishes_writing_and_retry'))
                 offset -= len(decoder.unused_data)
         except zstd.ZstdError as exc:
-            raise ValueError("DSH 压缩文件损坏或窗口过大") from exc
+            raise ValueError(message_text('err.dsh_compressed_file_is_corrupt_or_its_window_is_too_large')) from exc
         raw = bytes(decoded)
     try:
         records = [json.loads(line) for line in raw.decode("utf-8-sig").splitlines() if line.strip()]
     except (ValueError, UnicodeError) as exc:
-        raise ValueError("DSH 日志损坏或末行未写完") from exc
+        raise ValueError(message_text('err.dsh_log_is_corrupt_or_its_last_line_is_incomplete')) from exc
     if not records or any(not isinstance(r, dict) for r in records):
-        raise ValueError("不是 DSH 会话日志")
+        raise ValueError(message_text('err.not_a_dsh_session_log'))
     # v0/v1 compact multiple streaming events into one physical row.
     expanded = [records[0]]
     for rec in records[1:]:
@@ -101,7 +103,7 @@ def read_records(path):
         deltas = data.get("dt")
         if (not isinstance(values, list) or not values or not all(isinstance(v, str) for v in values)
                 or not isinstance(deltas, list) or len(deltas) != len(values) - 1):
-            raise ValueError("DSH packed chunks 无效")
+            raise ValueError(message_text('err.invalid_dsh_packed_chunks'))
         timestamp = rec["time0"]
         for index, value in enumerate(values):
             if index:
@@ -142,9 +144,9 @@ class DshAdapter(BaseAdapter):
             if generations:
                 version = max(generations)
                 candidates = sorted(generations[version])
-                error = "DSH 同一世代有普通和压缩日志，无法确定来源" if len(candidates) != 1 else ""
+                error = message_text('err.dsh_generation_ambiguous') if len(candidates) != 1 else ""
                 if version > 4:
-                    error = f"不支持 DSH v{version}；支持 v0–v4"
+                    error = message_text('err.dsh_version_unsupported', version=version)
                 yield candidates[0], error
 
     def discover(self):
@@ -159,7 +161,7 @@ class DshAdapter(BaseAdapter):
             try:
                 conv = self._parse(path)
             except (ValueError, OSError, TypeError, KeyError, AttributeError) as exc:
-                error = str(exc)
+                error = error_text(exc)
         return SessionInfo(self.name, sid, (conv.title if conv else "DSH 会话") or "未命名会话",
                            conv.cwd if conv else "", (conv.model or "") if conv else "",
                            safe_ms(conv.created_at) if conv else None,
@@ -173,7 +175,7 @@ class DshAdapter(BaseAdapter):
             if identity == sid or os.path.basename(os.path.dirname(path)) == sid:
                 matches.append((path, identity, error))
         if len(matches) > 1:
-            raise ValueError("DSH 会话 ID 匹配多条记录，请使用完整 ID")
+            raise ValueError(message_text('err.dsh_session_id_matches_multiple_records_use_the_full_id'))
         if matches:
             path, identity, error = matches[0]
             if error:
@@ -181,22 +183,22 @@ class DshAdapter(BaseAdapter):
             conv = self._parse(path)
             conv.id = identity
             return conv
-        raise FileNotFoundError(f"找不到 DSH 会话: {sid}")
+        raise FileNotFoundError(message_text('err.dsh_session_not_found_sid', sid=sid))
 
     def _parse(self, path):
         records = read_records(path)
         header = records[0]
         actual = header.get("version")
         if header.get("type") != "session" or not isinstance(header.get("id"), str) or not header["id"] or type(actual) is not int:
-            raise ValueError("不是 DSH session header；WorkBuddy 请选独立来源")
+            raise ValueError(message_text('err.not_a_dsh_session_header_select_workbuddy_as_a_separate_source'))
         filename = GENERATION.fullmatch(os.path.basename(path))
         expected = int(filename.group(1) or 0) if filename else None
         if actual not in range(5) or (expected is not None and actual != expected):
-            raise ValueError("DSH header 版本与文件世代不匹配或尚不支持")
+            raise ValueError(message_text('err.dsh_header_version_does_not_match_the_file_generation_or_is_unsupported'))
         conv = ir.Conversation(source=self.name, id=str(header["id"]), path=path,
                                cwd=header.get("cwd") or "", created_at=iso(safe_ms(header.get("createdAt"))),
                                meta={"format_version":actual, "header":header,
-                                     "notes":["DSH 导出保留事件历史；不等同于压缩、替换后的当前运行上下文。"],
+                                     "notes":[message_text('msg.dsh_export_preserves_event_history_it_does_not_represent_the_current_context_after_compact')],
                                      "export_mode":"historical-events; not active surface replay"})
         seen_calls = set()
         final_steps = {(r["data"].get("turn"), r["data"].get("step")) for r in records[1:]
@@ -207,7 +209,7 @@ class DshAdapter(BaseAdapter):
                        if isinstance(b, dict) and b.get("type") == "tool-call"}
         for seq, rec in enumerate(records[1:]):
             if type(rec.get("seq")) is not int or rec["seq"] != seq or not isinstance(rec.get("data"), dict):
-                raise ValueError("DSH event seq 不连续或 data 无效")
+                raise ValueError(message_text('err.dsh_event_sequence_is_discontinuous_or_data_is_invalid'))
             kind, data = rec.get("type"), rec["data"]
             ts = iso(safe_ms(rec.get("time")))
             if ts:
@@ -240,11 +242,11 @@ class DshAdapter(BaseAdapter):
             elif kind in ("user/message", "assistant/message", "tool/result", "system/message", "developer/message"):
                 message = data if kind == "user/message" else data.get("message", {})
                 if not isinstance(message, dict):
-                    raise ValueError("DSH message 必须是 JSON 对象")
+                    raise ValueError(message_text('err.dsh_message_must_be_a_json_object'))
                 parsed = blocks(message.get("content"))
                 if kind == "tool/result" and actual == 4:
                     if message.get("role") != "tool" or not message.get("toolCallId"):
-                        raise ValueError("DSH v4 工具结果必须有 tool role 和 toolCallId")
+                        raise ValueError(message_text('err.dsh_v4_tool_results_require_tool_role_and_toolcallid'))
                     parsed = [ir.Block.tool_result(message.get("toolCallId", ""),
                               content_text(message.get("content")), bool(message.get("isError")))]
                     parsed[0].meta["content"] = message.get("content", [])

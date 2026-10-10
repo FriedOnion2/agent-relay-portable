@@ -1,4 +1,6 @@
 """One bounded local background job, with progress and cooperative cancellation."""
+
+from .messages import text as message_text, error_text
 import copy
 import threading
 import uuid
@@ -19,7 +21,7 @@ class Jobs:
     def start(self, kind, function):
         with self.lock:
             if self.closing or (self.thread and self.thread.is_alive()):
-                raise ValueError('已有任务正在进行或服务正在退出')
+                raise ValueError(message_text('msg.a_job_is_already_running_or_the_service_is_exiting'))
             self.event = threading.Event()
             key = uuid.uuid4().hex
             self.value = dict(ok=True, id=key, kind=kind, status='running', progress={})
@@ -33,7 +35,7 @@ class Jobs:
                         self.value.update(status='canceled' if result.get('canceled') else 'completed', result=result)
                 except Exception as exc:
                     with self.lock:
-                        self.value.update(status='failed', error=str(exc))
+                        self.value.update(status='failed', error=error_text(exc))
             self.thread = threading.Thread(target=run, name='relay-' + kind, daemon=False)
             self.thread.start()
             return copy.deepcopy(self.value)
@@ -41,7 +43,7 @@ class Jobs:
     def cancel(self, key):
         with self.lock:
             if key != self.value.get('id'):
-                raise ValueError('任务已改变，请刷新任务状态')
+                raise ValueError(message_text('msg.the_job_changed_refresh_its_status'))
             self.event.set()
             return dict(ok=True)
 

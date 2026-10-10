@@ -11,6 +11,8 @@ type ∈ { session_meta, turn_context, response_item, event_msg, token_usage_rec
 
 from __future__ import annotations
 
+from ..messages import text as message_text
+
 import json
 import os
 import hashlib
@@ -108,7 +110,7 @@ class CodexAdapter(BaseAdapter):
             # supplied by a caller. Hash collisions are rejected, not guessed.
             matches = [row.path for row in self._rollouts() if self._selector(row) == sid]
             if len(matches) > 1:
-                raise ValueError("选择 ID 匹配多条记录，已停止读取")
+                raise ValueError(message_text('msg.the_selection_id_matches_several_records_reading_was_stopped'))
             return matches[0] if matches else None
         return super().find_path(sid)
 
@@ -162,32 +164,32 @@ class CodexAdapter(BaseAdapter):
         kind = payload.get("type")
         role = ir.ASSISTANT
 
-        def text(value):
+        def message_text(value):
             result = _content_to_text(value)
             return strip_scaffolding(result) if self.clean else result
 
         if kind == "message":
             if payload.get("role") in (ir.SYSTEM, "developer"):
                 return role, []
-            value = text(payload.get("content"))
+            value = message_text(payload.get("content"))
             if payload.get("role") == ir.USER:
                 role = ir.USER
                 if looks_like_system_prompt(value):
                     value = ""
             return role, [ir.Block.text_block(value)] if value else []
         if kind == "agent_message":
-            value = text(payload.get("content"))
+            value = message_text(payload.get("content"))
             author, recipient = payload.get("author") or "", payload.get("recipient") or ""
             return role, [ir.Block.text_block(f"[{author} → {recipient}] {value}")] if value else []
         if kind == "reasoning":
-            value = text(payload.get("summary") or payload.get("content") or [])
+            value = message_text(payload.get("summary") or payload.get("content") or [])
             return role, [ir.Block.thinking_block(value)] if value else []
         if kind in ("function_call", "custom_tool_call"):
             args = (payload.get("arguments") or "{}") if kind == "function_call" else (payload.get("input") or "")
             return role, [ir.Block.tool_call(payload.get("call_id") or payload.get("id") or "",
                                              payload.get("name") or "unknown", args)]
         if kind in ("function_call_output", "custom_tool_call_output"):
-            return role, [ir.Block.tool_result(payload.get("call_id") or "", text(payload.get("output")) or "", False)]
+            return role, [ir.Block.tool_result(payload.get("call_id") or "", message_text(payload.get("output")) or "", False)]
         if kind == "web_search_call":
             return role, [ir.Block.tool_call(payload.get("call_id") or payload.get("id") or "", "WebSearch",
                                              json.dumps(payload.get("action") or {}, ensure_ascii=False))]
@@ -196,7 +198,7 @@ class CodexAdapter(BaseAdapter):
     def read(self, sid: str) -> ir.Conversation:
         path = self.find_path(sid)
         if not path:
-            raise FileNotFoundError(f"找不到 Codex 会话: {sid}")
+            raise FileNotFoundError(message_text('err.codex_session_not_found_sid', sid=sid))
         return self._parse(path)
 
     def _parse(self, path: str) -> ir.Conversation:
@@ -277,7 +279,7 @@ class CodexAdapter(BaseAdapter):
         target_cwd = (cwd or conv.cwd or os.getcwd()).replace("\\", "/")
         sid = validate_session_id(session_id if session_id is not None else uuid7())
         if session_id is not None and self.find_path(sid):
-            raise FileExistsError(f"目标会话已存在: {sid}")
+            raise FileExistsError(message_text('err.target_session_already_exists_sid', sid=sid))
         now = dt.datetime.now(dt.timezone.utc)
         out_path = os.path.join(
             self.home,
@@ -474,7 +476,7 @@ class CodexAdapter(BaseAdapter):
                 with open(self.index_path, "rb") as handle:
                     original = handle.read(MAX_SCAN_BYTES + 1)
                 if len(original) > MAX_SCAN_BYTES:
-                    raise ValueError("目标 Codex 标题索引过大，已停止迁移")
+                    raise ValueError(message_text('err.target_codex_title_index_is_too_large_migration_stopped'))
             entry = json.dumps({"id": sid, "thread_name": title, "updated_at": iso(timestamp)},
                                ensure_ascii=False).encode("utf-8") + b"\n"
             separator = b"\n" if original and not original.endswith(b"\n") else b""
@@ -486,7 +488,7 @@ class CodexAdapter(BaseAdapter):
                     with open(self.index_path, "rb") as handle:
                         current = handle.read(MAX_SCAN_BYTES + 1)
                 if current != original:
-                    raise ValueError("Codex 标题索引正在变化，请关闭软件后重试")
+                    raise ValueError(message_text('err.codex_title_index_is_changing_close_the_app_and_retry'))
                 atomic_write(self.index_path, [original, separator, entry], encoding=None)
             except BaseException:
                 os.unlink(out_path)

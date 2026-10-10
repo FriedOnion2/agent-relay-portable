@@ -1,4 +1,6 @@
 """Deterministic, local workflow candidates. Drafts are evidence, not instructions to execute."""
+
+from .messages import text as message_text
 import collections
 import json
 import re
@@ -59,7 +61,7 @@ def _segments(doc):
 
 def extract(store=None, progress=None, cancel=None, max_documents=500, max_seconds=60):
     if type(max_documents) is not int or not 1 <= max_documents <= 500 or not 0 < max_seconds <= 60:
-        raise ValueError('提炼范围无效')
+        raise ValueError(message_text('err.invalid_extraction_scope'))
     store = store or corpus.Corpus()
     state = dict(ok=True, processed=0, segments=0, comparisons=0, candidates=[], limited=False, canceled=False)
     start = time.monotonic()
@@ -151,48 +153,48 @@ def extract(store=None, progress=None, cancel=None, max_documents=500, max_secon
 
 def export_draft(markdown, directory, confirmed=False):
     if confirmed is not True:
-        raise ValueError('请先编辑审核并明确确认导出草稿')
+        raise ValueError(message_text('err.edit_review_and_explicitly_confirm_the_draft_before_exporting'))
     if not isinstance(markdown, str) or len(markdown.encode('utf-8')) > 1024 * 1024:
-        raise ValueError('草稿为空或超过 1 MiB')
+        raise ValueError(message_text('err.draft_is_empty_or_exceeds_1_mib'))
     match = re.match(r'\A---\r?\n(.*?)\r?\n---\r?\n', markdown, re.S)
     if not match:
-        raise ValueError('草稿需要有效的 name / description frontmatter')
+        raise ValueError(message_text('err.draft_requires_valid_name_description_frontmatter'))
     fields = {}
     for line in match.group(1).splitlines():
         if ':' not in line:
-            raise ValueError('frontmatter 仅支持单行字段')
+            raise ValueError(message_text('err.frontmatter_only_supports_single_line_fields'))
         key, value = line.split(':',1)
         if key.strip() not in ('name','description') or key.strip() in fields:
-            raise ValueError('frontmatter 只允许唯一的 name 和 description')
+            raise ValueError(message_text('err.frontmatter_only_allows_unique_name_and_description_fields'))
         value = value.strip()
         if value.startswith('"'):
             try:
                 value = json.loads(value)
             except ValueError as exc:
-                raise ValueError('frontmatter 引号无效') from exc
+                raise ValueError(message_text('err.invalid_frontmatter_quotes')) from exc
         elif value.startswith("'") and value.endswith("'"):
             value = value[1:-1].replace("''", "'")
         elif any(c in value for c in ':#{}[]&*!|>@`'):
-            raise ValueError('description 含 YAML 特殊字符时请使用 JSON 双引号')
+            raise ValueError(message_text('err.use_json_double_quotes_when_description_contains_yaml_special_characters'))
         fields[key.strip()] = value
     name, description = fields.get('name',''), fields.get('description','')
     if not isinstance(name,str) or not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*', name) or len(name)>64:
-        raise ValueError('name 需要不超过64字符的小写字母数字和单连字符')
+        raise ValueError(message_text('err.name_requires_lowercase_letters_digits_and_single_hyphens_at_most_64_characters'))
     archive_name = name + '/SKILL.md'
     from .archive import safe_name
     safe_name(archive_name)
     if not isinstance(description,str) or not description.strip() or len(description)>1024:
-        raise ValueError('description 必须是非空单行说明，最多1024字符')
+        raise ValueError(message_text('err.description_must_be_a_nonempty_single_line_of_at_most_1024_characters'))
     if '\n' in description or '\r' in description:
-        raise ValueError('description 必须是单行')
+        raise ValueError(message_text('err.description_must_be_a_single_line'))
     # Canonical YAML strings avoid bare names/descriptions such as null/true/123
     # becoming non-string YAML values in the target software.
     markdown = '---\nname: ' + json.dumps(name) + '\ndescription: ' + json.dumps(description,ensure_ascii=False) + '\n---\n' + markdown[match.end():]
     if not isinstance(directory,str) or not directory:
-        raise ValueError('请选择导出目录')
+        raise ValueError(message_text('err.select_an_export_directory'))
     parent = Path(directory).expanduser()
     if not parent.is_absolute() or not parent.is_dir():
-        raise ValueError('导出父目录必须是本机存在的绝对目录')
+        raise ValueError(message_text('err.export_parent_must_be_an_existing_absolute_local_directory'))
     target = parent.resolve() / name
     target.mkdir()  # Exclusive, never replace an installed or earlier Skill.
     try:

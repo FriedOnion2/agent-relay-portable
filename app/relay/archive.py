@@ -1,4 +1,6 @@
 """Bounded, verified local ZIP packages; no account configuration or execution."""
+
+from .messages import text as message_text, error_text
 import hashlib
 import json
 import os
@@ -24,14 +26,14 @@ def storage_root(root=None):
 def safe_name(name):
     if (not isinstance(name, str) or not name or "\\" in name or ":" in name
             or any(ord(c) < 32 for c in name)):
-        raise ValueError("包内路径无效")
+        raise ValueError(message_text('err.invalid_package_path'))
     path = PurePosixPath(name)
     if path.is_absolute() or any(part in (".", "..", "") for part in name.split("/")):
-        raise ValueError("包内路径越界")
+        raise ValueError(message_text('err.package_path_escapes_its_root'))
     for part in path.parts:
         if (re.search(r'[<>"|?*]', part) or part.endswith((".", " "))
                 or part.split(".", 1)[0].upper() in {"CON", "PRN", "AUX", "NUL", *["COM%d" % n for n in range(1, 10)], *["LPT%d" % n for n in range(1, 10)]}):
-            raise ValueError("包内路径不能跨平台使用")
+            raise ValueError(message_text('err.package_path_is_not_portable_across_platforms'))
     return name
 
 
@@ -44,11 +46,11 @@ def is_link(path):
 def read_file(path):
     path = Path(path)
     if is_link(path) or not path.is_file():
-        raise ValueError("仅打包普通文件，不包含符号链接")
+        raise ValueError(message_text('err.only_regular_files_can_be_packaged_symbolic_links_are_excluded'))
     with path.open("rb") as stream:
         data = stream.read(MAX_FILE + 1)
     if len(data) > MAX_FILE:
-        raise ValueError("单个文件超过 32 MiB")
+        raise ValueError(message_text('err.a_file_exceeds_32_mib'))
     return data
 
 
@@ -56,20 +58,20 @@ def write_package(path, manifest, files):
     """Publish an exclusive package after a complete ZIP has been flushed."""
     path = Path(path)
     if path.exists():
-        raise FileExistsError("存储包已存在，不覆盖：" + str(path))
+        raise FileExistsError(message_text('err.storage_package_already_exists_and_will_not_be_overwritten_value', value=str(path)))
     if not files or len(files) > MAX_FILES or sum(len(data) for data, mode in files.values()) > MAX_TOTAL:
-        raise ValueError("存储包为空或超过文件数量/256 MiB 限制")
+        raise ValueError(message_text('err.storage_package_is_empty_or_exceeds_the_file_count_256_mib_limit'))
     manifest = dict(manifest, version=1, files=[])
     folded = set()
     for name, (data, mode) in files.items():
         safe_name(name)
         if name.casefold() == "manifest.json" or name.casefold() in folded or len(data) > MAX_FILE:
-            raise ValueError("包内名称冲突或文件过大")
+            raise ValueError(message_text('err.conflicting_package_names_or_oversized_file'))
         folded.add(name.casefold())
         manifest["files"].append({"path":name, "size":len(data), "sha256":hashlib.sha256(data).hexdigest(), "executable":bool(mode)})
     raw_manifest = json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8")
     if len(raw_manifest) > MAX_MANIFEST:
-        raise ValueError("包清单过大")
+        raise ValueError(message_text('err.package_manifest_is_too_large'))
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary = tempfile.mkstemp(prefix=".relay-", suffix=".partial", dir=str(path.parent))
     os.close(descriptor)
@@ -110,58 +112,58 @@ def read_package(path, kind=None, full=True):
     try:
         return _read_package(path, kind, full)
     except (zipfile.BadZipFile, RuntimeError, NotImplementedError, RecursionError) as exc:
-        raise ValueError("存储包损坏或压缩格式不支持") from exc
+        raise ValueError(message_text('err.storage_package_is_corrupt_or_uses_an_unsupported_compression_format')) from exc
 
 
 def _read_package(path, kind=None, full=True):
     """Verify all names, sizes, CRC and SHA before a caller writes native stores."""
     path = Path(path)
     if path.stat().st_size > MAX_TOTAL + MAX_MANIFEST + 4 * 1024 * 1024:
-        raise ValueError("包文件过大")
+        raise ValueError(message_text('err.package_file_is_too_large'))
     with zipfile.ZipFile(path) as package:
         infos = package.infolist()
         if len(infos) > MAX_FILES + 1:
-            raise ValueError("包内文件过多")
+            raise ValueError(message_text('err.too_many_files_in_the_package'))
         index, folded, total = {}, set(), 0
         for info in infos:
             safe_name(info.filename)
             if info.filename.casefold() in folded or info.is_dir() or info.flag_bits & 1:
-                raise ValueError("包含重复目录项、目录或加密条目")
+                raise ValueError(message_text('err.duplicate_entries_directories_or_encrypted_entries_found'))
             folded.add(info.filename.casefold())
             mode = info.external_attr >> 16
             if stat.S_IFMT(mode) not in (0, stat.S_IFREG):
-                raise ValueError("包含符号链接或非普通文件")
+                raise ValueError(message_text('err.symbolic_links_or_non_regular_files_found'))
             if info.file_size > (MAX_MANIFEST if info.filename == "manifest.json" else MAX_FILE):
-                raise ValueError("包内文件超过读取限制")
+                raise ValueError(message_text('err.package_files_exceed_the_read_limit'))
             total += info.file_size
             index[info.filename] = info
         if total > MAX_TOTAL + MAX_MANIFEST or "manifest.json" not in index:
-            raise ValueError("包缺少清单或解压后过大")
+            raise ValueError(message_text('err.package_manifest_is_missing_or_decompressed_size_is_too_large'))
         manifest = json.loads(package.read("manifest.json").decode("utf-8"))
         if (not isinstance(manifest, dict) or type(manifest.get("version")) is not int
                 or manifest["version"] != 1 or (kind and manifest.get("kind") != kind)):
-            raise ValueError("不支持的存储包类型或版本")
+            raise ValueError(message_text('err.unsupported_storage_package_type_or_version'))
         rows = manifest.get("files")
         if not isinstance(rows, list) or not rows:
-            raise ValueError("存储包清单为空或无效")
+            raise ValueError(message_text('err.storage_package_manifest_is_empty_or_invalid'))
         expected, files = set(), {}
         for row in rows:
             if not isinstance(row, dict):
-                raise ValueError("存储包文件清单无效")
+                raise ValueError(message_text('err.invalid_storage_package_file_manifest'))
             name = safe_name(row.get("path"))
             if (name == "manifest.json" or name in expected or name not in index
                     or type(row.get("size")) is not int or row["size"] != index[name].file_size
                     or not isinstance(row.get("sha256"), str) or not re.fullmatch(r"[0-9a-f]{64}", row["sha256"])
                     or type(row.get("executable")) is not bool):
-                raise ValueError("存储包文件清单与 ZIP 不一致")
+                raise ValueError(message_text('err.storage_package_file_manifest_does_not_match_the_zip'))
             expected.add(name)
             if full:
                 data = package.read(name)
                 if hashlib.sha256(data).hexdigest() != row["sha256"]:
-                    raise ValueError("存储包校验失败：" + name)
+                    raise ValueError(message_text('err.storage_package_checksum_failed_name', name=name))
                 files[name] = (data, row["executable"])
         if expected != set(index) - {"manifest.json"}:
-            raise ValueError("存储包含未声明文件")
+            raise ValueError(message_text('err.storage_package_contains_undeclared_files'))
         return manifest, files
 
 
@@ -187,5 +189,5 @@ def list_packages(kind, agent=None, root=None):
             rows.append({"path":str(path), "agent":manifest.get("agent"), "created_at":manifest.get("created_at"),
                          "session":manifest.get("session"), "skill":manifest.get("skill"), "verified":False})
         except (OSError, ValueError, zipfile.BadZipFile, KeyError) as exc:
-            rows.append({"path":str(path), "error":str(exc)})
+            rows.append({"path":str(path), "error":error_text(exc)})
     return rows
