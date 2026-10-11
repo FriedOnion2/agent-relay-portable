@@ -57,3 +57,15 @@ class SiteConfigTests(unittest.TestCase):
                 if '%s/%s' % (section, page.name) not in config:
                     missing.append('%s/%s' % (section, page.name))
         self.assertEqual(missing, [])
+
+
+class CliReferenceTests(unittest.TestCase):
+    def test_every_cli_command_is_documented(self):
+        import argparse
+        import sys
+        sys.path.insert(0, str(ROOT / 'app'))
+        import cli
+        parser = cli.build_parser()
+        names = [name for action in parser._actions if isinstance(action, argparse._SubParsersAction) for name in action.choices]
+        page = (ROOT / 'docs' / 'reference' / 'cli.md').read_text(encoding='utf-8')
+        self.assertEqual([name for name in names if '`%s' % name not in page], [])

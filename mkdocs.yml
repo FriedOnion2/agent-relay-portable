@@ -30,6 +30,7 @@ nav:
   - 首页: README.md
   - 使用指南:
       - 安装与启动: guide/install.md
+      - 迁移一条会话: guide/migrate-a-session.md
       - 网页工作流: guide/web-workflow.md
       - 存储与迁移: guide/storage-and-migration.md
       - 便携存储: guide/portable-storage.md
@@ -38,6 +39,7 @@ nav:
       - 配置: guide/configuration.md
       - 故障排查: guide/troubleshooting.md
   - 参考:
+      - 命令行: reference/cli.md
       - 兼容状态: reference/compatibility.md
       - 已知限制: reference/limitations.md
       - 来源格式: reference/source-formats.md

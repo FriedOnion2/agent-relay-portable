@@ -7,6 +7,7 @@
 | 文档 | 内容 |
 |---|---|
 | [install.md](guide/install.md) | 下载、安装、启动与退出，源码与 pip 安装 |
+| [migrate-a-session.md](guide/migrate-a-session.md) | 教程：从查找、预演到核对、撤销，迁移一条会话 |
 | [web-workflow.md](guide/web-workflow.md) | 网页任务导航、恢复与草稿打包 |
 | [storage-and-migration.md](guide/storage-and-migration.md) | 批量存储、跨软件 / 双系统迁移、预览、撤销、批量迁移、脱敏、对比 |
 | [portable-storage.md](guide/portable-storage.md) | 对话 / Skill 的便携存储包与恢复 |
@@ -15,12 +16,13 @@
 | [configuration.md](guide/configuration.md) | 配置与数据目录 |
 | [troubleshooting.md](guide/troubleshooting.md) | 故障排查 |
 
-命令行的完整说明目前在根目录的 [使用说明.md](../使用说明.md)。
+命令行的完整说明见 [reference/cli.md](reference/cli.md)。
 
 ## 参考（`reference/`）：事实与边界
 
 | 文档 | 内容 |
 |---|---|
+| [cli.md](reference/cli.md) | 命令行参考：全部命令、迁移参数、退出码 |
 | [compatibility.md](reference/compatibility.md) | 兼容状态与验证证据 |
 | [limitations.md](reference/limitations.md) | 已知限制与未验证项 |
 | [source-formats.md](reference/source-formats.md) | 各来源的格式与识别依据 |
