@@ -1,6 +1,6 @@
 # 配置与数据
 
-配置文件、设备配置与数据目录。回到 [README](../README.md)。
+配置文件、设备配置与数据目录。回到 [README](../../README.md)。
 
 ## 配置与数据
 
@@ -16,7 +16,7 @@ python app/cli.py health --output health-output
 python app/cli.py transfer claude <ID> --to codex --dry-run
 ```
 
-迁移命令和 `restore-session` 支持 `--dry-run` 与 `--preview-token`；旧直接命令保持兼容。预览不会锁住源软件，操作前关闭正在写入会话的客户端。详见 [兼容与迁移预览](compatibility.md)、[插件接口](adapters.md) 和 [换设备排查](troubleshooting.md)。
+迁移命令和 `restore-session` 支持 `--dry-run` 与 `--preview-token`；旧直接命令保持兼容。预览不会锁住源软件，操作前关闭正在写入会话的客户端。详见 [兼容与迁移预览](../reference/compatibility.md)、[插件接口](../dev/adapters.md) 和 [换设备排查](troubleshooting.md)。
 DSH 尊重 `DSH_HOME`，WorkBuddy 尊重 `WORKBUDDY_HOME`，CodeBuddy 尊重 `CODEBUDDY_HOME`。
 SDK 默认尊重 `CLAUDE_CONFIG_DIR`；独立覆盖为 `agent_homes.claude_sdk` / `RELAY_CLAUDE_SDK_HOME`，
 不会继承仅为 Claude Code 设置的 `RELAY_CLAUDE_HOME`。

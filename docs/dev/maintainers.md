@@ -30,7 +30,7 @@
 
 ### 发正式版
 
-1. 开一个只做发布的 PR：`__version__` 改为 `X.Y.Z`；`CHANGELOG.md` 把 `[Unreleased]` 的内容移到 `## [X.Y.Z] - YYYY-MM-DD`（并留一个空的 `[Unreleased]`）；同步 README / `docs/install.md` 里的版本提示。合并到 `main`。
+1. 开一个只做发布的 PR：`__version__` 改为 `X.Y.Z`；`CHANGELOG.md` 把 `[Unreleased]` 的内容移到 `## [X.Y.Z] - YYYY-MM-DD`（并留一个空的 `[Unreleased]`）；同步 README / `docs/guide/install.md` 里的版本提示。合并到 `main`。
 2. 在 `main` 上打 tag 并推送：`git tag vX.Y.Z && git push origin vX.Y.Z`。
 3. 紧接着再开一个 PR，把 `__version__` 改回下一个 `-dev`。
 4. `Build and publish release` 工作流自动运行：校验 tag 为 `vX.Y.Z` 且与 `__version__`、CHANGELOG 一致 → 四平台构建与测试 → 组装总包并在四类设备上验证，并完成真实 Codex 的 Windows → Ubuntu → Windows 原生包续聊往返门槛 → 生成构建来源证明 → 创建 Release（说明取自 CHANGELOG 与 `.github/release-notes-template.md`）。

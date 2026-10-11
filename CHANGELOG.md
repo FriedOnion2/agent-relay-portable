@@ -8,6 +8,9 @@
 ### Added
 - 腾讯元宝 JSON 导出来源：导入兼容的本地 JSON，分别预览正文与思考、导出 Markdown、迁出到现有目标，以及按会话保存 ZIP 并在其他设备恢复到 AgentRelay 导出目录。相同内容重复导入跳过；同 ID 的不同记录独立选择。尚不支持元宝客户端数据库读取、云端采集、原生写回或 Skill 管理。
 
+### Changed
+- 文档目录整理：`docs/` 按读者分为 `guide/`（使用）、`reference/`（兼容、限制、格式）、`dev/`（开发维护）、`research/`（带日期的调研记录，已标注非现行规范），新增 `docs/README.md` 索引；`tests/test_docs.py` 检查链接和索引。仅移动与改链接，文档内容未改。
+
 ### Fixed
 - Codex 同一原生 ID 的多个 rollout 现在提供独立选择 ID，CLI / UI 标注记录数与文件路径；使用有歧义的原生 ID 会停止读取、导出或迁移，避免静默选中第一份记录。单份记录仍可用原生 ID；选择 ID 随 Agent 根目录搬迁保持有效。
 - 原生会话包保留所选 rollout 的选择 ID 与原生 ID；列表多选、批量转换和离线索引可分别处理同 ID 的记录，预览 token 继续校验实际源文件。
@@ -23,11 +26,11 @@
 ### Added
 - 正式发布增加真实 Codex 的 Windows → Ubuntu 22.04 → Windows 原生包往返门槛：每站恢复历史、通过本地测试接口续聊、重启回读，核对工具与思考及 ID 冲突保护；无需登录、不调用付费模型，仅使用临时合成数据。
 - 网页主流程：任务首页与来源状态、互斥任务导航、独立会话保存流程、恢复时显式本机项目映射与 ID 策略、跨页面保留的迁移结果；搜索展示索引概况，已审核导出的草稿可转到 Skill 打包表单，仍需单独确认存储。
-- 发布规则：始终只有一个滚动开发版（固定 tag `dev`，每次合并到 `main` 自动重建并替换）；正式版只用 `vX.Y.Z` tag。`main` 通常使用 `X.Y.Z-dev`，正式发布准备期间暂用对应正式版本。规则见 `docs/maintainers.md`。
+- 发布规则：始终只有一个滚动开发版（固定 tag `dev`，每次合并到 `main` 自动重建并替换）；正式版只用 `vX.Y.Z` tag。`main` 通常使用 `X.Y.Z-dev`，正式发布准备期间暂用对应正式版本。规则见 `docs/dev/maintainers.md`。
 - 网页界面：「操作记录」面板（查看写入记录、一键撤销，被改动的文件默认保留并可二次确认强制撤销）、「批量迁移所选」（先预演再确认）、「脱敏密钥」选项；预览对话框会提示疑似敏感信息。均支持中英文。
 - 批量迁移：`relay batch`（API `/api/batch`）按条件或 ID 列表批量转换，默认只预演，`--yes` 才写入；目标 ID 确定性派生，重复执行自动识别已迁移的会话（`--on-conflict skip|new|fail`），单条失败不拖垮整批，输出逐条进度与汇总。
 - 敏感信息扫描：预览会提示会话里疑似的 API 密钥、令牌、私钥和口令（只显示类型、位置和长度）；`relay scan` 单独扫描；迁移与导出支持 `--redact-secrets`（API：`redact_secrets`），写入时替换为 `[REDACTED:类型]`。
-- 插件开发体验：新增 `plugins check`（隔离进程里逐项自检，不保存配置）、第二个示例 `examples/jsonl_adapter.py` 和 [插件编写指南](docs/writing-a-plugin.md)。
+- 插件开发体验：新增 `plugins check`（隔离进程里逐项自检，不保存配置）、第二个示例 `examples/jsonl_adapter.py` 和 [插件编写指南](docs/dev/writing-a-plugin.md)。
 - 可用 `pipx install` / `pip install` 安装，提供 `relay` / `agent-relay` 命令；安装后的数据放在每用户目录（`RELAY_PORTABLE_ROOT` 可改），不写进 site-packages；CI 在三个系统上验证 wheel 安装。
 - 计划任务（每日格式体检、每周真实客户端兼容性）失败时自动开 / 更新带 `format-drift` 标签的 issue，客户端改了存储格式不再靠人盯 Actions 页面。
 - 会话对比：`relay diff <agent> <id> <agent2> <id2>`（API `/api/diff`）按顺序对齐正文与工具调用，迁移后核对有没有丢内容；有差异时退出码为 1。

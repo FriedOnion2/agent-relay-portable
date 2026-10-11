@@ -27,7 +27,7 @@
 
 ## 快速开始
 
-**正式版：[v1.0.0](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v1.0.0)**。各 Agent 的实测范围见下方支持表与 [兼容状态](docs/compatibility.md)。
+**正式版：[v1.0.0](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v1.0.0)**。各 Agent 的实测范围见下方支持表与 [兼容状态](docs/reference/compatibility.md)。
 
 **普通用户**：到 [Releases](https://github.com/FriedOnion2/agent-relay-portable/releases) 下载 `AgentRelay-<版本>-universal.zip`，完整解压后运行启动器。总包内置 Python 与依赖，**无需另装 Python / Node.js，首次启动不联网下载**。不要选择 GitHub 自动生成的 Source code 压缩包。
 
@@ -37,7 +37,7 @@
 | macOS | `AgentRelay.app` 或 `bash 启动_AgentRelay.command` | Apple Silicon：macOS 14+；Intel：macOS 15+ |
 | Linux | `bash 启动_AgentRelay.sh` | Ubuntu 22.04+ / glibc 2.35+ x64 |
 
-启动后在浏览器打开提示的地址（默认 `http://127.0.0.1:8745/`）。退出请点网页右上角「退出服务」。macOS 应用未经 Apple 公证，被系统阻止时的处理见 [安装与启动](docs/install.md)。
+启动后在浏览器打开提示的地址（默认 `http://127.0.0.1:8745/`）。退出请点网页右上角「退出服务」。macOS 应用未经 Apple 公证，被系统阻止时的处理见 [安装与启动](docs/guide/install.md)。
 
 **从源码运行**（需要 Python 3.8+）：
 
@@ -59,7 +59,7 @@ relay list codex
 
 这种方式下配置、日志和存储包放在每用户数据目录（Linux `~/.local/share/agent-relay`，macOS `~/Library/Application Support/AgentRelay`，Windows `%APPDATA%\AgentRelay`），可用 `RELAY_PORTABLE_ROOT` 指定别处。
 
-Ubuntu / macOS 可用 `Ubuntu首次准备.sh` / `Mac首次准备.command` 自动建立隔离环境。完整步骤见 [安装与启动](docs/install.md)。
+Ubuntu / macOS 可用 `Ubuntu首次准备.sh` / `Mac首次准备.command` 自动建立隔离环境。完整步骤见 [安装与启动](docs/guide/install.md)。
 
 ## 支持的来源
 
@@ -73,27 +73,30 @@ Ubuntu / macOS 可用 `Ubuntu首次准备.sh` / `Mac首次准备.command` 自动
 | OpenAI Codex | `~/.codex/sessions` | ✅ | ✅ | 真实客户端已验证 |
 | 腾讯元宝 JSON 导出 | 便携目录 `imports/yuanbao` | ✅ | 仅导出文件存包恢复 | 合成 JSON 回归，未验证原生客户端 |
 
-元宝入口位于「迁移会话 → 腾讯元宝」：填入兼容 JSON 文件的本机绝对路径后导入。需要先取得 JSON 导出；本次不读取元宝电脑版数据库或云端账户，也不把 ZIP 写回元宝客户端。换设备后可恢复到 AgentRelay 再查看或迁出，见[元宝使用与格式说明](docs/formats/yuanbao.md)。
+元宝入口位于「迁移会话 → 腾讯元宝」：填入兼容 JSON 文件的本机绝对路径后导入。需要先取得 JSON 导出；本次不读取元宝电脑版数据库或云端账户，也不把 ZIP 写回元宝客户端。换设备后可恢复到 AgentRelay 再查看或迁出，见[元宝使用与格式说明](docs/reference/formats/yuanbao.md)。
 
-“实机验证”指用真实客户端打开、续聊过迁移或恢复后的会话；其余只验证了文件层读写。厂商格式可能变化，详见 [兼容状态](docs/compatibility.md) 与 [当前限制](docs/limitations.md)。
+“实机验证”指用真实客户端打开、续聊过迁移或恢复后的会话；其余只验证了文件层读写。厂商格式可能变化，详见 [兼容状态](docs/reference/compatibility.md) 与 [当前限制](docs/reference/limitations.md)。
 
 ## 文档
 
+完整索引见 [docs/README.md](docs/README.md)，分为使用指南（`guide/`）、参考（`reference/`）、开发与维护（`dev/`）和调研记录（`research/`）。常用入口：
+
 | 主题 | 文档 |
 |---|---|
-| 网页任务导航、恢复与草稿打包 | [docs/web-workflow.md](docs/web-workflow.md) |
-| 下载、安装、启动与退出 | [docs/install.md](docs/install.md) |
-| 批量存储、跨软件 / 双系统迁移与预览 | [docs/storage-and-migration.md](docs/storage-and-migration.md) |
-| 配置与数据目录 | [docs/configuration.md](docs/configuration.md) |
-| 搜索与 Skill 草稿 | [docs/search-and-skills.md](docs/search-and-skills.md) |
-| 便携存储、Ubuntu 双系统 | [docs/portable-storage.md](docs/portable-storage.md) · [docs/ubuntu-dual-boot.md](docs/ubuntu-dual-boot.md) |
-| 来源格式、适配器开发 | [docs/source-formats.md](docs/source-formats.md) · [docs/adapters.md](docs/adapters.md) |
-| 已知限制、故障排查、测试 | [docs/limitations.md](docs/limitations.md) · [docs/troubleshooting.md](docs/troubleshooting.md) · [docs/testing.md](docs/testing.md) |
+| 下载、安装、启动与退出 | [docs/guide/install.md](docs/guide/install.md) |
+| 网页任务导航、恢复与草稿打包 | [docs/guide/web-workflow.md](docs/guide/web-workflow.md) |
+| 批量存储、跨软件 / 双系统迁移与预览 | [docs/guide/storage-and-migration.md](docs/guide/storage-and-migration.md) |
+| 搜索与 Skill 草稿 | [docs/guide/search-and-skills.md](docs/guide/search-and-skills.md) |
+| 便携存储、Ubuntu 双系统 | [docs/guide/portable-storage.md](docs/guide/portable-storage.md) · [docs/guide/ubuntu-dual-boot.md](docs/guide/ubuntu-dual-boot.md) |
+| 配置与数据目录、故障排查 | [docs/guide/configuration.md](docs/guide/configuration.md) · [docs/guide/troubleshooting.md](docs/guide/troubleshooting.md) |
+| 兼容状态、已知限制、来源格式 | [docs/reference/compatibility.md](docs/reference/compatibility.md) · [docs/reference/limitations.md](docs/reference/limitations.md) · [docs/reference/source-formats.md](docs/reference/source-formats.md) |
+| 腾讯元宝接入范围 | [docs/reference/yuanbao-compatibility.md](docs/reference/yuanbao-compatibility.md) |
+| 适配器与插件开发、测试 | [docs/dev/adapters.md](docs/dev/adapters.md) · [docs/dev/writing-a-plugin.md](docs/dev/writing-a-plugin.md) · [docs/dev/testing.md](docs/dev/testing.md) |
 | 命令行完整说明 | [使用说明.md](使用说明.md) |
 
 ## 参与贡献
 
-欢迎提 issue 和 PR：请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。安全问题请按 [SECURITY.md](SECURITY.md) 私密报告。版本变更见 [CHANGELOG.md](CHANGELOG.md)，维护流程见 [docs/maintainers.md](docs/maintainers.md)。
+欢迎提 issue 和 PR：请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。安全问题请按 [SECURITY.md](SECURITY.md) 私密报告。版本变更见 [CHANGELOG.md](CHANGELOG.md)，维护流程见 [docs/dev/maintainers.md](docs/dev/maintainers.md)。
 
 ## 许可
 

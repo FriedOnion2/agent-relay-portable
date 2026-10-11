@@ -4,8 +4,8 @@ AgentRelay 内置来源之外的工具，可以用一个 Python 文件作为「�
 
 ## 1. 从示例开始
 
-- [`examples/plaintext_adapter.py`](../examples/plaintext_adapter.py)：一个 `.txt` 文件一个会话，最小实现。
-- [`examples/jsonl_adapter.py`](../examples/jsonl_adapter.py)：每行一条 `{"role","content"}` 的 JSON Lines 聊天，带角色映射、行号报错、截断标记，是更接近真实格式的起点。
+- [`examples/plaintext_adapter.py`](../../examples/plaintext_adapter.py)：一个 `.txt` 文件一个会话，最小实现。
+- [`examples/jsonl_adapter.py`](../../examples/jsonl_adapter.py)：每行一条 `{"role","content"}` 的 JSON Lines 聊天，带角色映射、行号报错、截断标记，是更接近真实格式的起点。
 
 复制一份，改 `name`、`label`、`home` 和 `read()` 里的解析即可。
 

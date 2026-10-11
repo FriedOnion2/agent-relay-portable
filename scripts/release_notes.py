@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Render the GitHub Release notes for a tag from CHANGELOG.md and the notes template.
 
-Two kinds of builds (see docs/maintainers.md):
+Two kinds of builds (see docs/dev/maintainers.md):
 
 * stable ``vX.Y.Z`` tag: must equal ``relay.__version__`` and CHANGELOG.md needs a non-empty section for it;
 * rolling ``dev`` build of a ``main`` commit (``--sha``): ``__version__`` must end with ``-dev``; notes come from [Unreleased].

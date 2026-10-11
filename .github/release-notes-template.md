@@ -15,7 +15,7 @@ sha256sum -c SHA256SUMS.txt                                   # 校验值
 gh attestation verify AgentRelay-{tag}-universal.zip --repo {repo}   # 构建来源证明
 ```
 
-退出服务请点网页右上角「退出服务」或在终端按 Ctrl+C；关闭网页不会停止后台服务。目标软件的实际续聊、依赖与设备权限仍需自行核对，详见 [当前限制](https://github.com/{repo}/blob/{ref}/docs/limitations.md)。
+退出服务请点网页右上角「退出服务」或在终端按 Ctrl+C；关闭网页不会停止后台服务。目标软件的实际续聊、依赖与设备权限仍需自行核对，详见 [当前限制](https://github.com/{repo}/blob/{ref}/docs/reference/limitations.md)。
 
 ---
 

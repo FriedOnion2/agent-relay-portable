@@ -1,5 +1,5 @@
 name: Build and publish release
-# 两种产物（规则见 docs/maintainers.md）：
+# 两种产物（规则见 docs/dev/maintainers.md）：
 #   * 推送 vX.Y.Z 标签 → 正式版 Release；
 #   * 推送到 main（或手动运行且不填 tag）→ 滚动开发版：固定 tag `dev`，每次重建并替换，始终只有一个。
 on:

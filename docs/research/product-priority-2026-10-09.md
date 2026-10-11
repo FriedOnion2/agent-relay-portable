@@ -1,5 +1,7 @@
 # 下一步优先级：使用体验与差异化功能
 
+> 调研记录：反映写作当时的判断与数据，**不是现行规范**，也不随功能更新。现行行为以 [使用指南](../guide/) 与 [参考](../reference/) 为准。
+
 评估日期：2026-10-09（Australia/Brisbane）。交付基线：`ab6a2ae`。本轮只增加研究文档，不实施产品改动。详细 GitHub 核查见 [竞品笔记](research-competitors-2026-10-09.md)。
 
 ## 建议
@@ -26,7 +28,7 @@
 
 ## 当前已有功能，避免重复开发
 
-当前 README、[搜索与提炼文档](search-and-skills.md) 和源码已有：本地全文搜索、确定性 Skill 草稿及证据、adapter 插件与格式自检、迁移保真度预览、中英文、批量迁移、敏感信息脱敏、操作记录/撤销、会话 diff、会话/完整 Skill ZIP 存储，以及 Windows↔Ubuntu 原生路径迁移。
+当前 README、[搜索与提炼文档](../guide/search-and-skills.md) 和源码已有：本地全文搜索、确定性 Skill 草稿及证据、adapter 插件与格式自检、迁移保真度预览、中英文、批量迁移、敏感信息脱敏、操作记录/撤销、会话 diff、会话/完整 Skill ZIP 存储，以及 Windows↔Ubuntu 原生路径迁移。
 
 六个读取入口不等于六个可写目标：通用写入目前是 WorkBuddy、DSH、Claude、Codex。Claude SDK 默认日志与 Claude Code 共享，不能仅靠 transcript 判定创建者。不能向用户暗示复制记录就克隆了 SDK runtime、账号、权限或所有客户端 UI 状态。
 

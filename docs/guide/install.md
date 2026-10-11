@@ -1,6 +1,6 @@
 # 下载、安装与启动
 
-Release 总包与源码两种启动方式、端口与退出说明。回到 [README](../README.md)。
+Release 总包与源码两种启动方式、端口与退出说明。回到 [README](../../README.md)。
 
 ## Release 下载即用
 
@@ -79,7 +79,7 @@ python -m pip install -r requirements-optional.txt
 
 Mac 首次准备自动创建 `runtime/macos-<架构>/` 虚拟环境并安装 `zstandard`；安装失败可执行
 `bash Mac安装依赖.command` 重试。换机器需重新准备，虚拟环境依赖本机 Python，不能当作跨设备便携解释器。
-Ubuntu 首次准备使用用户级虚拟环境，避免系统 pip 的 PEP 668 限制。完整运行时说明见 [runtime/README.txt](../runtime/README.txt)。
+Ubuntu 首次准备使用用户级虚拟环境，避免系统 pip 的 PEP 668 限制。完整运行时说明见 [runtime/README.txt](../../runtime/README.txt)。
 缺少解码器时仍会列出 DSH 会话并显示安装提示；损坏、未写完、过大或未知版本的日志会显示读取受限。
 
 Mac `.app` 在 HTTP 就绪后打开浏览器，尊重 `open_browser` 配置。日志优先写入项目 `logs/`，
