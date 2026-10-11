@@ -50,6 +50,31 @@ python3 scripts/release_notes.py --tag v0.5.0 --output /tmp/notes.md      # 正�
 python3 scripts/release_notes.py --sha "$(git rev-parse HEAD)" --output /tmp/notes.md   # 开发版
 ```
 
+## 网页前端结构
+
+`app/web/` 不用构建工具，也没有框架；`index.html` 只放结构和 `data-i18n` 标记，其余都是外部文件，由本机服务从 `/static/` 提供：
+
+| 文件 | 内容 |
+|---|---|
+| `app.css`、`workflow.css` | 基础样式、任务导航样式 |
+| `i18n.js`、`locales.zh.json`、`locales.en.json` | 界面语言与词条 |
+| `app-core.js` | 全局状态、语言切换、`api()`、勾选与按钮状态、toast |
+| `app-shell.js` | 启动、来源 / 目标选择、事件绑定 |
+| `app-sessions.js` | 会话列表与详情 |
+| `app-migrate.js` | 环境检查、元宝导入、迁移确认对话框 |
+| `app-storage.js` | Skill 与对话存储、恢复 |
+| `app-transfer.js` | Windows 导入、迁移、批量迁移 |
+| `app-history.js` | 操作记录与撤销 |
+| `app-search.js` | 全文搜索、索引任务、Skill 草稿 |
+| `app-workflow.js` | 任务导航与结果面板 |
+| `app-start.js` | 调用 `init()`，必须最后加载 |
+
+这些 `app-*.js` 是**经典脚本**（不是 ES 模块），按 `index.html` 里的顺序加载并共享全局作用域，所以：
+
+- 文件顶层只放声明（函数、常量、状态对象），不要在加载时就调用别的文件里的函数；真正的启动只在 `app-start.js`。
+- 新增脚本要同时加进 `index.html`（放在 `app-start.js` 之前）；`tests/web.test.cjs` 会按页面里的顺序逐个执行，并检查引用的文件都存在、页面没有内联脚本或样式。
+- 打包（wheel 的 `package-data`、便携包的 `--add-data app/web`）按扩展名 / 整个目录收文件，新文件不需要改打包配置；`tests/test_server.py`、wheel 检查与发布冒烟测试会逐个请求页面引用的资源。
+
 ## 日常
 
 - PR 合并前确认 Tests、Lint、CodeQL 全绿。

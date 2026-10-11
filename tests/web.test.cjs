@@ -7,7 +7,10 @@ const vm = require('node:vm');
 const html = fs.readFileSync(path.join(__dirname, '../app/web/index.html'), 'utf8');
 const catalogs=Object.fromEntries(['zh','en'].map(lang=>[lang,JSON.parse(fs.readFileSync(path.join(__dirname,'../app/web/locales.'+lang+'.json'),'utf8'))]));
 const i18nScript=fs.readFileSync(path.join(__dirname,'../app/web/i18n.js'),'utf8');
-const script = html.match(/<script>([\s\S]*?)<\/script>/)[1].split('\ninit().catch')[0];
+// index.html 按顺序加载若干经典脚本；这里同样逐个执行（共享全局作用域），启动入口 app-start.js 留给真实页面。
+const scriptFiles=Array.from(html.matchAll(/<script src="\/static\/(app-[\w-]+\.js)"><\/script>/g),m=>m[1]);
+const scriptParts=scriptFiles.filter(name=>name!=='app-start.js').map(name=>[name,fs.readFileSync(path.join(__dirname,'../app/web/'+name),'utf8')]);
+const script=scriptParts.map(([,text])=>text).join('\n');
 
 test('returning to search preserves the selected search and index sources',async()=>{
   const t=setup();t.app.bind();
@@ -126,7 +129,8 @@ function setup({automaticPreview=true,confirmed=true,randomUUID}={}){
   });
   vm.runInContext(i18nScript,context);
   context.RelayI18n.configure(catalogs.zh,catalogs.en);
-  vm.runInContext(script + '\n globalThis.app={importYuanbao,workflow,showPage,renderOperationResult,selectPackage,selections,selectAll,storeBatch,state,loadSessions,openSession,doTransfer,doImportWindows,updateActions,bind,buildTarget,buildTabs,loadSources,storeCurrent,refreshStorage,restoreStored,buildSkillAgents,loadSkills,refreshSkillPackages,storeSelectedSkill,restoreSelectedSkill,corpusState,searchCorpus,openCorpusDocument,renderDraftCandidates,exportDraft,updateDraftAction,startCorpusJob,pollCorpusJob,cancelCorpusJob,setLang,tr,ts,applyStatic,renderChips,renderList,renderDetail,doBatch,openHistory,refreshHistory,renderHistory,undoOperation,getLang:()=>lang};',context);
+  for(const [name,text] of scriptParts)vm.runInContext(text,context,{filename:name});
+  vm.runInContext('globalThis.app={importYuanbao,workflow,showPage,renderOperationResult,selectPackage,selections,selectAll,storeBatch,state,loadSessions,openSession,doTransfer,doImportWindows,updateActions,bind,buildTarget,buildTabs,loadSources,storeCurrent,refreshStorage,restoreStored,buildSkillAgents,loadSkills,refreshSkillPackages,storeSelectedSkill,restoreSelectedSkill,corpusState,searchCorpus,openCorpusDocument,renderDraftCandidates,exportDraft,updateDraftAction,startCorpusJob,pollCorpusJob,cancelCorpusJob,setLang,tr,ts,applyStatic,renderChips,renderList,renderDetail,doBatch,openHistory,refreshHistory,renderHistory,undoOperation,getLang:()=>lang};',context);
   const response = (index,body,status=200)=>requests[index].resolve({ok:status<400,status,json:async()=>body});
   return {app:context.app, elements, requests, previews, response, document, el:document.querySelector};
 }
@@ -896,4 +900,19 @@ test('Yuanbao structured import errors translate when the UI language changes',a
   t.response(0,{ok:false,error:'原始错误',error_message:{code:'err.yuanbao_input_path'}},400);await pending;
   t.app.setLang('en');
   assert.equal(t.el('#yuanbaoImportResult').textContent,'Yuanbao import failed: Enter the absolute path to a local JSON export file.');
+});
+
+test('index.html loads its scripts in a safe order and every referenced file exists',()=>{
+  assert.equal(scriptFiles[0],'app-core.js');
+  assert.equal(scriptFiles.at(-1),'app-start.js');
+  assert.equal(new Set(scriptFiles).size,scriptFiles.length);
+  assert.ok(html.indexOf('/static/i18n.js')<html.indexOf('/static/app-core.js'));
+  assert.doesNotMatch(html,/<script>/);        // 不再有内联脚本
+  assert.doesNotMatch(html,/<style>/);         // 不再有内联样式
+  for(const name of [...scriptFiles,...Array.from(html.matchAll(/href="\/static\/([^"]+)"/g),m=>m[1])]){
+    assert.ok(fs.existsSync(path.join(__dirname,'../app/web/'+name)),name);
+  }
+  // 只有 app-start.js 在加载时就会调用 init()；其余文件加载时不应执行业务流程。
+  assert.match(fs.readFileSync(path.join(__dirname,'../app/web/app-start.js'),'utf8'),/^init\(\)\.catch/m);
+  assert.doesNotMatch(script,/^init\(\)/m);
 });

@@ -1,5 +1,6 @@
 """Verify frozen CLI, bundled Zstd, shared data root, HTTP and graceful exit."""
 import json
+import re
 import http.client
 import os
 import shutil
@@ -187,6 +188,14 @@ def smoke(binary):
                     if actual is None:
                         time.sleep(.1)
                 assert actual, 'Packaged HTTP server did not start'
+                with opener.open('http://127.0.0.1:%d/' % actual, timeout=5) as response:
+                    page = response.read().decode('utf-8')
+                assert '<script>' not in page, 'Page should only load external scripts'
+                assets = re.findall(r'(?:src|href)="/static/([^"]+)"', page)
+                assert 'app-core.js' in assets and assets[-1] == 'app-start.js', assets
+                for asset in assets:
+                    with opener.open('http://127.0.0.1:%d/static/%s' % (actual, asset), timeout=5) as response:
+                        assert response.status == 200 and response.read(), 'Packaged page asset missing: ' + asset
                 with opener.open('http://127.0.0.1:%d/static/workflow.css' % actual, timeout=5) as response:
                     assert b'.task-panel' in response.read(), 'Packaged task stylesheet missing'
                 catalogs = {}
