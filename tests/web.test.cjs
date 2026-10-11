@@ -907,8 +907,9 @@ test('index.html loads its scripts in a safe order and every referenced file exi
   assert.equal(scriptFiles.at(-1),'app-start.js');
   assert.equal(new Set(scriptFiles).size,scriptFiles.length);
   assert.ok(html.indexOf('/static/i18n.js')<html.indexOf('/static/app-core.js'));
-  assert.doesNotMatch(html,/<script>/);        // 不再有内联脚本
-  assert.doesNotMatch(html,/<style>/);         // 不再有内联样式
+  const lowered=html.toLowerCase();
+  for(const chunk of lowered.split('<script').slice(1))assert.match(chunk.slice(0,chunk.indexOf('>')),/\ssrc=/,'inline script');   // 不再有内联脚本
+  assert.ok(!lowered.includes('<style'),'inline style');                                  // 不再有内联样式
   for(const name of [...scriptFiles,...Array.from(html.matchAll(/href="\/static\/([^"]+)"/g),m=>m[1])]){
     assert.ok(fs.existsSync(path.join(__dirname,'../app/web/'+name)),name);
   }
