@@ -197,7 +197,7 @@ Release builds validate bundled dependencies with an empty `PATH`, DSH import, s
 
 ## Further documentation (Chinese)
 
-- [User guide](使用说明.md): launch, batch storage, shutdown, configuration, and CLI.
+- [Quick start](使用说明.md) (Chinese): launch and shutdown; see the [CLI reference](docs/reference/cli.md) (Chinese) for all commands.
 - [Portable storage](docs/guide/portable-storage.md): conversation and Skill archives, restoration, and boundaries.
 - [Ubuntu dual boot](docs/guide/ubuntu-dual-boot.md): mounting and native migration in both directions.
 - [Source formats](docs/reference/source-formats.md): format references and official sources.

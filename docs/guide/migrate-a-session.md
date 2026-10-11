@@ -89,3 +89,13 @@ python3 app/cli.py batch codex --to claude --filter 关键词 --yes     # 实际
 ## 不想敲命令
 
 网页界面做同样的事：`python3 app/cli.py serve`，按 [网页工作流](web-workflow.md) 操作。
+
+## 迁移时程序做了什么
+
+- **写入位置**：写进主机上目标软件的会话目录（`~/.claude/projects/…` 等），不是移动盘。
+- **项目目录名**：先扫描目标软件已有的会话目录，从记录里读出各自的工作目录来反查，命中就用现成的目录名。这是唯一可靠的办法，因为 Windows（`c-Users-alice-proj`）和 macOS（`-Users-alice-proj`）的命名规则不同；只有遇到全新目录才退回启发式规则。
+- **保留的内容**：普通正文、明文思考和成对的工具调用与结果。没有结果的工具调用、图片和未知块保留为带标注的文本。导入不会执行历史里的工具，也不会安装来源的工具或转换参数协议。
+- **读取上限**：每个源文件最多读 32MB，超出会明确标记；超限的会话只允许导出带标记的部分内容，迁移会停止。
+- **迁到 DSH**：命令行用 `--to dsh`，网页里目标选「迁移到 DeepSeek Harness」。写入后命令行输出会显示 DSH 的原生会话 ID，到 DSH 会话列表里按标题找。DSH 压缩读取和导入需要 `zstandard`（Release 已内置）。
+- **工具名互译**：默认把工具名译成目标软件的叫法，`--keep-tool-names` 可关闭。
+- **Claude Agent SDK**：与 Claude Code 共用 `~/.claude/projects`，两个入口显示相同的会话是正常的；SDK 入口只读，可导出和迁出。按当前 `parentUuid` 主链读取，避免混入旧分支或子代理。自行保存的 stream-json 输出不等于原生可恢复的会话。

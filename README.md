@@ -92,7 +92,7 @@ Ubuntu / macOS 可用 `Ubuntu首次准备.sh` / `Mac首次准备.command` 自动
 | 兼容状态、已知限制、来源格式 | [docs/reference/compatibility.md](docs/reference/compatibility.md) · [docs/reference/limitations.md](docs/reference/limitations.md) · [docs/reference/source-formats.md](docs/reference/source-formats.md) |
 | 腾讯元宝接入范围 | [docs/reference/yuanbao-compatibility.md](docs/reference/yuanbao-compatibility.md) |
 | 适配器与插件开发、测试 | [docs/dev/adapters.md](docs/dev/adapters.md) · [docs/dev/writing-a-plugin.md](docs/dev/writing-a-plugin.md) · [docs/dev/testing.md](docs/dev/testing.md) |
-| 命令行完整说明 | [使用说明.md](使用说明.md) |
+| 命令行完整说明 | [命令行参考](docs/reference/cli.md)（快速上手见 [使用说明.md](使用说明.md)） |
 
 ## 参与贡献
 
