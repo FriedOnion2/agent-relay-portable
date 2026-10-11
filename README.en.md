@@ -8,7 +8,7 @@
 
 Browse, export, and migrate AI coding assistant conversations locally, or carry conversation and Skill archives on a portable drive and restore them on another device. AgentRelay provides a **Chinese/English web interface and a command-line interface** for Windows, macOS, and Ubuntu / Linux.
 
-**Interface language:** the web interface is fully available in English and Chinese. It follows the browser language on first load; use the language button at the top right to switch (the choice is remembered), or open `/?lang=en` once. Markdown exports and Skill drafts generated from the page use the language you are viewing. The command line still prints Chinese messages.
+**Interface language:** the web interface is fully available in English and Chinese. It follows the browser language on first load; use the language button at the top right to switch (the choice is remembered), or open `/?lang=en` once. Markdown exports and Skill drafts generated from the page use the language you are viewing. The command line prints Chinese by default; add `--lang en` before the subcommand (for example `python app/cli.py --lang en sources`) or set `RELAY_LANG=en` to get English output, `--help` text and error messages. The default is not taken from your system locale, so existing scripts keep their output.
 
 **The universal release bundles Python 3.12 and `zstandard`. Extract the complete archive and launch it: no Python or Node.js installation and no dependency downloads on first launch.** One archive contains Windows, macOS, and Linux runtimes for switching devices.
 

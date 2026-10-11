@@ -26,6 +26,14 @@ def lang_text(lang, code, **params):
     return catalog(normalize_lang(lang))[code].format(**params)
 
 
+def render(value, lang):
+    """Render a Message (and any Message parameters) in lang; anything else is returned as plain text."""
+    if not isinstance(value, Message):
+        return value
+    params = {key: render(item, lang) for key, item in value.params.items()}
+    return catalog(normalize_lang(lang))[value.code].format(**params)
+
+
 class Message(str):
     def __new__(cls, code, params, fallback=None):
         value = catalog()[code].format(**params) if fallback is None else fallback

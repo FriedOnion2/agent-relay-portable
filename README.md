@@ -47,6 +47,7 @@ python app/cli.py serve                              # 启动网页
 python app/cli.py list codex                         # 命令行：列出某来源的会话
 python app/cli.py export codex <会话id> -o out.md    # 导出 Markdown
 python app/cli.py transfer codex <会话id> --to dsh --dry-run   # 先预览迁移
+python app/cli.py --lang en list codex                # 命令行输出改为英文（或设 RELAY_LANG=en）
 ```
 
 **用 pip / pipx 安装**（只用命令行和网页，不需要 U 盘便携）：

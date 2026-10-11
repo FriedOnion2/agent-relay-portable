@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from relay.messages import text as message_text, annotate, error_text, normalize_lang
+from relay.messages import text as message_text, annotate, error_text, normalize_lang, lang_text
 
 import errno
 import json
@@ -418,13 +418,16 @@ def create_server(host: str, port: int):
     raise OSError(errno.EADDRINUSE, message_text('err.ports_occupied', port=port))
 
 
-def run(host: str = "127.0.0.1", port: int = 8745, open_browser: bool = True):
+def run(host: str = "127.0.0.1", port: int = 8745, open_browser: bool = True, lang: str = "zh"):
+    def say(code, **params):
+        print(lang_text(lang, "msg.cli_s_" + code, **params))
+
     srv = create_server(host, port)
     if port and srv.server_address[1] != port:
-        print(f"端口 {port} 已被占用，自动改用 {srv.server_address[1]}")
+        say("port", port=port, actual=srv.server_address[1])
     url = f"http://{host}:{srv.server_address[1]}/"
-    print(f"AgentRelay Web 已启动: {url}")
-    print("点击网页右上角「退出服务」或按 Ctrl+C 停止")
+    say("started", url=url)
+    say("stop_hint")
     if open_browser:
         timer = threading.Timer(0.6, lambda: webbrowser.open(url))
         timer.daemon = True
@@ -432,7 +435,7 @@ def run(host: str = "127.0.0.1", port: int = 8745, open_browser: bool = True):
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
-        print("\n已停止")
+        say("stopped")
     finally:
         srv.server_close()
 

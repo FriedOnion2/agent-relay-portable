@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from relay.messages import text as message_text, error_text
+from relay.messages import text as message_text, error_text, lang_text
 
 import json
 import os
@@ -327,43 +327,64 @@ def report(cfg: dict | None = None) -> dict:
     }
 
 
-def print_report(cfg: dict | None = None) -> int:
+_REPORT_KEYS = {
+    "可移动磁盘": "drive_removable", "本地磁盘": "drive_local", "网络驱动器": "drive_network", "光盘": "drive_optical",
+    "内存盘": "drive_ram", "外置宗卷": "drive_external", "（无法判断，不影响运行）": "media_unknown",
+    "（无 config.json，走自动探测）": "no_config", "环境变量 RELAY_PYTHON": "origin_env", "当前运行的 Python": "origin_current",
+    "移动硬盘自带 runtime": "origin_bundled", "Windows Python 启动器": "origin_py_launcher", "用户级安装": "origin_user",
+    "系统级安装": "origin_system", "系统自带": "origin_os", "python.org 安装": "origin_pyorg", "系统 Python": "origin_system_python",
+    "Release 内置 Python": "origin_release",
+}
+
+
+def print_report(cfg: dict | None = None, lang: str = "zh") -> int:
+    def t(code, **params):
+        return lang_text(lang, "msg.cli_b_" + code, **params)
+
+    def loc(value):
+        """The report data carries Chinese labels; show them in the requested language."""
+        if value in _REPORT_KEYS:
+            return t(_REPORT_KEYS[value])
+        if isinstance(value, str) and value.startswith("PATH 中的 "):
+            return t("origin_path", cmd=value[len("PATH 中的 "):])
+        return value
+
     r = report(cfg=cfg)
     line = "─" * 66
     print(line)
-    print(" AgentRelay 便携版 · 运行环境体检")
+    print(t("rule_title"))
     print(line)
-    print(f"  当前系统     {r['platform']}")
-    print(f"  程序位置     {r['app_root']}")
-    print(f"  所在盘       {r['media_root']}  [{r['media_kind']}]")
-    print(f"  配置文件     {r['config']}")
+    print(t("platform", value=r["platform"]))
+    print(t("app_root", value=r["app_root"]))
+    print(t("media_root", value=r["media_root"], kind=loc(r["media_kind"])))
+    print(t("config", value=loc(r["config"])))
     if r["windows_user_home"]:
-        print(f"  Windows 用户 {r['windows_user_home']}（跨系统只读）")
+        print(t("windows_user", value=r["windows_user_home"]))
     print()
     py = r["python"]
     if py["ok"]:
-        print(f"  ✓ Python     {py['version']}  via {py['origin']}")
+        print(t("py_ok", version=py["version"], origin=loc(py["origin"])))
         print(f"               {py['cmd']}")
     else:
-        print("  ✗ 没找到可用的 Python（需要 3.8 以上）")
-        for t in py["tried"]:
-            mark = "✗" if not t["ok"] else "✓"
-            why = f"版本 {t['ver']} 过低" if t["ver"] and not t["ok"] else "无法执行"
-            print(f"      {mark} {t['cmd']}  ({t['origin']}) {why}")
+        print(t("py_none"))
+        for item in py["tried"]:
+            mark = "✗" if not item["ok"] else "✓"
+            why = t("py_too_old", ver=item["ver"]) if item["ver"] and not item["ok"] else t("py_cannot_run")
+            print(f"      {mark} {item['cmd']}  ({loc(item['origin'])}) {why}")
     print()
-    print("  当前主机上的会话目录：")
+    print(t("sessions_dirs"))
     for a in r["agents"]:
         if a["found"]:
-            cnt = f"{a['files']} 个会话" if a["files"] >= 0 else "读取失败"
+            cnt = t("count", files=a["files"]) if a["files"] >= 0 else t("read_failed")
             print(f"    ✓ {a['label']:<16} {cnt}")
             print(f"      {a['data']}")
         else:
-            print(f"    · {a['label']:<16} 未安装 / 目录不存在")
+            print(f"    · {a['label']:<16} {t('not_installed')}")
             print(f"      {a['data']}")
         for error in a.get("errors", []):
             print(f"      ↳ {error}")
         if a["key"] == "claude_sdk":
-            print("      ↳ SDK 与 Claude Code 共用存储；此处统计包含共享会话，不代表 SDK 专属数量。")
+            print(f"      ↳ {t('sdk_shared')}")
     print()
     print(line)
     return 0 if py["ok"] else 2

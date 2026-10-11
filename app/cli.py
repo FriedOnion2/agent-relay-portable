@@ -10,7 +10,7 @@
 
 from __future__ import annotations
 
-from relay.messages import text as message_text
+from relay.messages import text as message_text, lang_text, normalize_lang, render, error_text
 
 import argparse
 import json
@@ -30,6 +30,28 @@ if hasattr(sys.stdout, "reconfigure"):
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import bootstrap  # noqa: E402  —— 便携版引导层：读 U 盘上的配置，按主机定位会话目录
+
+def _resolve_lang(argv=None):
+    """--lang beats RELAY_LANG; the default stays zh so existing scripts keep their output."""
+    argv = sys.argv[1:] if argv is None else list(argv)
+    for i, arg in enumerate(argv):
+        if arg == '--lang' and i + 1 < len(argv):
+            return normalize_lang(argv[i + 1])
+        if arg.startswith('--lang='):
+            return normalize_lang(arg[len('--lang='):])
+    return normalize_lang(os.environ.get('RELAY_LANG', '').strip().lower()[:2])
+
+
+LANG = _resolve_lang()
+
+
+def T(code, **params):
+    return lang_text(LANG, 'msg.cli_' + code, **params)
+
+
+def R(value):
+    return render(value, LANG)
+
 
 _CFG = bootstrap.load_config()
 bootstrap.apply_config(_CFG)
@@ -55,10 +77,10 @@ def cmd_windows_users(args):
         _print_json(rows)
         return
     for row in rows:
-        print(f"{row['user']}  {row['home']}\n  来源：{', '.join(row['sources'])}")
+        print(T('win_user_line', user=row['user'], home=row['home'], sources=', '.join(row['sources'])))
     if not rows:
-        print("未找到已挂载的 Windows 会话目录。请在 Ubuntu 文件管理器中打开 Windows 分区。")
-    print('选择用户： python3 app/cli.py windows-use "/media/用户名/分区/Users/Windows用户名"')
+        print(T('win_none'))
+    print(T('win_pick'))
 
 
 def cmd_import_windows(args):
@@ -79,12 +101,12 @@ def cmd_import_windows(args):
     native = result['to']['source']
     if native.startswith("windows_"):
         native = native[len("windows_"):]
-    print(f"✓ 已迁到 {result['target_os']} {bootstrap.SOURCES[native][0]}")
-    print(f"  新文件: {result['to']['path']}\n  原生会话 ID: {result['to']['native_id']}")
+    print(T('imported', os=result['target_os'], name=bootstrap.SOURCES[native][0]))
+    print(T('new_file', path=result['to']['path'], native_id=result['to']['native_id']))
     if result["resume_command"]:
-        print(f"  续聊命令: {result['resume_command']}")
+        print(T('resume_cmd', command=result['resume_command']))
     for note in result["notes"]:
-        print(f"  · {note}")
+        print(f"  · {R(note)}")
 
 
 def cmd_windows_use(args):
@@ -120,8 +142,8 @@ def cmd_windows_use(args):
     device.write(local)
     os.environ[env] = path
     registry._CACHE.clear()
-    print(f"已保存 {label} 用户目录：{path}" if path else f"已清除 {label} 用户目录选择")
-    print("重启服务后生效；切换系统时忽略不适用的来源配置。")
+    print(T('use_saved', label=label, path=path) if path else T('use_cleared', label=label))
+    print(T('use_restart'))
 
 
 def _print_json(obj):
@@ -164,16 +186,16 @@ def cmd_sources(args):
     if args.json:
         _print_json(rows)
         return
-    print(f"{'agent':<10} {'状态':<8} {'会话数':>6}  目录")
+    print(T('sources_header', agent=T('col_agent'), status=T('col_status'), count=T('col_count'), home=T('col_home')))
     print("-" * 78)
     for r in rows:
-        avail = ("可用" if r.get("can_write") else "只读") if r["available"] else "缺失"
+        avail = (T('avail_ok') if r.get("can_write") else T('avail_ro')) if r["available"] else T('avail_missing')
         cnt = r.get("session_count", 0)
-        print(f"{r['name']:<10} {avail:<8} {cnt:>6}  {r.get('home') or ''}")
+        print(T('sources_header', agent=r['name'], status=avail, count=cnt, home=r.get('home') or ''))
         if r.get("error"):
-            print(f"{'':<26}↳ {r['error']}")
+            print(f"{'':<26}↳ {R(r['error'])}")
         if r.get("read_note"):
-            print(f"{'':<26}↳ {r['read_note']}")
+            print(f"{'':<26}↳ {R(r['read_note'])}")
 
 
 def cmd_list(args):
@@ -182,19 +204,19 @@ def cmd_list(args):
         _print_json(rows)
         return
     if not rows:
-        print(f"（{args.agent} 没有匹配的会话）")
+        print(T('list_none', agent=args.agent))
         return
-    print(f"{'#':>3}  {'会话 id':<38} {'更新':<20} {'轮次':>4}  标题")
+    print(f"{'#':>3}  {T('col_id'):<38} {T('col_updated'):<20} {T('col_turns'):>4}  {T('col_title')}")
     print("-" * 100)
     for i, r in enumerate(rows, 1):
         sid = r["id"]
         print(f"{i:>3}  {sid:<38} {r['updated']:<20} {r['turns']:>4}  {r['title'][:50]}")
         if r.get("variant_count", 1) > 1:
-            print(f"     同 ID 的 {r['variant_count']} 份记录；原生 ID：{r['native_id']}")
-            print(f"     文件：{r['path']}")
+            print(T('list_variants', count=r['variant_count'], native_id=r['native_id']))
+            print(T('list_file', path=r['path']))
         if r.get("error"):
-            print(f"     读取受限：{r['error']}")
-    print(f"\n共 {len(rows)} 条")
+            print(T('list_limited', error=R(r['error'])))
+    print(T('list_total', count=len(rows)))
 
 
 def cmd_show(args):
@@ -203,17 +225,16 @@ def cmd_show(args):
         _print_json(conv.to_dict())
         return
     st = conv.stats()
-    print(f"标题: {conv.title or '未命名会话'}")
-    print(f"来源: {conv.source}   会话 id: {conv.id}")
-    print(f"目录: {conv.cwd}")
-    print(f"模型: {conv.model}")
-    print(f"轮次: {st['turns']}（用户 {st['user']} / 助手 {st['assistant']}，"
-          f"工具调用 {st['tool_call']}，思考 {st['thinking']}）")
-    print(f"文件: {conv.path}")
+    print(T('show_title', title=conv.title or T('untitled')))
+    print(T('show_source', source=conv.source, id=conv.id))
+    print(T('show_cwd', cwd=conv.cwd))
+    print(T('show_model', model=conv.model))
+    print(T('show_turns', **st))
+    print(T('show_file', path=conv.path))
     if conv.truncated:
-        print("⚠ 源文件过大，仅读取了部分内容")
+        print(T('show_truncated'))
     for note in conv.meta.get("notes", []):
-        print(f"读取说明: {note}")
+        print(T('show_note', note=R(note)))
     print("=" * 78)
     shown = 0
     for t in conv.turns:
@@ -222,12 +243,12 @@ def cmd_show(args):
         txt = t.text()
         if not txt:
             continue
-        label = {"user": "👤 用户", "assistant": "🤖 助手", "system": "⚙️ 系统"}.get(t.role, t.role)
+        label = T('role_' + t.role) if t.role in ("user", "assistant", "system") else t.role
         print(f"\n── {label} · {t.ts or ''} ──")
         print(ir.preview_text(txt, args.max_chars))
         shown += 1
         if args.head and shown >= args.head:
-            print(f"\n（仅显示前 {args.head} 轮，加 --head 0 显示全部）")
+            print(T('show_head', count=args.head))
             break
 
 
@@ -239,18 +260,18 @@ def cmd_diff(args):
         _print_json(res)
     else:
         a, b = res["a"], res["b"]
-        print("A: %s %s（%d 项）\nB: %s %s（%d 项）" % (a["source"], a["id"], a["items"], b["source"], b["id"], b["items"]))
-        print("一致 %d 项，仅 A 有 %d 项，仅 B 有 %d 项，相似度 %.1f%%" % (res["matched"], res["only_in_a"], res["only_in_b"], res["ratio"] * 100))
+        print(T('diff_ab', a_source=a["source"], a_id=a["id"], a_items=a["items"], b_source=b["source"], b_id=b["id"], b_items=b["items"]))
+        print(T('diff_summary', matched=res["matched"], only_a=res["only_in_a"], only_b=res["only_in_b"], ratio="%.1f" % (res["ratio"] * 100)))
         for row in res["changed"][:args.max]:
-            print("  改动  A: [%s/%s] %s\n        B: [%s/%s] %s" % (row["before"]["role"], row["before"]["kind"], row["before"]["text"],
-                                                                row["after"]["role"], row["after"]["kind"], row["after"]["text"]))
-        for label, key in (("仅 A", "only_in_a_samples"), ("仅 B", "only_in_b_samples")):
+            print(T('diff_changed', before="[%s/%s] %s" % (row["before"]["role"], row["before"]["kind"], row["before"]["text"]),
+                    after="[%s/%s] %s" % (row["after"]["role"], row["after"]["kind"], row["after"]["text"])))
+        for label, key in ((T('diff_only_a'), "only_in_a_samples"), (T('diff_only_b'), "only_in_b_samples")):
             for row in res[key][:args.max]:
                 print("  %s  [%s/%s] %s" % (label, row["role"], row["kind"], row["text"]))
         delta = {k: v for k, v in res["stats_delta"].items() if v}
         if delta:
-            print("数量差（B−A）：" + "，".join("%s %+d" % kv for kv in delta.items()))
-        print("两份会话内容一致。" if res["identical"] else "存在差异。")
+            print(T('diff_delta', items=T('diff_sep').join("%s %+d" % kv for kv in delta.items())))
+        print(T('diff_same') if res["identical"] else T('diff_differs'))
     if not res["identical"]:
         sys.exit(1)
 
@@ -262,12 +283,12 @@ def cmd_scan(args):
         _print_json(result)
         return
     if not result["total"]:
-        print("未发现疑似敏感信息（扫描不保证发现全部）。")
+        print(T('scan_clean'))
         return
-    print("发现 %d 处疑似敏感信息：%s" % (result["total"], sensitive.summary_line(result)))
+    print(T('scan_found', total=result["total"], summary=R(sensitive.summary_line(result))))
     for row in result["locations"][:50]:
-        print("  第 %d 轮 块 %d %s  %s  长度 %d" % (row["turn"] + 1, row["block"] + 1, row["field"], row["kind"], row["length"]))
-    print("迁移/导出时加 --redact-secrets 可将其替换为 [REDACTED:类型]。")
+        print(T('scan_row', turn=row["turn"] + 1, block=row["block"] + 1, field=row["field"], kind=row["kind"], length=row["length"]))
+    print(T('scan_hint'))
     sys.exit(2)
 
 
@@ -286,15 +307,14 @@ def cmd_batch(args):
     if args.json:
         _print_json(res)
     else:
-        label = "预演（未写入）" if res["dry_run"] else "完成"
-        print("\n批量迁移%s：选中 %d，已迁移 %d，将迁移 %d，跳过 %d，失败 %d%s" % (
-            label, res["selected"], res["migrated"], res["would-migrate"], res["skipped"], res["failed"],
-            "，已提前停止" if res["stopped_early"] else ""))
+        label = T('batch_dry') if res["dry_run"] else T('batch_done')
+        print(T('batch_summary', label=label, selected=res["selected"], migrated=res["migrated"], would=res["would-migrate"],
+                skipped=res["skipped"], failed=res["failed"], stopped=T('batch_stopped') if res["stopped_early"] else ""))
         for item in res["items"]:
             if item["status"] == "failed":
-                print("  失败 %s: %s" % (item["id"], item["error"]))
+                print(T('batch_failed', id=item["id"], error=R(item["error"])))
         if res["dry_run"]:
-            print("确认无误后加 --yes 实际执行。")
+            print(T('batch_yes'))
     if not res["ok"]:
         sys.exit(1)
 
@@ -306,13 +326,14 @@ def cmd_export(args):
         include_tools=not args.no_tools,
         max_text=args.max_chars,
         redact_secrets=args.redact_secrets,
+        lang=LANG,
     )
     if args.output:
         out = os.path.abspath(args.output)
         os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
         with open(out, "w", encoding="utf-8", newline="\n") as f:
             f.write(md)
-        print(f"已导出: {out}")
+        print(T('exported', path=out))
     else:
         print(md)
 
@@ -338,25 +359,25 @@ def cmd_transfer(args):
     f = res["from"]
     t = res["to"]
     st = res["stats"]
-    print("✓ 已迁移")
-    print(f"  来源: {f['source']}  {f['title'] or f['id']}")
-    print(f"  目标: {t['source']}")
-    print(f"  内容: {st['turns']} 轮 / 工具调用 {st['tool_call']} / 思考 {st['thinking']}")
-    print(f"  新文件: {t['path']}")
+    print(T('tr_done'))
+    print(T('tr_from', source=f['source'], title=f['title'] or f['id']))
+    print(T('tr_to', source=t['source']))
+    print(T('tr_content', **st))
+    print(T('tr_file', path=t['path']))
     if res["truncated"]:
-        print("  ⚠ 源文件过大，迁移内容可能不完整")
+        print(T('tr_truncated'))
     if t["source"] == "claude":
-        print(f"\n提示: 在该目录下执行 `claude --resume {os.path.basename(t['path']).split('.')[0]}` 继续会话")
+        print(T('tr_claude', id=os.path.basename(t['path']).split('.')[0]))
     elif t["source"] == "dsh":
         sid = os.path.basename(os.path.dirname(t["path"]))
-        print(f"\nDSH 会话 ID: {sid}")
-        print("提示: 在 DSH 会话列表中选择导入会话，或使用支持 --resume 的 DSH profile 恢复该 ID。")
+        print(T('tr_dsh_id', id=sid))
+        print(T('tr_dsh_hint'))
 
 
 def cmd_serve(args):
     from server import run
     run(host=args.host, port=args.port,
-        open_browser=not args.no_browser and bootstrap.effective_open_browser(_CFG))
+        open_browser=not args.no_browser and bootstrap.effective_open_browser(_CFG), lang=LANG)
 
 
 def cmd_history(args):
@@ -366,11 +387,11 @@ def cmd_history(args):
         _print_json({"ok": True, "operations": rows})
         return
     if not rows:
-        print("还没有操作记录。")
+        print(T('hist_none'))
         return
     for row in rows:
-        state = "已撤销" if row["undone"] else ("失败" if row["status"] == "failed" else "完成")
-        flag = "可撤销" if row["undoable"] else ("—" if row["undone"] else "不可撤销")
+        state = T('hist_undone') if row["undone"] else (T('hist_failed') if row["status"] == "failed" else T('hist_ok'))
+        flag = T('hist_undoable') if row["undoable"] else ("—" if row["undone"] else T('hist_not_undoable'))
         print(f"{row['id']}  {row['time']}  {row['kind']:<15} {row['source'] or ''} → {row['target'] or ''}  [{state}/{flag}]")
         print(f"    {row['title'] or row['session'] or ''}  {row['path'] or ''}")
 
@@ -381,26 +402,25 @@ def cmd_undo(args):
     if args.json:
         _print_json(result)
         return
-    print(f"✓ 已撤销 {args.id}：删除 {len(result['removed'])} 个文件，截回 {len(result['truncated'])} 个索引文件")
+    print(T('undo_done', id=args.id, removed=len(result['removed']), truncated=len(result['truncated'])))
     for row in result["kept"]:
-        print(f"  ⚠ 保留 {row['path']}：{row['reason']}")
+        print(T('undo_kept', path=row['path'], reason=R(row['reason'])))
     if not result["complete"]:
-        print("  有文件被保留；确认可以丢弃后可加 --force 重试。")
+        print(T('undo_incomplete'))
 
 
 def cmd_doctor(args):
     """换机器后先跑这个：看 Python 找没找到、各个来源的目录在哪。"""
-    code = bootstrap.print_report(_CFG)
+    code = bootstrap.print_report(_CFG, LANG)
     print()
     if code == 0:
         rows = registry.sources_info()
-        print("  会话统计：")
+        print(T('doc_stats'))
         for r in rows:
-            avail = "可用" if r["available"] else "缺失"
-            print(f"    {r['name']:<8} {avail:<6} {r.get('session_count', 0):>4} 个会话")
+            avail = T('doc_ready') if r["available"] else T('doc_missing')
+            print(T('doc_row', name=r['name'], avail=avail, count=r.get('session_count', 0)))
         print()
-        print("  下一步： python cli.py serve      （启动界面）")
-        print("           python cli.py list codex （列出会话）")
+        print(T('doc_next'))
     return code
 
 
@@ -437,11 +457,11 @@ def cmd_plugins(args):
         result = plugins.check(args.name, args.path)
         for row in result['checks']:
             print('%s %s%s' % ('✅' if row['ok'] else '❌', row['check'], '：' + row['detail'] if row['detail'] else ''))
-        print('自检通过。' if result['ok'] else '自检未通过。')
+        print(T('check_pass') if result['ok'] else T('check_fail'))
         return 0 if result['ok'] else 1
     else:
         result = {'ok':True, 'enabled':list(plugins.entries.values()), 'errors':plugins.errors,
-                  'note':'只启用可信插件；独立进程与超时不是安全沙箱。换设备需重新启用。'}
+                  'note':T('plugins_note')}
     _print_json(result)
 
 
@@ -484,21 +504,22 @@ def build_parser():
     read_agents = READ_AGENTS + list(plugins.entries)
     p = RelayParser(
         prog="relay",
-        description="读取 WorkBuddy / DeepSeek Harness / CodeBuddy / Claude Code / Claude Agent SDK / Codex / 元宝导出会话",
+        description=T('desc'),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     from relay import __version__
     p.add_argument("--version", action="version", version="%(prog)s " + __version__)
+    p.add_argument("--lang", choices=("zh", "en"), default=LANG, help=T('lang_help'))
     sub = p.add_subparsers(dest="cmd", required=True)
-    yuanbao_import = sub.add_parser('import-yuanbao', help='导入元宝 JSON 导出文件（不读取或修改客户端数据库）')
-    yuanbao_import.add_argument('path', help='本机 JSON 导出文件的绝对路径')
+    yuanbao_import = sub.add_parser('import-yuanbao', help=T('h_import_yuanbao'))
+    yuanbao_import.add_argument('path', help=T('h_import_yuanbao_path'))
     yuanbao_import.set_defaults(func=cmd_import_yuanbao)
-    index = sub.add_parser('index', help='更新便携全文索引；默认不保存思考内容')
+    index = sub.add_parser('index', help=T('h_index'))
     index.add_argument('--source', action='append', choices=read_agents)
     index.add_argument('--include-thinking', action='store_true')
     index.add_argument('--no-packages', action='store_true')
     index.set_defaults(func=cmd_corpus)
-    search = sub.add_parser('search', help='离线跨来源搜索便携索引，支持中文短词')
+    search = sub.add_parser('search', help=T('h_search'))
     search.add_argument('query', nargs='?', default='')
     for field in ('source','project','tool','after','before'):
         search.add_argument('--' + field, default='')
@@ -506,147 +527,147 @@ def build_parser():
     search.add_argument('--limit',type=int,default=50)
     search.add_argument('--offset',type=int,default=0)
     search.set_defaults(func=cmd_corpus)
-    document = sub.add_parser('indexed-session', help='打开缓存会话，不读取旧设备路径')
+    document = sub.add_parser('indexed-session', help=T('h_indexed_session'))
     document.add_argument('key')
     document.add_argument('--include-thinking',action='store_true')
     document.set_defaults(func=cmd_corpus)
-    extract = sub.add_parser('extract-skills', help='从完整索引会话提炼待审核 Skill 草稿；不调用模型')
+    extract = sub.add_parser('extract-skills', help=T('h_extract_skills'))
     extract.set_defaults(func=cmd_corpus)
-    draft = sub.add_parser('export-draft', help='显式确认后导出已编辑草稿，同名不覆盖')
-    draft.add_argument('markdown', help='已审核的 Markdown 文件')
-    draft.add_argument('--directory',required=True,help='本机存在的导出父目录')
-    draft.add_argument('--confirm',action='store_true',help='确认已审核草稿并写入')
+    draft = sub.add_parser('export-draft', help=T('h_export_draft'))
+    draft.add_argument('markdown', help=T('h_export_draft_md'))
+    draft.add_argument('--directory',required=True,help=T('h_export_draft_dir'))
+    draft.add_argument('--confirm',action='store_true',help=T('h_export_draft_confirm'))
     draft.set_defaults(func=cmd_corpus)
 
-    p1 = sub.add_parser("sources", help="查看来源是否可用及会话数量")
+    p1 = sub.add_parser("sources", help=T('h_sources'))
     p1.add_argument("--json", action="store_true")
     p1.set_defaults(func=cmd_sources)
 
-    p2 = sub.add_parser("list", help="列出某个 agent 的会话")
+    p2 = sub.add_parser("list", help=T('h_list'))
     p2.add_argument("agent", choices=read_agents)
-    p2.add_argument("--filter", "-f", default="", help="按标题/目录/id 过滤")
+    p2.add_argument("--filter", "-f", default="", help=T('h_list_filter'))
     p2.add_argument("--limit", "-n", type=int, default=500)
     p2.add_argument("--json", action="store_true")
     p2.set_defaults(func=cmd_list)
 
-    p3 = sub.add_parser("show", help="查看会话内容")
+    p3 = sub.add_parser("show", help=T('h_show'))
     p3.add_argument("agent", choices=read_agents)
     p3.add_argument("id")
-    p3.add_argument("--role", choices=["user", "assistant", "system"], help="只看某个角色")
-    p3.add_argument("--head", type=int, default=0, help="只显示前 N 轮，0=全部")
-    p3.add_argument("--max-chars", type=int, default=2000, help="每轮最多显示多少字符")
+    p3.add_argument("--role", choices=["user", "assistant", "system"], help=T('h_show_role'))
+    p3.add_argument("--head", type=int, default=0, help=T('h_show_head'))
+    p3.add_argument("--max-chars", type=int, default=2000, help=T('h_show_max'))
     p3.add_argument("--json", action="store_true")
     p3.set_defaults(func=cmd_show)
 
-    p4 = sub.add_parser("export", help="导出为 markdown 交接文档")
+    p4 = sub.add_parser("export", help=T('h_export'))
     p4.add_argument("agent", choices=read_agents)
     p4.add_argument("id")
-    p4.add_argument("-o", "--output", help="输出文件，省略则打印到标准输出")
-    p4.add_argument("--no-thinking", action="store_true", help="不包含思考过程")
-    p4.add_argument("--no-tools", action="store_true", help="不包含工具调用")
-    p4.add_argument("--max-chars", type=int, default=0, help="单段文本最大长度，0=不限")
-    p4.add_argument("--redact-secrets", action="store_true", help="把疑似密钥/口令替换为 [REDACTED:类型]")
+    p4.add_argument("-o", "--output", help=T('h_export_output'))
+    p4.add_argument("--no-thinking", action="store_true", help=T('h_no_thinking_export'))
+    p4.add_argument("--no-tools", action="store_true", help=T('h_no_tools'))
+    p4.add_argument("--max-chars", type=int, default=0, help=T('h_export_max'))
+    p4.add_argument("--redact-secrets", action="store_true", help=T('h_redact_export'))
     p4.set_defaults(func=cmd_export)
 
-    p4b = sub.add_parser("scan", help="扫描会话里的疑似密钥、令牌和口令（只显示类型、位置和长度）")
+    p4b = sub.add_parser("scan", help=T('h_scan'))
     p4b.add_argument("agent", choices=read_agents)
     p4b.add_argument("id")
     p4b.add_argument("--json", action="store_true")
     p4b.set_defaults(func=cmd_scan)
 
-    pd = sub.add_parser("diff", help="比较两个会话（迁移后核对有没有丢内容）")
+    pd = sub.add_parser("diff", help=T('h_diff'))
     pd.add_argument("agent", choices=read_agents)
     pd.add_argument("id")
     pd.add_argument("agent2", choices=read_agents)
     pd.add_argument("id2")
-    pd.add_argument("--max", type=int, default=20, help="最多显示多少条差异样例")
+    pd.add_argument("--max", type=int, default=20, help=T('h_diff_max'))
     pd.add_argument("--json", action="store_true")
     pd.set_defaults(func=cmd_diff)
 
 
-    p5 = sub.add_parser("transfer", help="迁移会话到另一个 agent")
-    p5.add_argument("agent", choices=read_agents, help="来源 agent")
-    p5.add_argument("id", help="源会话 id")
-    p5.add_argument("--to", "-t", required=True, choices=registry.writable_keys(), help="支持写入的目标 agent")
-    p5.add_argument("--cwd", help="写入到哪个工作目录（默认沿用源会话的目录）")
-    p5.add_argument("--session-id", help="指定新会话 id（默认自动生成）")
-    p5.add_argument("--title", help="覆盖标题")
-    p5.add_argument("--keep-tool-names", action="store_true", help="不做工具名互译")
-    p5.add_argument("--no-thinking", action="store_true", help="不迁移思考过程")
-    p5.add_argument("--redact-secrets", action="store_true", help="写入前把疑似密钥/口令替换为 [REDACTED:类型]")
+    p5 = sub.add_parser("transfer", help=T('h_transfer'))
+    p5.add_argument("agent", choices=read_agents, help=T('h_src_agent'))
+    p5.add_argument("id", help=T('h_src_id'))
+    p5.add_argument("--to", "-t", required=True, choices=registry.writable_keys(), help=T('h_to_agent'))
+    p5.add_argument("--cwd", help=T('h_tr_cwd'))
+    p5.add_argument("--session-id", help=T('h_tr_session_id'))
+    p5.add_argument("--title", help=T('h_tr_title'))
+    p5.add_argument("--keep-tool-names", action="store_true", help=T('h_keep_tools'))
+    p5.add_argument("--no-thinking", action="store_true", help=T('h_no_thinking_tr'))
+    p5.add_argument("--redact-secrets", action="store_true", help=T('h_redact_tr'))
     p5.add_argument("--json", action="store_true")
-    p5.add_argument('--dry-run', action='store_true', help='只预览保真度，不写入文件')
-    p5.add_argument('--preview-token', help='执行已确认的预览；内容变化则拒绝')
+    p5.add_argument('--dry-run', action='store_true', help=T('h_dry_run_tr'))
+    p5.add_argument('--preview-token', help=T('h_preview_token'))
     p5.set_defaults(func=cmd_transfer)
 
-    history = sub.add_parser("history", help="查看写入目标软件的操作记录")
+    history = sub.add_parser("history", help=T('h_history'))
     history.add_argument("--limit", type=int, default=20)
     history.add_argument("--json", action="store_true")
     history.set_defaults(func=cmd_history)
 
-    undo = sub.add_parser("undo", help="撤销一次迁移 / 恢复：删除新建文件、截回被追加的索引；写入后被改动的文件会保留")
-    undo.add_argument("id", help="history 中显示的操作 ID")
-    undo.add_argument("--force", action="store_true", help="连同写入后又被修改的新建文件一起删除")
+    undo = sub.add_parser("undo", help=T('h_undo'))
+    undo.add_argument("id", help=T('h_undo_id'))
+    undo.add_argument("--force", action="store_true", help=T('h_undo_force'))
     undo.add_argument("--json", action="store_true")
     undo.set_defaults(func=cmd_undo)
 
-    pb = sub.add_parser("batch", help="批量迁移多个会话（默认只预演，加 --yes 才写入）")
-    pb.add_argument("agent", choices=read_agents, help="来源 agent")
-    pb.add_argument("--to", "-t", required=True, choices=registry.writable_keys(), help="支持写入的目标 agent")
-    pb.add_argument("--ids", help="会话 id，逗号分隔；省略则按 --filter 选取")
-    pb.add_argument("--filter", default="", help="按标题 / 目录 / id 关键字筛选")
-    pb.add_argument("--limit", type=int, default=100, help="最多处理多少条（上限 500）")
-    pb.add_argument("--cwd", help="统一写入到哪个工作目录（默认沿用各会话原目录）")
+    pb = sub.add_parser("batch", help=T('h_batch'))
+    pb.add_argument("agent", choices=read_agents, help=T('h_src_agent'))
+    pb.add_argument("--to", "-t", required=True, choices=registry.writable_keys(), help=T('h_to_agent'))
+    pb.add_argument("--ids", help=T('h_batch_ids'))
+    pb.add_argument("--filter", default="", help=T('h_batch_filter'))
+    pb.add_argument("--limit", type=int, default=100, help=T('h_batch_limit'))
+    pb.add_argument("--cwd", help=T('h_batch_cwd'))
     pb.add_argument("--on-conflict", choices=("skip", "new", "fail"), default="skip",
-                    help="目标里已有同一来源的迁移结果时：skip 跳过（默认）/ new 另建新 ID / fail 立即停止")
-    pb.add_argument("--redact-secrets", action="store_true", help="写入前脱敏疑似密钥/口令")
-    pb.add_argument("--keep-tool-names", action="store_true", help="不做工具名互译")
-    pb.add_argument("--no-thinking", action="store_true", help="不迁移思考过程")
-    pb.add_argument("--stop-on-error", action="store_true", help="任一条失败即停止")
-    pb.add_argument("--yes", action="store_true", help="实际写入；不加则只预演")
+                    help=T('h_batch_conflict'))
+    pb.add_argument("--redact-secrets", action="store_true", help=T('h_batch_redact'))
+    pb.add_argument("--keep-tool-names", action="store_true", help=T('h_keep_tools'))
+    pb.add_argument("--no-thinking", action="store_true", help=T('h_no_thinking_tr'))
+    pb.add_argument("--stop-on-error", action="store_true", help=T('h_batch_stop'))
+    pb.add_argument("--yes", action="store_true", help=T('h_batch_yes'))
     pb.add_argument("--json", action="store_true")
     pb.set_defaults(func=cmd_batch)
 
-    p6 = sub.add_parser("doctor", help="环境体检（换机器后先跑这个）")
+    p6 = sub.add_parser("doctor", help=T('h_doctor'))
     p6.set_defaults(func=cmd_doctor)
 
-    p7 = sub.add_parser("serve", help="启动 Web 界面")
+    p7 = sub.add_parser("serve", help=T('h_serve'))
     p7.add_argument("--host", default="127.0.0.1")
     p7.add_argument("--port", type=int, default=bootstrap.effective_port(_CFG))
     p7.add_argument("--no-browser", action="store_true")
     p7.set_defaults(func=cmd_serve)
 
-    p8 = sub.add_parser("windows-users", help="探测已挂载 Windows 分区中的 Agent 用户目录")
+    p8 = sub.add_parser("windows-users", help=T('h_windows_users'))
     p8.add_argument("--json", action="store_true")
     p8.set_defaults(func=cmd_windows_users)
-    p9 = sub.add_parser("windows-use", help="保存 Windows 用户目录选择（Linux 只读来源）")
+    p9 = sub.add_parser("windows-use", help=T('h_windows_use'))
     p9.add_argument("path", nargs="?")
     p9.add_argument("--clear", action="store_true")
     p9.set_defaults(func=cmd_windows_use)
-    p10 = sub.add_parser("import-windows", help="Windows 会话迁到 Ubuntu 对应软件，保留原生记录")
+    p10 = sub.add_parser("import-windows", help=T('h_import_windows'))
     p10.add_argument("agent", choices=[key for key in READ_AGENTS if key != 'yuanbao'])
-    p10.add_argument("id", help="Windows 来源列表中的完整会话 ID")
-    p10.add_argument("--cwd", required=True, help="存在的 Ubuntu 项目目录")
-    p10.add_argument("--session-id", help="可选新 ID；默认保留 Windows 原生 ID，已有目标不会覆盖")
+    p10.add_argument("id", help=T('h_iw_id'))
+    p10.add_argument("--cwd", required=True, help=T('h_iw_cwd'))
+    p10.add_argument("--session-id", help=T('h_iw_session_id'))
     p10.add_argument("--dsh-compression", choices=["zstd", "none"], default="zstd")
     p10.add_argument("--json", action="store_true")
     p10.add_argument('--dry-run', action='store_true')
     p10.add_argument('--preview-token')
     p10.set_defaults(func=cmd_import_windows)
-    p11 = sub.add_parser("ubuntu-use", help="保存 Windows 可访问的 Ubuntu 用户目录备份")
+    p11 = sub.add_parser("ubuntu-use", help=T('h_ubuntu_use'))
     p11.add_argument("path", nargs="?")
     p11.add_argument("--clear", action="store_true")
     p11.set_defaults(func=cmd_windows_use)
     native_commands = []
-    for name, help_text in (("export-windows", "Ubuntu 会话写入已挂载的 Windows 对应软件"),
-                            ("import-ubuntu", "Windows 导入 Ubuntu 用户目录备份中的原生会话")):
+    for name, help_text in (("export-windows", T('h_export_windows')),
+                            ("import-ubuntu", T('h_import_ubuntu'))):
         command = sub.add_parser(name, help=help_text)
         command.add_argument("agent", choices=registry.cross_system_keys() if name == "export-windows" else
                              [key for key in READ_AGENTS if key != 'yuanbao'])
         command.add_argument("id")
-        command.add_argument("--cwd", required=True, help="Windows 绝对项目路径，如 D:\\project")
+        command.add_argument("--cwd", required=True, help=T('h_ew_cwd'))
         if name == "export-windows":
-            command.add_argument("--project-path", required=True, help="该项目在 Ubuntu 中的挂载路径")
+            command.add_argument("--project-path", required=True, help=T('h_ew_project'))
         command.add_argument("--session-id")
         command.add_argument("--dsh-compression", choices=["zstd", "none"], default="zstd")
         command.add_argument("--json", action="store_true")
@@ -654,17 +675,17 @@ def build_parser():
         command.add_argument('--preview-token')
         command.set_defaults(func=cmd_import_windows)
         native_commands.append(command)
-    store = sub.add_parser("store-sessions", help="按 Agent 保存原生会话包，复制到另一设备后恢复")
+    store = sub.add_parser("store-sessions", help=T('h_store_sessions'))
     store.add_argument("agent", choices=READ_AGENTS)
     store.add_argument("ids", nargs="*")
-    store.add_argument("--all", action="store_true", help="保存该来源全部可读取会话，每条独立成包")
-    store.add_argument("--storage", help="便携存储目录；默认项目 storage/")
+    store.add_argument("--all", action="store_true", help=T('h_store_all'))
+    store.add_argument("--storage", help=T('h_storage_dir'))
     store.set_defaults(func=cmd_storage)
-    stored = sub.add_parser("stored-sessions", help="列出按 Agent 保存的对话包")
+    stored = sub.add_parser("stored-sessions", help=T('h_stored_sessions'))
     stored.add_argument("--agent", choices=AGENTS)
     stored.add_argument("--storage")
     stored.set_defaults(func=cmd_storage)
-    restore = sub.add_parser("restore-session", help="校验并恢复会话包到当前设备的对应软件")
+    restore = sub.add_parser("restore-session", help=T('h_restore_session'))
     restore.add_argument("package")
     restore.add_argument("--cwd", required=True)
     restore.add_argument("--session-id")
@@ -672,35 +693,35 @@ def build_parser():
     restore.add_argument('--dry-run', action='store_true')
     restore.add_argument('--preview-token')
     restore.set_defaults(func=cmd_storage)
-    skills = sub.add_parser("skills", help="列出 Agent 的 SKILL.md 技能目录（可指定实际路径）")
+    skills = sub.add_parser("skills", help=T('h_skills'))
     skills.add_argument("agent", choices=[key for key in READ_AGENTS if key != 'yuanbao'])
     skills.add_argument("--skills-dir")
     skills.set_defaults(func=cmd_skill_storage)
-    skill_store = sub.add_parser("store-skills", help="保存完整 Skill 目录，按 Agent 分类存储")
+    skill_store = sub.add_parser("store-skills", help=T('h_store_skills'))
     skill_store.add_argument("agent", choices=[key for key in READ_AGENTS if key != 'yuanbao'])
     skill_store.add_argument("paths", nargs="*")
     skill_store.add_argument("--all", action="store_true")
-    skill_store.add_argument("--skills-dir", help="配合 --all 指定实际 Skill 根目录")
+    skill_store.add_argument("--skills-dir", help=T('h_store_skills_dir'))
     skill_store.add_argument("--storage")
     skill_store.set_defaults(func=cmd_skill_storage)
-    stored_skills = sub.add_parser("stored-skills", help="列出已保存的 Skill 包")
+    stored_skills = sub.add_parser("stored-skills", help=T('h_stored_skills'))
     stored_skills.add_argument("--agent", choices=[key for key in AGENTS if key != 'yuanbao'])
     stored_skills.add_argument("--storage")
     stored_skills.set_defaults(func=cmd_skill_storage)
-    skill_restore = sub.add_parser("restore-skill", help="校验并恢复 Skill 包；已有同名目录不覆盖")
+    skill_restore = sub.add_parser("restore-skill", help=T('h_restore_skill'))
     skill_restore.add_argument("package")
-    skill_restore.add_argument("--agent", choices=[key for key in READ_AGENTS if key != 'yuanbao'], help="默认对应软件；可显式改分类")
-    skill_restore.add_argument("--skills-dir", help="目标设备实际的 Skill 根目录")
-    skill_restore.add_argument("--name", help="可选新目录名，保留已有 Skill")
+    skill_restore.add_argument("--agent", choices=[key for key in READ_AGENTS if key != 'yuanbao'], help=T('h_restore_skill_agent'))
+    skill_restore.add_argument("--skills-dir", help=T('h_restore_skill_dir'))
+    skill_restore.add_argument("--name", help=T('h_restore_skill_name'))
     skill_restore.set_defaults(func=cmd_skill_storage)
-    health = sub.add_parser('health', help='临时合成样本自检，不验证真实客户端续聊')
-    health.add_argument('--output', help='导出 health.json 和静态 index.html')
+    health = sub.add_parser('health', help=T('h_health'))
+    health.add_argument('--output', help=T('h_health_output'))
     health.set_defaults(func=cmd_health)
-    device = sub.add_parser('device-config', help='查看设备检查，设置本机 Agent 目录（不影响其他设备）')
+    device = sub.add_parser('device-config', help=T('h_device'))
     device.add_argument('--agent', choices=AGENTS)
-    device.add_argument('--home', help='存在的本机目录；省略或空字符串则恢复自动探测')
+    device.add_argument('--home', help=T('h_device_home'))
     device.set_defaults(func=cmd_device)
-    plugin = sub.add_parser('plugins', help='启用/禁用/自检可信社区读取插件；不会自动发现执行代码')
+    plugin = sub.add_parser('plugins', help=T('h_plugins'))
     plugin.add_argument('action', choices=['list','enable','disable','check'], nargs='?', default='list')
     plugin.add_argument('name', nargs='?')
     plugin.add_argument('path', nargs='?')
@@ -708,13 +729,15 @@ def build_parser():
     # Per-command override can be passed through the Linux launcher. Choices
     # are built before parsing, so recognize Windows source names explicitly.
     for command in (p1, p2, p3, p4, p5, p6, p7, p10, store, skills, skill_store, skill_restore, *native_commands):
-        command.add_argument("--windows-user", help="临时选择 Windows 用户目录，不保存配置")
-        command.add_argument("--ubuntu-user", help="临时选择 Windows 可访问的 Ubuntu 用户目录备份")
+        command.add_argument("--windows-user", help=T('h_windows_user'))
+        command.add_argument("--ubuntu-user", help=T('h_ubuntu_user'))
 
     return p
 
 
 def main(argv=None):
+    global LANG
+    LANG = _resolve_lang(argv)
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
@@ -739,10 +762,10 @@ def main(argv=None):
         result = args.func(args)
         return result if isinstance(result, int) else 0
     except KeyboardInterrupt:
-        print("\n已取消")
+        print(T('cancelled'))
         return 130
     except Exception as e:
-        print(f"错误: {e}", file=sys.stderr)
+        print(T('error', detail=R(error_text(e))), file=sys.stderr)
         if os.environ.get("RELAY_DEBUG"):
             import traceback
             traceback.print_exc()
