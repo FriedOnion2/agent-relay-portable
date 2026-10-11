@@ -52,7 +52,7 @@ async function undoOperation(row){
   try{
     let r=await post({id:row.id});
     if((r.kept||[]).length){
-      const kept=r.kept.map(k=>k.path+'：'+tm(k,'reason'));
+      const kept=r.kept.map(k=>k.path+sep()+tm(k,'reason'));
       const force=await askConfirm(tr('ui.some_files_were_kept'),[{meta:tr('ui.these_files_were_modified_after_the_migration_and_were_not_deleted_forcing_the_u')},{group:'dropped',label:tr('ui.kept_files'),rows:kept}],
         tr('ui.force_delete_these_modified_files')+'\n'+kept.join('\n'),tr('ui.force_undo'));
       if(force) r=await post({id:row.id,force:true});

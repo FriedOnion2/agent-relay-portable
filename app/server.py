@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from relay.messages import text as message_text, annotate, error_text
+from relay.messages import text as message_text, annotate, error_text, normalize_lang
 
 import errno
 import json
@@ -196,7 +196,8 @@ class Handler(BaseHTTPRequestHandler):
                 })
             if path == "/api/preview-md":
                 return self._json({"ok": True, "markdown": registry.export_markdown(
-                    (q.get("agent") or [""])[0], (q.get("id") or [""])[0])})
+                    (q.get("agent") or [""])[0], (q.get("id") or [""])[0],
+                    lang=normalize_lang((q.get("lang") or [""])[0]))})
             return self._error("unknown endpoint", 404)
         except FileNotFoundError as e:
             return self._error(e, 404)
@@ -247,7 +248,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(yuanbao.import_file(body.get('path')))
             if u.path == '/api/extract':
                 from relay.extraction import extract
-                return self._json(self.server.jobs.start('extract', lambda progress,cancel:extract(progress=progress,cancel=cancel)))
+                return self._json(self.server.jobs.start('extract', lambda progress,cancel:extract(progress=progress,cancel=cancel,lang=normalize_lang(body.get('lang')))))
             if u.path == '/api/undo':
                 from relay import oplog
                 if not isinstance(body.get('id'), str) or not body['id']:
@@ -381,6 +382,7 @@ class Handler(BaseHTTPRequestHandler):
                     include_thinking=bool(body.get("include_thinking", True)),
                     include_tools=bool(body.get("include_tools", True)),
                     redact_secrets=bool(body.get("redact_secrets", False)),
+                    lang=normalize_lang(body.get("lang")),
                 )
                 return self._json({"ok": True, "markdown": md})
             if u.path == "/api/scan":

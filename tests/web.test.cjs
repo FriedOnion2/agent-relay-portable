@@ -130,7 +130,7 @@ function setup({automaticPreview=true,confirmed=true,randomUUID}={}){
   vm.runInContext(i18nScript,context);
   context.RelayI18n.configure(catalogs.zh,catalogs.en);
   for(const [name,text] of scriptParts)vm.runInContext(text,context,{filename:name});
-  vm.runInContext('globalThis.app={importYuanbao,workflow,showPage,renderOperationResult,selectPackage,selections,selectAll,storeBatch,state,loadSessions,openSession,doTransfer,doImportWindows,updateActions,bind,buildTarget,buildTabs,loadSources,storeCurrent,refreshStorage,restoreStored,buildSkillAgents,loadSkills,refreshSkillPackages,storeSelectedSkill,restoreSelectedSkill,corpusState,searchCorpus,openCorpusDocument,renderDraftCandidates,exportDraft,updateDraftAction,startCorpusJob,pollCorpusJob,cancelCorpusJob,setLang,tr,ts,applyStatic,renderChips,renderList,renderDetail,doBatch,openHistory,refreshHistory,renderHistory,undoOperation,getLang:()=>lang};',context);
+  vm.runInContext('globalThis.app={importYuanbao,workflow,showPage,renderOperationResult,selectPackage,selections,selectAll,storeBatch,state,loadSessions,openSession,doTransfer,doImportWindows,updateActions,bind,buildTarget,buildTabs,loadSources,storeCurrent,refreshStorage,restoreStored,buildSkillAgents,loadSkills,refreshSkillPackages,storeSelectedSkill,restoreSelectedSkill,corpusState,searchCorpus,openCorpusDocument,renderDraftCandidates,exportDraft,updateDraftAction,startCorpusJob,pollCorpusJob,cancelCorpusJob,setLang,sep,displayTitle,tr,ts,applyStatic,renderChips,renderList,renderDetail,doBatch,openHistory,refreshHistory,renderHistory,undoOperation,getLang:()=>lang};',context);
   const response = (index,body,status=200)=>requests[index].resolve({ok:status<400,status,json:async()=>body});
   return {app:context.app, elements, requests, previews, response, document, el:document.querySelector};
 }
@@ -655,6 +655,25 @@ test('switching language re-renders the session list and the open conversation w
   assert.match(hero, /Turns 1 · Tool calls 0 · Thinking 0/);
   assert.match(hero, /The preview describes the file conversion/);
   assert.equal(t.el('#content').children[1].children[0].children[1].children[0].innerHTML.includes('User'), true);
+});
+
+test('placeholder titles written by the backend follow the UI language', async () => {
+  const t = setup();
+  const loading = t.app.loadSessions();
+  t.response(0, {ok: true, sessions: [
+    {id: 'a', title: '未命名会话', turns: 1, updated: 'now', size_str: '1 KB'},
+    {id: 'b', title: 'DSH 会话', turns: 1, updated: 'now', size_str: '1 KB'},
+    {id: 'c', title: '我自己起的标题', turns: 1, updated: 'now', size_str: '1 KB'}]});
+  await loading;
+  t.app.setLang('en');
+  const html = [0, 1, 2].map(i => t.el('#list').children[i].innerHTML).join('\n');
+  assert.match(html, /Untitled session/);
+  assert.match(html, /DSH session/);
+  assert.match(html, /我自己起的标题/);
+  assert.doesNotMatch(html, /未命名会话|DSH 会话/);
+  assert.equal(t.app.sep(), ': ');
+  t.app.setLang('zh');
+  assert.equal(t.app.sep(), '：');
 });
 
 test('static bindings keep their keys when Chinese copy changes and do not touch user text',()=>{

@@ -170,10 +170,11 @@ def transfer(source: str, sid: str, target: str, cwd: str | None = None,
 
 
 def export_markdown(source: str, sid: str, include_thinking: bool = True,
-                    include_tools: bool = True, max_text: int = 0, redact_secrets: bool = False) -> str:
+                    include_tools: bool = True, max_text: int = 0, redact_secrets: bool = False,
+                    lang: str = 'zh') -> str:
     conv = get(source).read(sid)
     if redact_secrets:
         from . import sensitive
         conv = sensitive.redact_conversation(conv)
     return render_markdown(conv, include_thinking=include_thinking,
-                           include_tools=include_tools, max_text=max_text)
+                           include_tools=include_tools, max_text=max_text, lang=lang)

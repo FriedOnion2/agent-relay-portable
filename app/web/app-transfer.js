@@ -108,7 +108,7 @@ async function doBatch(){
   try{
     const plan=await post(payload);
     const names=rows=>{
-      const shown=rows.slice(0,15).map(item=>item.title||item.id);
+      const shown=rows.slice(0,15).map(item=>displayTitle(item.title)||item.id);
       if(rows.length>15) shown.push(tr('ui.and_n_more',{n:rows.length-15}));
       return shown;
     };
@@ -122,7 +122,7 @@ async function doBatch(){
     const sections=[{meta:tr('ui.target_name',{name:targetName})+'\n'+tr('ui.project_cwd',{cwd:payload.cwd||tr('ui.same_as_the_source')})}];
     sections.push({group:'preserved',label:tr('ui.will_migrate'),rows:names(go)});
     if(skip.length) sections.push({group:'degraded',label:tr('ui.already_migrated_skipped'),rows:names(skip)});
-    if(bad.length) sections.push({group:'dropped',label:tr('ui.cannot_migrate'),rows:bad.slice(0,15).map(item=>(item.title||item.id)+'：'+(tm(item,'error')||''))});
+    if(bad.length) sections.push({group:'dropped',label:tr('ui.cannot_migrate'),rows:bad.slice(0,15).map(item=>(displayTitle(item.title)||item.id)+sep()+(tm(item,'error')||''))});
     sections.push({warn:tr('ui.batch_migration_does_not_preview_fidelity_one_by_one_preview_a_single_session_fi')});
     const plain=tr('ui.migrate_n_sessions_to_name',{n:go.length,name:targetName});
     if(!(await askConfirm(tr('ui.batch_migration_preview'),sections,plain,tr('ui.confirm_batch_migration')))) return;

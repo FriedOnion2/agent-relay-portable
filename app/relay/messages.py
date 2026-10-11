@@ -4,13 +4,25 @@ import json
 from pathlib import Path
 
 
-@lru_cache(maxsize=1)
-def catalog():
+LANGUAGES = ('zh', 'en')
+
+
+@lru_cache(maxsize=None)
+def catalog(lang='zh'):
     root = Path(__file__).resolve().parent.parent / 'web'
     if not (root / 'locales.zh.json').is_file():
         import relay_web
         root = Path(list(relay_web.__path__)[0])
-    return json.loads((root / 'locales.zh.json').read_text(encoding='utf-8'))
+    return json.loads((root / ('locales.%s.json' % lang)).read_text(encoding='utf-8'))
+
+
+def normalize_lang(value):
+    return value if value in LANGUAGES else 'zh'
+
+
+def lang_text(lang, code, **params):
+    """Plain string in the requested language, for documents the server generates (exports, drafts, reports)."""
+    return catalog(normalize_lang(lang))[code].format(**params)
 
 
 class Message(str):

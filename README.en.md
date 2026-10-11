@@ -8,6 +8,8 @@
 
 Browse, export, and migrate AI coding assistant conversations locally, or carry conversation and Skill archives on a portable drive and restore them on another device. AgentRelay provides a **Chinese/English web interface and a command-line interface** for Windows, macOS, and Ubuntu / Linux.
 
+**Interface language:** the web interface is fully available in English and Chinese. It follows the browser language on first load; use the language button at the top right to switch (the choice is remembered), or open `/?lang=en` once. Markdown exports and Skill drafts generated from the page use the language you are viewing. The command line still prints Chinese messages.
+
 **The universal release bundles Python 3.12 and `zstandard`. Extract the complete archive and launch it: no Python or Node.js installation and no dependency downloads on first launch.** One archive contains Windows, macOS, and Linux runtimes for switching devices.
 
 The service listens only on the local machine. It does not upload conversations or call models. Python installation instructions below apply only to running the source code.
@@ -40,7 +42,7 @@ The task home links to migration, moving between devices, full-text search, and 
 
 Choose Tencent Yuanbao on the migration page and enter the absolute path of a compatible local JSON export. Obtain the JSON export first: this integration does not read the desktop client database or cloud account, or restore ZIPs into the Yuanbao client. On another device, restore exports into AgentRelay to browse or migrate them out. See the [Yuanbao guide and format contract](docs/formats/yuanbao.md) (Chinese).
 
-CodeBuddy CLI and IDE appear under one source. DSH and WorkBuddy have separate names, configuration, and directories. Claude Agent SDK shares Claude Code's default storage; logs cannot reliably identify the creator. The SDK entry is labelled “Claude 共享记录” (shared Claude records), and both lists may show the same conversation. CLI history is not automatically relabelled as SDK-specific history.
+CodeBuddy CLI and IDE appear under one source. DSH and WorkBuddy have separate names, configuration, and directories. Claude Agent SDK shares Claude Code's default storage; logs cannot reliably identify the creator. The SDK entry is labelled “Shared Claude records”, and both lists may show the same conversation. CLI history is not automatically relabelled as SDK-specific history.
 
 ## Download and launch
 
@@ -54,7 +56,7 @@ Download **`AgentRelay-<version>-universal.zip`** from [GitHub Releases](https:/
 | Mac | `AgentRelay.app` or `bash 启动_AgentRelay.command` | Apple Silicon: macOS 14+; Intel: macOS 15+ |
 | Linux | `bash 启动_AgentRelay.sh` | Ubuntu 22.04+ / glibc 2.35+ x64 |
 
-Keep the entire extracted folder on your portable drive. Its optional `config.json`, `storage/`, and `index/` directories are shared across devices. Finish background jobs and exit the service before copying; copy drafts exported elsewhere separately. The launcher extracts only the matching runtime into a local cache, avoiding portable-drive executable restrictions and Mac symlink differences. **Keep `runtimes/`; no runtime is downloaded at startup.** Device overrides live in `devices/<device-id>.json`; another device starts with its own defaults. Inaccessible shared paths prompt reselection in **环境与兼容** (Environment and compatibility); save an empty directory to restore automatic detection.
+Keep the entire extracted folder on your portable drive. Its optional `config.json`, `storage/`, and `index/` directories are shared across devices. Finish background jobs and exit the service before copying; copy drafts exported elsewhere separately. The launcher extracts only the matching runtime into a local cache, avoiding portable-drive executable restrictions and Mac symlink differences. **Keep `runtimes/`; no runtime is downloaded at startup.** Device overrides live in `devices/<device-id>.json`; another device starts with its own defaults. Inaccessible shared paths prompt reselection in **Environment**; save an empty directory to restore automatic detection.
 
 The Mac app is not notarized by Apple. If macOS blocks it, run `bash Mac首次运行.command` in the trusted extracted directory, then launch again. Runtime caches are `%LOCALAPPDATA%/AgentRelay/<version>/` on Windows, `~/Library/Caches/AgentRelay/<version>/` on Mac, and `~/.cache/agentrelay/<version>/` on Linux (respecting `XDG_CACHE_HOME`). If extraction is interrupted, remove that version's cache and retry.
 
@@ -64,7 +66,7 @@ Release archives contain only runtime files, launchers, a configuration example,
 
 The default URL is `http://127.0.0.1:8745/`. If occupied, AgentRelay tries the next five ports; use the URL printed by the launcher or opened in the browser. It does not terminate an existing service or another application. Startup fails if all candidate ports are occupied.
 
-To free an old AgentRelay port, open that service's page and click **退出服务** (Exit service) at the top right, then confirm, or press **Ctrl+C** in its terminal. This also stops a background service launched by `.app`. Active requests finish before shutdown, and other pages connected to that service disconnect. Closing the browser alone does not stop the server. Run the launcher again to restart; stop the old service before restarting updated code.
+To free an old AgentRelay port, open that service's page and click **Stop service** at the top right, then confirm, or press **Ctrl+C** in its terminal. This also stops a background service launched by `.app`. Active requests finish before shutdown, and other pages connected to that service disconnect. Closing the browser alone does not stop the server. Run the launcher again to restart; stop the old service before restarting updated code.
 
 ## Run from source (optional)
 
@@ -91,9 +93,9 @@ The source Mac `.app` opens the browser after HTTP becomes ready and respects `o
 
 ## Batch conversation and Skill storage
 
-For conversations, select rows in the current source list or click **全选当前列表** (Select all in current list), then **存储所选对话** (Store selected conversations). **存储此会话** (Store this conversation) remains available in an individual preview. Use **跨设备搬运** (Move between devices) to choose a storage directory, inspect archives, and restore.
+For conversations, select rows in the current source list or click **Select all in list**, then **Store selected conversations**. **Store this session** remains available in an individual preview. Use **Move between devices** to choose a storage directory, inspect archives, and restore.
 
-For Skills, open **Skill 资产** (Skill assets), choose the source agent, and click **查找 Skill** (Find Skills). Enter the actual Skill root if discovery finds nothing. Select directories or the entire current list, then click **存储所选 Skill** (Store selected Skills). You can also enter a directory directly for individual storage.
+For Skills, open **Skill assets**, choose the source agent, and click **Find Skills**. Enter the actual Skill root if discovery finds nothing. Select directories or the entire current list, then click **Store selected Skills**. You can also enter a directory directly for individual storage.
 
 Select all includes only readable items in the current list. Changing the source or conversation search, or rescanning Skills, clears selections. Each item gets its own archive and success/failure result. Successful items are deselected; failed items stay selected for retry. Restore operates on one archive at a time.
 
@@ -103,9 +105,9 @@ storage/
 └── skills/<agent>/<archive-id>.zip
 ```
 
-Copy archives or the entire `storage/` directory to the destination device. In Conversation storage, choose an archive and an existing local project directory to restore into the corresponding assistant. In Skill storage, choose an archive, destination agent, and actual Skill root, then click **恢复 Skill** (Restore Skill).
+Copy archives or the entire `storage/` directory to the destination device. In Conversation storage, choose an archive and an existing local project directory to restore into the corresponding assistant. In Skill storage, choose an archive, destination agent, and actual Skill root, then click **Restore Skill**.
 
-Contents and paths are validated before restoration. Existing conversation IDs and Skill names are not overwritten; choose a new ID or directory name when needed. Skill instructions and scripts are not automatically executed. Archives are unencrypted and are not uploaded to GitHub. Conversation archives restore native records for the corresponding assistant; use **迁移到目标** (Migrate to target) for conversion between assistants. See [portable storage](docs/portable-storage.md) (Chinese).
+Contents and paths are validated before restoration. Existing conversation IDs and Skill names are not overwritten; choose a new ID or directory name when needed. Skill instructions and scripts are not automatically executed. Archives are unencrypted and are not uploaded to GitHub. Conversation archives restore native records for the corresponding assistant; use **Migrate to target** for conversion between assistants. See [portable storage](docs/portable-storage.md) (Chinese).
 
 ```sh
 python app/cli.py store-sessions codex <ID1> <ID2>
@@ -120,7 +122,7 @@ python app/cli.py restore-skill <skill.zip> --skills-dir <destination-skill-root
 
 ## Conversion and Windows / Ubuntu native migration
 
-Select a source conversation and writable target in the web interface, provide a local target project directory when needed, and click **迁移到目标** (Migrate to target). DSH imports write native v0 history without executing historical tool calls. Replace a source working directory from another operating system with a local absolute path.
+Select a source conversation and writable target in the web interface, provide a local target project directory when needed, and click **Migrate to target**. DSH imports write native v0 history without executing historical tool calls. Replace a source working directory from another operating system with a local absolute path.
 
 ```sh
 python app/cli.py list codex
@@ -138,9 +140,9 @@ bash 启动_AgentRelay.sh
 python3 app/cli.py import-windows codex <session-id> --cwd /home/<user>/<project>
 ```
 
-The web interface keeps Ubuntu sources and adds six read-only Windows sources. Select a Windows conversation, enter an existing Ubuntu project directory, and click **迁到 Ubuntu 对应软件** (Move to the corresponding Ubuntu assistant) to preserve native records. Supported sources include WorkBuddy, Claude, SDK, Codex, DSH v4 / v0 seed, and CodeBuddy CLI/IDE; create the local IDE workspace first. Historical Windows paths are not automatically rewritten.
+The web interface keeps Ubuntu sources and adds six read-only Windows sources. Select a Windows conversation, enter an existing Ubuntu project directory, and click **Migrate to the Ubuntu counterpart** to preserve native records. Supported sources include WorkBuddy, Claude, SDK, Codex, DSH v4 / v0 seed, and CodeBuddy CLI/IDE; create the local IDE workspace first. Historical Windows paths are not automatically rewritten.
 
-For Ubuntu → Windows, enter the Windows project path and its mounted path in Ubuntu, then click **迁到 Windows 对应软件** (Move to the corresponding Windows assistant), or run:
+For Ubuntu → Windows, enter the Windows project path and its mounted path in Ubuntu, then click **Migrate to the Windows counterpart**, or run:
 
 ```sh
 python3 app/cli.py export-windows codex <session-id> --cwd 'D:\project' --project-path /mnt/data/project

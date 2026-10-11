@@ -203,6 +203,10 @@ class CorpusTests(unittest.TestCase):
         draft=result['candidates'][0]
         self.assertEqual(draft['evidence_count'],3);self.assertFalse(draft['selected'])
         self.assertNotIn('SECRET_TOKEN',draft['markdown']);self.assertNotIn('/private',draft['markdown'])
+        english=extraction.extract(self.store,lang='en')
+        self.assertIn('Workflow draft awaiting review',english['candidates'][0]['markdown'])
+        self.assertNotRegex(english['candidates'][0]['markdown']+english['score_note']+english['candidates'][0]['description'],r'[\u4e00-\u9fff]')
+        self.assertRegex(result['score_note'],r'[\u4e00-\u9fff]')
         self.assertNotIn('rm dangerous',draft['markdown'])
         self.assertEqual(draft['outcomes']['nonempty'],6)
         self.source.write(workflow(),session_id='four');self.update()

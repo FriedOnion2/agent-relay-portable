@@ -161,7 +161,7 @@ function bind(){
       const r = await api('/api/export-md', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({source:selected.source, id:selected.id,
-          include_thinking:$('#think').checked, include_tools:true})
+          include_thinking:$('#think').checked, include_tools:true, lang})
       });
       download(`${(selected.title||'session').slice(0,40).replace(/[<>:"/\\|?*\x00-\x1f]/g,'_')}.md`, r.markdown);
       toast(tr('ui.markdown_downloaded'));

@@ -93,7 +93,7 @@ async function confirmMigration(payload,mode='convert'){
   const sections=[{meta:where}];
   for(const [key,label] of Object.entries(labels)){
     const rows=(r[key]||[]).map(row=>tr('ui.item_count',{item:tm(row,'item'),count:row.count}));
-    for(const row of rows) lines.push(label+'：'+row);
+    for(const row of rows) lines.push(label+sep()+row);
     if(rows.length) sections.push({group:key,label,rows});
   }
   const warnings=tms(r,'warnings');

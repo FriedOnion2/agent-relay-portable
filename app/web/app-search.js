@@ -36,7 +36,7 @@ async function startCorpusJob(kind){
     corpusState.selected=null;$('#draftEditor').style.display='none';$('#draftCandidates').innerHTML='';
   }
   const payload=kind==='index'?{include_thinking:$('#indexThinking').checked,packages:$('#indexPackages').checked,
-    sources:$('#indexSource').value?[$('#indexSource').value]:null}:{};
+    sources:$('#indexSource').value?[$('#indexSource').value]:null}:{lang};
   try{
     const r=await api('/api/'+kind,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     corpusState.job=r.id;
@@ -92,7 +92,7 @@ async function searchCorpus(offset=0){
     if(!r.results.length)$('#corpusResults').textContent=r.indexed?tr('ui.no_matching_sessions'):tr('ui.no_index_yet');
     for(const row of r.results){
       const box=document.createElement('div');box.className='session';
-      const title=document.createElement('b');title.textContent=row.title||row.sid;box.appendChild(title);
+      const title=document.createElement('b');title.textContent=displayTitle(row.title)||row.sid;box.appendChild(title);
       const meta=document.createElement('p');meta.textContent=`${row.source} · ${row.origin==='package'?tr('ui.stored_package'):tr('ui.local_record')}${row.offline?tr('ui.offline_cache'):''}${row.partial?tr('ui.partial'):''} · ${row.cwd}`;box.appendChild(meta);
       const snippet=document.createElement('p');snippet.textContent=row.snippet;box.appendChild(snippet);
       const button=document.createElement('button');button.className='btn';button.textContent=tr('ui.view_session');button.onclick=()=>openCorpusDocument(row.key);box.appendChild(button);
@@ -106,7 +106,7 @@ async function openCorpusDocument(key){
     const r=await api('/api/document?key='+encodeURIComponent(key)+'&include_thinking='+$('#searchThinking').checked);
     if(request!==corpusState.documentRequest)return;
     const panel=$('#corpusDocument');panel.innerHTML='';
-    const title=document.createElement('h3');title.textContent=r.title||r.sid;panel.appendChild(title);
+    const title=document.createElement('h3');title.textContent=displayTitle(r.title)||r.sid;panel.appendChild(title);
     const pre=document.createElement('pre');pre.style.whiteSpace='pre-wrap';
     pre.textContent=r.conversation.turns.map(t=>t.role+'\n'+t.blocks.map(b=>b.text||(b.name?b.name+'\n':'')+(b.arguments||b.output||'')).join('\n')).join('\n\n');panel.appendChild(pre);
     if(r.can_open){const button=document.createElement('button');button.className='btn';button.textContent=tr('ui.open_the_local_original_session');button.onclick=async()=>{
