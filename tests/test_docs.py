@@ -46,3 +46,14 @@ class DocsLayoutTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class SiteConfigTests(unittest.TestCase):
+    def test_every_page_outside_research_is_in_the_site_nav(self):
+        config = (ROOT / 'mkdocs.yml').read_text(encoding='utf-8')
+        missing = []
+        for section in ('guide', 'reference', 'dev'):
+            for page in sorted((ROOT / 'docs' / section).glob('*.md')):
+                if '%s/%s' % (section, page.name) not in config:
+                    missing.append('%s/%s' % (section, page.name))
+        self.assertEqual(missing, [])

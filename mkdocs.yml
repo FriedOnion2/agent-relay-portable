@@ -1,0 +1,58 @@
+site_name: AgentRelay Portable
+site_description: 在不同 AI 编码助手之间迁移、导出、搜索和存储会话的本地工具
+repo_url: https://github.com/FriedOnion2/agent-relay-portable
+repo_name: FriedOnion2/agent-relay-portable
+edit_uri: edit/main/docs/
+docs_dir: docs
+strict: true
+hooks:
+  - scripts/mkdocs_hooks.py
+
+theme:
+  name: material
+  language: zh
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.highlight
+
+validation:
+  links:
+    not_found: warn
+    anchors: warn
+
+# 调研记录会被构建（保证站内链接可用），但不进导航。
+not_in_nav: |
+  /research/
+
+nav:
+  - 首页: README.md
+  - 使用指南:
+      - 安装与启动: guide/install.md
+      - 网页工作流: guide/web-workflow.md
+      - 存储与迁移: guide/storage-and-migration.md
+      - 便携存储: guide/portable-storage.md
+      - Ubuntu 双系统: guide/ubuntu-dual-boot.md
+      - 搜索与 Skill: guide/search-and-skills.md
+      - 配置: guide/configuration.md
+      - 故障排查: guide/troubleshooting.md
+  - 参考:
+      - 兼容状态: reference/compatibility.md
+      - 已知限制: reference/limitations.md
+      - 来源格式: reference/source-formats.md
+      - 腾讯元宝: reference/yuanbao-compatibility.md
+      - 来源格式明细:
+          - Claude Code: reference/formats/claude.md
+          - Claude SDK: reference/formats/claude_sdk.md
+          - CodeBuddy: reference/formats/codebuddy.md
+          - Codex: reference/formats/codex.md
+          - DSH: reference/formats/dsh.md
+          - WorkBuddy: reference/formats/workbuddy.md
+          - 元宝: reference/formats/yuanbao.md
+  - 开发与维护:
+      - 适配器接口: dev/adapters.md
+      - 编写插件: dev/writing-a-plugin.md
+      - 测试与 CI: dev/testing.md
+      - 界面词条: dev/i18n.md
+      - 维护者手册: dev/maintainers.md
