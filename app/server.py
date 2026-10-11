@@ -242,6 +242,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(self.server.jobs.start('index', lambda progress,cancel:Corpus().update(
                     sources=sources, include_thinking=body.get('include_thinking',False),
                     packages=body.get('packages',True), progress=progress, cancel=cancel)))
+            if u.path == '/api/import-yuanbao':
+                from relay import yuanbao
+                return self._json(yuanbao.import_file(body.get('path')))
             if u.path == '/api/extract':
                 from relay.extraction import extract
                 return self._json(self.server.jobs.start('extract', lambda progress,cancel:extract(progress=progress,cancel=cancel)))

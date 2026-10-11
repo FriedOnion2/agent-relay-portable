@@ -10,7 +10,7 @@
 
 **在本机浏览、导出和迁移 AI 编程助手的对话与 Skill，并可打包到移动盘，在另一台设备恢复。**
 
-支持 **WorkBuddy、DeepSeek Harness（DSH）、CodeBuddy、Claude Code、Claude Agent SDK、OpenAI Codex**，提供中英文网页和命令行，适用于 Windows、macOS、Ubuntu / Linux。
+支持 **WorkBuddy、DeepSeek Harness（DSH）、CodeBuddy、Claude Code、Claude Agent SDK、OpenAI Codex、腾讯元宝 JSON 导出**，提供中英文网页和命令行，适用于 Windows、macOS、Ubuntu / Linux。
 
 ![AgentRelay 任务首页：迁移会话、跨设备搬运、全文搜索与 Skill 资产](docs/images/task-home.jpg)
 
@@ -71,6 +71,9 @@ Ubuntu / macOS 可用 `Ubuntu首次准备.sh` / `Mac首次准备.command` 自动
 | Claude Code | `~/.claude/projects` | ✅ | ✅ | 导出已验证 |
 | Claude Agent SDK | `~/.claude/projects`（与 Claude Code 共享） | ✅ | — | 与 Claude Code 共享存储 |
 | OpenAI Codex | `~/.codex/sessions` | ✅ | ✅ | 真实客户端已验证 |
+| 腾讯元宝 JSON 导出 | 便携目录 `imports/yuanbao` | ✅ | 仅导出文件存包恢复 | 合成 JSON 回归，未验证原生客户端 |
+
+元宝入口位于「迁移会话 → 腾讯元宝」：填入兼容 JSON 文件的本机绝对路径后导入。需要先取得 JSON 导出；本次不读取元宝电脑版数据库或云端账户，也不把 ZIP 写回元宝客户端。换设备后可恢复到 AgentRelay 再查看或迁出，见[元宝使用与格式说明](docs/formats/yuanbao.md)。
 
 “实机验证”指用真实客户端打开、续聊过迁移或恢复后的会话；其余只验证了文件层读写。厂商格式可能变化，详见 [兼容状态](docs/compatibility.md) 与 [当前限制](docs/limitations.md)。
 

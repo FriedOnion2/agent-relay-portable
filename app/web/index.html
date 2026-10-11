@@ -203,7 +203,7 @@
 <section id="homePanel" class="task-panel home-panel">
   <div class="task-cards">
     <button class="task-card" id="homeMigrate"><span class="card-icon">↔</span><strong><span data-i18n="ui.migrate_sessions">迁移会话</span></strong><span><span data-i18n="ui.switch_agents_or_continue_across_mounted_dual_boot_systems">换一个 Agent，或在已挂载的双系统之间接力。</span></span><span class="card-action"><span data-i18n="ui.choose_source_and_target">选择来源与目标 →</span></span></button>
-    <button class="task-card" id="homeMove"><span class="card-icon">↗</span><strong><span data-i18n="ui.move_to_another_device">搬到另一台设备</span></strong><span><span data-i18n="ui.save_a_native_zip_package_map_the_project_on_your_new_device_and_restore">保存原生 ZIP 包，在新设备映射项目目录并恢复。</span></span><span class="card-action"><span data-i18n="ui.save_or_restore">保存或恢复 →</span></span></button>
+    <button class="task-card" id="homeMove"><span class="card-icon">↗</span><strong><span data-i18n="ui.move_to_another_device">搬到另一台设备</span></strong><span><span data-i18n="ui.save_a_native_zip_package_map_the_project_on_your_new_device_and_restore">保存会话 ZIP 包，在新设备映射项目目录并恢复。</span></span><span class="card-action"><span data-i18n="ui.save_or_restore">保存或恢复 →</span></span></button>
     <button class="task-card" id="homeSearch"><span class="card-icon">⌕</span><strong><span data-i18n="ui.find_past_experience">找回历史经验</span></strong><span><span data-i18n="ui.search_past_sessions_inspect_evidence_and_distill_skills_for_review">全文查找历史会话，核对证据，提炼待审核 Skill。</span></span><span class="card-action"><span data-i18n="ui.search_and_distill">搜索与提炼 →</span></span></button>
     <button class="task-card" id="homeSkills"><span class="card-icon">◇</span><strong><span data-i18n="ui.take_your_skills_with_you">携带 Skill</span></strong><span><span data-i18n="ui.package_skill_md_scripts_and_assets_to_restore_on_another_device">打包 SKILL.md、脚本和资源，在另一台设备恢复。</span></span><span class="card-action"><span data-i18n="ui.manage_skill_assets">管理 Skill 资产 →</span></span></button>
   </div>
@@ -217,6 +217,11 @@
   <aside>
     <div class="tabs" id="tabs"></div>
     <div id="sourceNote" class="meta" style="padding:8px 12px;display:none"></div>
+    <div id="yuanbaoImport" class="side-tools" style="display:none">
+      <label class="field"><span data-i18n="ui.yuanbao_export_path">元宝 JSON 导出文件的本机绝对路径</span><input class="input" id="yuanbaoPath" aria-label="元宝 JSON 导出文件的本机绝对路径" data-i18n-aria-label="ui.yuanbao_export_path" autocomplete="off"></label>
+      <button class="btn" id="importYuanbao"><span data-i18n="ui.yuanbao_import">导入元宝 JSON</span></button>
+      <p id="yuanbaoImportResult" class="meta" aria-live="polite"></p>
+    </div>
     <div class="side-tools">
       <input class="input" id="q" placeholder="搜索标题 / 目录 / id…" autocomplete="off" data-i18n-placeholder="ui.search_title_directory_id">
       <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
@@ -263,7 +268,7 @@
 <div class="toast" id="toast"></div>
 <section id="storagePanel" class="task-panel" style="display:none" aria-label="跨设备对话存储" data-i18n-aria-label="ui.cross_device_conversation_storage">
   <div class="bar"><b><span data-i18n="ui.cross_device_conversation_storage">跨设备对话存储</span></b><button class="btn" id="closeStorage"><span data-i18n="ui.close">关闭</span></button></div>
-  <div class="transfer-steps"><div><b><span data-i18n="ui.save_on_the_original_device">在原设备保存</span></b><p><span data-i18n="ui.choose_sessions_save_zip_packages_and_copy_them_or_the_storage_folder_to_the_new">选择会话并保存 ZIP，复制包或 storage 文件夹到新设备。</span></p><button class="btn primary" id="chooseToStore"><span data-i18n="ui.choose_sessions_to_take">选择要携带的会话</span></button></div><div><b><span data-i18n="ui.restore_on_the_new_device">在新设备恢复</span></b><p><span data-i18n="ui.select_a_package_below_enter_the_local_project_directory_and_preview_before_rest">选择下面的包，填写本机项目目录，预览后恢复到对应软件。</span></p></div></div>
+  <div class="transfer-steps"><div><b><span data-i18n="ui.save_on_the_original_device">在原设备保存</span></b><p><span data-i18n="ui.choose_sessions_save_zip_packages_and_copy_them_or_the_storage_folder_to_the_new">选择会话并保存 ZIP，复制包或 storage 文件夹到新设备。</span></p><button class="btn primary" id="chooseToStore"><span data-i18n="ui.choose_sessions_to_take">选择要携带的会话</span></button></div><div><b><span data-i18n="ui.restore_on_the_new_device">在新设备恢复</span></b><p><span data-i18n="ui.select_a_package_below_enter_the_local_project_directory_and_preview_before_rest">选择下面的包，填写本机项目目录，预览后恢复。元宝包恢复到 AgentRelay 导出目录。</span></p></div></div>
   <p class="muted"><span data-i18n="ui.packages_and_the_index_are_unencrypted_use_storage_you_trust_this_page_does_not_">包和索引未加密。请使用你信任的存储介质；本页面不会上传会话。</span></p>
   <div class="bar">
     <input class="input" id="storageRoot" placeholder="存储目录（留空使用项目 storage/）" style="width:380px" data-i18n-placeholder="ui.storage_directory_blank_uses_the_project_s_storage">
@@ -279,7 +284,7 @@
       <label class="field"><span data-i18n="ui.session_id_strategy">会话 ID 策略</span><select class="sel" id="restoreConflict"><option value="keep" data-i18n="ui.keep_the_original_id_stop_on_conflict">保留原 ID，有冲突时停止</option><option value="new" data-i18n="ui.create_an_independent_copy_with_a_new_id">创建独立副本，生成新 ID</option></select></label>
       <details class="advanced"><summary><span data-i18n="ui.specify_an_id_manually">手动指定 ID</span></summary><input class="input" id="restoreId" placeholder="新 UUID（可选，避免同 ID 冲突）" data-i18n-placeholder="ui.new_uuid_optional_avoids_an_id_clash"><button class="btn" id="restoreNewId"><span data-i18n="ui.generate_id">生成新 ID</span></button></details>
       <p id="restoreError" class="inline-error" role="alert"></p>
-      <button class="btn primary" id="restorePackage"><span data-i18n="ui.restore_to_the_matching_app">恢复到对应软件</span></button><p class="muted"><span data-i18n="ui.step_3_review_fidelity_confirm_writing_check_resume_in_the_target_app">3 检查保真度预览 → 确认写入 → 在目标软件核对续聊</span></p>
+      <button class="btn primary" id="restorePackage"><span data-i18n="ui.restore_to_the_matching_app">预览并恢复会话</span></button><p class="muted"><span data-i18n="ui.step_3_review_fidelity_confirm_writing_check_resume_in_the_target_app">3 检查保真度预览 → 确认写入 → 核对恢复结果与来源限制</span></p>
     </div>
   </div>
   <div id="storageResult" class="meta" style="white-space:pre-wrap;padding:12px"></div>
@@ -381,9 +386,9 @@
 <section id="operationResult" class="operation-result" style="display:none" aria-label="本次操作结果" aria-live="polite" data-i18n-aria-label="ui.operation_result"></section>
 <script src="/static/i18n.js"></script>
 <script>
-const AGENTS = {workbuddy:'WorkBuddy', dsh:'DeepSeek Harness', codebuddy:'CodeBuddy', claude:'Claude Code', claude_sdk:'Claude Agent SDK', codex:'OpenAI Codex'};
+const AGENTS = {workbuddy:'WorkBuddy', dsh:'DeepSeek Harness', codebuddy:'CodeBuddy', claude:'Claude Code', claude_sdk:'Claude Agent SDK', codex:'OpenAI Codex', yuanbao:'Tencent Yuanbao'};
 const state = {source:'workbuddy', target:'claude', sources:[], sessions:[], current:null, turnLimit:40,
-  listRequest:0, sessionRequest:0, transferring:false, detail:null};
+  listRequest:0, sessionRequest:0, transferring:false, detail:null, yuanbaoResult:null};
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -423,7 +428,7 @@ function applyLang(){
   renderList();
   renderDetail();
   updateActions();
-  renderHome();renderWorkflow();renderOperationResult();
+  renderHome();renderWorkflow();renderOperationResult();renderYuanbaoResult();renderSelectedPackage();
   if(corpusState.indexStatus)renderIndexSummary(corpusState.indexStatus);
   if(corpusState.resultCount!=null)renderSearchSummary(corpusState.resultCount);
 }
@@ -431,7 +436,10 @@ function applyLang(){
 async function api(url, options){
   const response = await fetch(url, options);
   const result = await response.json();
-  if(!response.ok || !result.ok) throw new Error(tm(result,'error') || tr('ui.request_failed_status',{status:response.status}));
+  if(!response.ok || !result.ok){
+    const error=new Error(tm(result,'error') || tr('ui.request_failed_status',{status:response.status}));
+    error.error_message=result.error_message;throw error;
+  }
   return result;
 }
 
@@ -520,6 +528,7 @@ function nativeMode(source=state.source){
 function updateActions(){
   updateSelections();
   $('#btnExit').disabled = state.transferring;
+  $('#importYuanbao').disabled = state.transferring;
   $('#btnGo').disabled = !state.current || state.current.truncated || !state.target || state.transferring;
   const mode = nativeMode();
   const native = !!mode;
@@ -600,6 +609,7 @@ function buildTabs(){
   const fullNote = [note, location ? tr('ui.read_from') + location : '', tm(sourceInfo,'error')].filter(Boolean).join('\n');
   $('#sourceNote').textContent = fullNote;
   $('#sourceNote').style.display = fullNote ? '' : 'none';
+  $('#yuanbaoImport').style.display = state.source === 'yuanbao' ? '' : 'none';
   const labels = {...AGENTS};
   state.sources.forEach(s=>{ labels[s.name] = tm(s,'label') || s.name; });
   Object.keys(labels).forEach(k=>{
@@ -667,6 +677,7 @@ function bind(){
   };
   $('#closeEnvironment').onclick=()=>{showPage('sessions');};
   $('#saveDeviceHome').onclick=saveDeviceHome;
+  $('#importYuanbao').onclick=importYuanbao;
   $('#runHealth').onclick=runHealth;
   $('#selectAllSessions').onchange=e=>selectAll('sessions',e.target.checked);
   $('#selectAllSkills').onchange=e=>selectAll('skills',e.target.checked);
@@ -963,6 +974,24 @@ async function saveDeviceHome(){
   }catch(e){toast(tr('ui.save_failed_error',{error:e.message}),true);}
   finally{state.transferring=false;$('#saveDeviceHome').disabled=false;updateActions();}
 }
+function renderYuanbaoResult(){
+  $('#yuanbaoImportResult').textContent=state.yuanbaoResult?ts(state.yuanbaoResult):'';
+}
+async function importYuanbao(){
+  if(state.transferring) return;
+  const path=$('#yuanbaoPath').value.trim();
+  if(!path) return toast(tr('err.yuanbao_input_path'),true);
+  state.transferring=true;updateActions();state.yuanbaoResult=null;renderYuanbaoResult();
+  try{
+    const r=await api('/api/import-yuanbao',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path})});
+    state.yuanbaoResult={code:'ui.yuanbao_imported',params:{count:r.imported,skipped:r.skipped}};renderYuanbaoResult();
+    state.source='yuanbao';$('#q').value='';
+    await loadSources();buildTabs();await loadSessions();
+  }catch(e){
+    state.yuanbaoResult={code:'ui.yuanbao_import_failed',params:{error:e.error_message||e.message}};
+    renderYuanbaoResult();toast(ts(state.yuanbaoResult),true);
+  }finally{state.transferring=false;updateActions();}
+}
 async function runHealth(){
   const button=$('#runHealth');if(button.disabled) return;button.disabled=true;
   $('#healthResult').textContent=tr('ui.verifying_temporary_samples');
@@ -1031,14 +1060,14 @@ function buildSkillAgents(){
   source.innerHTML=''; target.innerHTML='';
   const labels={...AGENTS};
   state.sources.filter(s=>/^(windows_|ubuntu_)/.test(s.name)).forEach(s=>{labels[s.name]=tm(s,'label')||s.name;});
-  for(const [key,label] of Object.entries(labels)){
+  for(const [key,label] of Object.entries(labels).filter(([key])=>key.replace(/^(windows_|ubuntu_)/,'')!=='yuanbao')){
     const option=document.createElement('option');option.value=key;option.textContent=label;source.appendChild(option);
   }
-  for(const [key,label] of Object.entries(AGENTS)){
+  for(const [key,label] of Object.entries(AGENTS).filter(([key])=>key!=='yuanbao')){
     const option=document.createElement('option');option.value=key;option.textContent=label;target.appendChild(option);
   }
-  source.value=state.source in labels ? state.source : 'codex';
-  target.value=state.source.replace(/^(windows_|ubuntu_)/,'');
+  source.value=state.source in labels && state.source!=='yuanbao' ? state.source : 'codex';
+  target.value=state.source==='yuanbao' ? 'codex' : state.source.replace(/^(windows_|ubuntu_)/,'');
 }
 
 let skillRequest=0;
@@ -1573,9 +1602,15 @@ function generateId(selector){
   $(selector).value=id;return id;
 }
 function selectPackage(row){
+  workflow.selectedPackage=row;
   $('#packagePath').value=row.path;
-  $('#selectedPackage').textContent=tr('ui.selected_agent_title_original_project_cwd',{agent:AGENTS[row.agent]||row.agent,title:row.session?.title||row.session?.id||tr('ui.session'),cwd:row.session?.cwd||tr('ui.unknown')});
+  renderSelectedPackage();
   $('#restoreError').textContent='';$('#restoreCwd').focus?.();
+}
+function renderSelectedPackage(){
+  const row=workflow.selectedPackage;if(!row)return;
+  $('#selectedPackage').textContent=tr('ui.selected_agent_title_original_project_cwd',{agent:AGENTS[row.agent]||row.agent,title:row.session?.title||row.session?.id||tr('ui.session'),cwd:row.session?.cwd||tr('ui.unknown')});
+  if(row.agent==='yuanbao')$('#selectedPackage').textContent+='\n'+tr('ui.yuanbao_package_selected');
 }
 function bindWorkflow(){
   $('#btnHome').onclick=()=>showPage('home');

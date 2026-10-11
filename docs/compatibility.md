@@ -36,8 +36,9 @@ python app/cli.py health --output health-output
 | Claude Code | writer 生成的 JSONL | 分支、工具块、原生迁移与路径映射 |
 | Claude Agent SDK | Claude writer 生成的共享 JSONL | 官方 reader 主链语义、creator unknown、wire 记录拒绝 |
 | Codex | writer 生成的 JSONL | 标题索引、原生迁移、存包与冲突 |
+| 腾讯元宝 JSON 导出 | 第三方批量结构的合成 JSON；证据为 `synthetic-export-read` | 导入去重、思考分离、多记录选择、迁出、导出 ZIP 搬迁与冲突；原生文件回读 `unsupported` |
 
-样本通过代表此次样本读取及原生文件回读成功。客户端版本无确切依据显示未知；最新版兼容性 `unknown`、实际续聊 `not-tested`，不会因回归通过变为正常。社区来源显示未测试。测试失败或缺依赖会使内置健康度失败，详情仍可在网页查看。
+样本通过代表此次样本读取成功；仅报告支持原生文件回读的来源验证该能力。客户端版本无确切依据显示未知；最新版兼容性 `unknown`、实际续聊 `not-tested`，不会因回归通过变为正常。社区来源显示未测试。测试失败或缺依赖会使内置健康度失败，详情仍可在网页查看。
 
 ## 迁移预览
 

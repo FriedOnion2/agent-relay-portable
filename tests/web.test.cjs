@@ -126,7 +126,7 @@ function setup({automaticPreview=true,confirmed=true,randomUUID}={}){
   });
   vm.runInContext(i18nScript,context);
   context.RelayI18n.configure(catalogs.zh,catalogs.en);
-  vm.runInContext(script + '\n globalThis.app={workflow,showPage,renderOperationResult,selectPackage,selections,selectAll,storeBatch,state,loadSessions,openSession,doTransfer,doImportWindows,updateActions,bind,buildTarget,buildTabs,loadSources,storeCurrent,refreshStorage,restoreStored,buildSkillAgents,loadSkills,refreshSkillPackages,storeSelectedSkill,restoreSelectedSkill,corpusState,searchCorpus,openCorpusDocument,renderDraftCandidates,exportDraft,updateDraftAction,startCorpusJob,pollCorpusJob,cancelCorpusJob,setLang,tr,ts,applyStatic,renderChips,renderList,renderDetail,doBatch,openHistory,refreshHistory,renderHistory,undoOperation,getLang:()=>lang};',context);
+  vm.runInContext(script + '\n globalThis.app={importYuanbao,workflow,showPage,renderOperationResult,selectPackage,selections,selectAll,storeBatch,state,loadSessions,openSession,doTransfer,doImportWindows,updateActions,bind,buildTarget,buildTabs,loadSources,storeCurrent,refreshStorage,restoreStored,buildSkillAgents,loadSkills,refreshSkillPackages,storeSelectedSkill,restoreSelectedSkill,corpusState,searchCorpus,openCorpusDocument,renderDraftCandidates,exportDraft,updateDraftAction,startCorpusJob,pollCorpusJob,cancelCorpusJob,setLang,tr,ts,applyStatic,renderChips,renderList,renderDetail,doBatch,openHistory,refreshHistory,renderHistory,undoOperation,getLang:()=>lang};',context);
   const response = (index,body,status=200)=>requests[index].resolve({ok:status<400,status,json:async()=>body});
   return {app:context.app, elements, requests, previews, response, document, el:document.querySelector};
 }
@@ -232,11 +232,11 @@ test('export failure is shown to the user and does not reject the event handler'
   assert.match(t.el('#toast').children[0].textContent,/offline/);
 });
 
-test('six source tabs and only supported writable targets are offered',()=>{
+test('seven source tabs and only supported writable targets are offered',()=>{
   const t=setup();
   t.app.buildTabs();
   assert.deepEqual(t.el('#tabs').children.map(x=>x.textContent),
-    ['WorkBuddy','DeepSeek Harness','CodeBuddy','Claude Code','Claude Agent SDK','OpenAI Codex']);
+    ['WorkBuddy','DeepSeek Harness','CodeBuddy','Claude Code','Claude Agent SDK','OpenAI Codex','Tencent Yuanbao']);
   t.app.state.source='dsh';
   t.app.buildTarget();
   assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','claude','codex']);
@@ -269,7 +269,7 @@ test('Windows sources appear separately with paths and never become writable tar
   t.app.state.source='windows_codex';
   t.app.buildTabs();
   t.app.buildTarget();
-  assert.equal(t.el('#tabs').children.length,7);
+  assert.equal(t.el('#tabs').children.length,8);
   assert.equal(t.el('#tabs').children.at(-1).textContent,'Windows · OpenAI Codex');
   assert.match(t.el('#sourceNote').textContent,/\/media\/Win/);
   assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','dsh','claude','codex']);
@@ -847,4 +847,53 @@ test('export-to-package handoff uses the successfully exported directory without
   assert.equal(t.requests.length,2);assert.match(t.requests[1].url,/^\/api\/stored-skills/);
   assert.equal(t.requests.some(r=>r.url==='/api/store-skill'),false);
   t.response(1,{ok:true,packages:[],root:'/storage'});await flush();
+});
+
+test('Yuanbao offers export import and migration out without native or Skill targets',()=>{
+  const t=setup();t.app.state.source='yuanbao';t.app.buildTabs();t.app.buildTarget();t.app.buildSkillAgents();
+  assert.equal(t.el('#yuanbaoImport').style.display,'');
+  assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','dsh','claude','codex']);
+  assert.equal(t.el('#skillAgent').children.some(x=>x.value==='yuanbao'),false);
+  assert.equal(t.el('#skillTargetAgent').children.some(x=>x.value==='yuanbao'),false);
+  assert.equal(t.el('#skillAgent').value,'codex');
+  t.app.state.source='codex';t.app.buildTabs();
+  assert.equal(t.el('#yuanbaoImport').style.display,'none');
+  t.app.selectPackage({agent:'yuanbao',path:'/export.zip',session:{id:'one'}});
+  assert.match(t.el('#selectedPackage').textContent,/不会写回元宝客户端/);
+  t.app.setLang('en');
+  assert.match(t.el('#selectedPackage').textContent,/does not write to the Yuanbao client/);
+});
+
+test('Yuanbao import captures the local path, prevents repeat writes and refreshes the source',async()=>{
+  const t=setup();t.app.bind();t.app.state.source='yuanbao';t.el('#yuanbaoPath').value='/local/export.json';
+  const pending=t.app.importYuanbao();t.el('#yuanbaoPath').value='/changed.json';await t.app.importYuanbao();
+  assert.equal(t.requests.length,1);assert.equal(t.el('#importYuanbao').disabled,true);
+  assert.equal(t.requests[0].url,'/api/import-yuanbao');
+  assert.equal(JSON.parse(t.requests[0].options.body).path,'/local/export.json');
+  t.response(0,{ok:true,imported:2,skipped:1});await new Promise(resolve=>setImmediate(resolve));
+  t.response(1,{ok:true,sources:[{name:'yuanbao',available:true,can_write:false,session_count:2}]});
+  await new Promise(resolve=>setImmediate(resolve));
+  t.response(2,{ok:true,sessions:[]});await pending;
+  assert.equal(t.app.state.source,'yuanbao');
+  assert.equal(t.el('#importYuanbao').disabled,false);
+  assert.match(t.el('#yuanbaoImportResult').textContent,/已导入 2.*跳过 1/);
+  t.app.setLang('en');
+  assert.equal(t.el('#yuanbaoImportResult').textContent,'Imported 2 conversations; skipped 1 identical exports.');
+});
+
+test('Yuanbao import failure shows the backend reason and never enables native restore',async()=>{
+  const t=setup();t.app.state.source='yuanbao';t.el('#yuanbaoPath').value='/bad.json';
+  const pending=t.app.importYuanbao();t.response(0,{ok:false,error:'invalid export'},400);await pending;
+  assert.match(t.el('#yuanbaoImportResult').textContent,/invalid export/);
+  assert.equal(t.el('#importYuanbao').disabled,false);
+  assert.equal(t.el('#btnImport').style.display,'none');
+  assert.equal(t.app.state.transferring,false);
+});
+
+test('Yuanbao structured import errors translate when the UI language changes',async()=>{
+  const t=setup();t.el('#yuanbaoPath').value='/bad.json';
+  const pending=t.app.importYuanbao();
+  t.response(0,{ok:false,error:'原始错误',error_message:{code:'err.yuanbao_input_path'}},400);await pending;
+  t.app.setLang('en');
+  assert.equal(t.el('#yuanbaoImportResult').textContent,'Yuanbao import failed: Enter the absolute path to a local JSON export file.');
 });

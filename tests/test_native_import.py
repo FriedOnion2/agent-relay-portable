@@ -55,7 +55,7 @@ class NativeImportTests(unittest.TestCase):
     def test_all_six_same_agent_imports_preserve_content_and_windows_files(self):
         self.make_ide_workspace()
         before = self.snapshot(self.profile)
-        for key in cli.AGENTS:
+        for key in registry.cross_system_keys():
             source = "windows_" + key
             for row in registry.list_sessions(source):
                 with self.subTest(agent=key, session=row["id"]):

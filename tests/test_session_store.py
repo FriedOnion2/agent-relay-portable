@@ -26,7 +26,7 @@ class SessionStoreTests(unittest.TestCase):
         self.make_ide_workspace()
         before = self.snapshot(self.profile)
         storage = self.root / "portable storage"
-        for agent in cli.AGENTS:
+        for agent in registry.cross_system_keys():
             for row in registry.list_sessions("windows_" + agent):
                 with self.subTest(agent=agent, id=row["id"]):
                     conv = registry.get("windows_" + agent).read(row["id"])

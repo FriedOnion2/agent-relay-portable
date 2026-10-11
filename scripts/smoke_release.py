@@ -21,7 +21,7 @@ def smoke(binary):
     binary = Path(binary).resolve()
     with tempfile.TemporaryDirectory(prefix='AgentRelay release 中文 ') as folder:
         root = Path(folder)
-        homes = {name: str(root / name) for name in ('workbuddy', 'dsh', 'codebuddy', 'claude', 'claude_sdk', 'codex')}
+        homes = {name: str(root / name) for name in ('workbuddy', 'dsh', 'codebuddy', 'claude', 'claude_sdk', 'codex', 'yuanbao')}
         for home in homes.values():
             Path(home).mkdir()
         (root / 'config.json').write_text(json.dumps({'agent_homes': homes, 'open_browser': False}), encoding='utf-8')
@@ -51,7 +51,7 @@ def smoke(binary):
         assert environment['runtime']['bundled'] and environment['runtime']['zstandard']
         assert environment['runtime']['fts5'] and environment['runtime']['sqlite']
         health = json.loads(run('health', '--output', str(root / 'health-output')))
-        assert health['ok'] and len(health['adapters']) == 6
+        assert health['ok'] and {row['agent'] for row in health['adapters']} == {'workbuddy', 'dsh', 'codebuddy', 'claude', 'claude_sdk', 'codex', 'yuanbao'}
         assert all(row['native_resume'] == 'not-tested' for row in health['adapters'])
         arguments = ('transfer', 'workbuddy', 'fixture', '--to', 'dsh', '--cwd', str(root), '--json')
         plan = json.loads(run(*arguments, '--dry-run'))
@@ -94,6 +94,20 @@ def smoke(binary):
         (skill / 'SKILL.md').write_text('---\nname: fixture-skill\ndescription: portable fixture\n---\nFixture', encoding='utf-8')
         (skill / 'resources/data.bin').write_bytes(bytes(range(256)))
         run('store-skills', 'workbuddy', str(skill))
+        # Yuanbao exports are carried separately from client-native history.
+        yuanbao_json = root / '元宝导出.json'
+        yuanbao_json.write_text(json.dumps({'exportTime': '2026-10-12 09:30:00', 'conversations': [
+            {'id': 'yuanbao-fixture', 'title': '元宝便携测试', 'messages': [
+                {'role': 'user', 'content': '元宝 portable question'},
+                {'role': 'assistant', 'content': '元宝 portable answer', 'thinking': 'yuanbao reasoning'}]},
+            {'id': 'yuanbao-other', 'title': 'unselected private title', 'messages': [
+                {'role': 'user', 'content': 'unselected private body'}]}]}, ensure_ascii=False), encoding='utf-8')
+        assert json.loads(run('import-yuanbao', str(yuanbao_json)))['imported'] == 2
+        assert json.loads(run('import-yuanbao', str(yuanbao_json)))['skipped'] == 2
+        yuanbao_rows = json.loads(run('list', 'yuanbao', '--json'))
+        yuanbao_sid = next(row['id'] for row in yuanbao_rows if row['native_id'] == 'yuanbao-fixture')
+        assert 'yuanbao reasoning' in run('export', 'yuanbao', yuanbao_sid)
+        run('store-sessions', 'yuanbao', yuanbao_sid)
         other = root / '设备 B new root'; other.mkdir()
         other_homes = {name:str(other / name) for name in homes}
         for home in other_homes.values(): Path(home).mkdir()
@@ -112,6 +126,17 @@ def smoke(binary):
         run(*restore_args, '--preview-token', plan['token'], device_root=other)
         assert 'portable fixture' in run('export', 'workbuddy', 'fixture', device_root=other)
         assert run(*restore_args, device_root=other, failure=True)
+        yuanbao_package = next((other / 'storage/conversations/yuanbao').glob('*.zip'))
+        yuanbao_args = ('restore-session', str(yuanbao_package), '--cwd', str(other))
+        yuanbao_plan = json.loads(run(*yuanbao_args, '--dry-run', device_root=other))
+        assert yuanbao_plan['mode'] == 'yuanbao-export-json'
+        restored = json.loads(run(*yuanbao_args, '--preview-token', yuanbao_plan['token'], device_root=other))
+        markdown = run('export', 'yuanbao', restored['to']['id'], device_root=other)
+        assert '元宝 portable answer' in markdown and 'yuanbao reasoning' in markdown
+        assert 'unselected private' not in markdown
+        run(*yuanbao_args, device_root=other, failure=True)
+        copied = json.loads(run(*yuanbao_args, '--session-id', 'yuanbao-copy', device_root=other))
+        assert copied['to']['native_id'] == 'yuanbao-copy'
         skill_package = next((other / 'storage/skills/workbuddy').glob('*.zip'))
         target_skills = other / 'skills'
         skill_args = ('restore-skill', str(skill_package), '--skills-dir', str(target_skills))

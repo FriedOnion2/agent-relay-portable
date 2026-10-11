@@ -182,6 +182,7 @@ DEFAULT_CONFIG = {
         "dsh": "",
         "workbuddy": "",
         "codebuddy": "",
+        "yuanbao": "",
     },
     "port": 8745,
     "open_browser": True,
