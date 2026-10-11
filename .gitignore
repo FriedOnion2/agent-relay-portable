@@ -33,3 +33,6 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 *.egg-info/
+
+# MkDocs build output
+site/

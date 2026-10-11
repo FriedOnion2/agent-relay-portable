@@ -1,6 +1,6 @@
 # 存储、迁移与预览
 
-对话 / Skill 批量存储，跨软件与 Windows ↔ Ubuntu 迁移。回到 [README](../README.md)。
+对话 / Skill 批量存储，跨软件与 Windows ↔ Ubuntu 迁移。回到 [README](../../README.md)。
 
 ## 对话与 Skill 的批量存储
 
@@ -80,7 +80,7 @@ python3 app/cli.py export-windows codex <Ubuntu会话ID> --cwd 'D:\project' --pr
 Windows 中也可用 `python app/cli.py ubuntu-use "D:\UbuntuBackup\alice"` 选择可访问的 Ubuntu
 用户目录备份，再用 `import-ubuntu codex <会话ID> --cwd "D:\project"` 导入。Windows 不会直接读取 ext4。
 双向搬迁保留源文件、拒绝覆盖同 ID，不自动合并两边继续后的历史；新 ID 可保留另一份。
-GitHub 同类项目与源码差异见 [原生会话迁移调研](session-migration-alternatives.md)。
+GitHub 同类项目与源码差异见 [原生会话迁移调研](../research/session-migration-alternatives.md)。
 
 ## 迁移后核对：会话对比
 

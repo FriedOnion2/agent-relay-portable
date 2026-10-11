@@ -1,0 +1,23 @@
+name: docs
+
+on:
+  push:
+    branches: [main]
+    paths: ['docs/**', 'mkdocs.yml', 'scripts/mkdocs_hooks.py', '.github/workflows/docs.yml']
+  pull_request:
+    paths: ['docs/**', 'mkdocs.yml', 'scripts/mkdocs_hooks.py', '.github/workflows/docs.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: pip install -r docs/requirements.txt
+      - name: Build (strict, warnings are errors)
+        run: mkdocs build --strict

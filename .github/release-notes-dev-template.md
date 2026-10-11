@@ -19,7 +19,7 @@ sha256sum -c SHA256SUMS.txt                                   # 校验值
 gh attestation verify AgentRelay-{tag}-universal.zip --repo {repo}   # 构建来源证明
 ```
 
-目标软件的实际续聊、依赖与设备权限仍需自行核对，详见 [当前限制](https://github.com/{repo}/blob/{ref}/docs/limitations.md)。
+目标软件的实际续聊、依赖与设备权限仍需自行核对，详见 [当前限制](https://github.com/{repo}/blob/{ref}/docs/reference/limitations.md)。
 
 ---
 

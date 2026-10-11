@@ -10,7 +10,7 @@ API v1 复用 `relay.adapters.base.BaseAdapter` 与 `relay.ir.Conversation`。�
 
 ## 使用示例
 
-在便携根目录创建 `example-conversations/`，放入 UTF-8 `.txt` 文件。仓库提供 [示例](../examples/plaintext_adapter.py)，Release 用户需单独下载这个示例文件。
+在便携根目录创建 `example-conversations/`，放入 UTF-8 `.txt` 文件。仓库提供 [示例](../../examples/plaintext_adapter.py)，Release 用户需单独下载这个示例文件。
 
 ```sh
 python app/cli.py plugins enable plaintext examples/plaintext_adapter.py

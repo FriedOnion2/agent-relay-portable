@@ -14,7 +14,7 @@ Browse, export, and migrate AI coding assistant conversations locally, or carry 
 
 The service listens only on the local machine. It does not upload conversations or call models. Python installation instructions below apply only to running the source code.
 
-The task home links to migration, moving between devices, full-text search, and Skill assets. Restore archives with an explicit local project mapping and keep the original ID or create a separate copy; completed migration results remain available when switching pages. Reviewed draft exports can be handed to Skill storage, which requires a separate explicit save. See the [web workflow guide](docs/web-workflow.md) (Chinese).
+The task home links to migration, moving between devices, full-text search, and Skill assets. Restore archives with an explicit local project mapping and keep the original ID or create a separate copy; completed migration results remain available when switching pages. Reviewed draft exports can be handed to Skill storage, which requires a separate explicit save. See the [web workflow guide](docs/guide/web-workflow.md) (Chinese).
 
 ![Task home](docs/images/task-home.jpg)
 
@@ -27,7 +27,7 @@ The task home links to migration, moving between devices, full-text search, and 
 - Transfer native records between the same assistant on Windows and Ubuntu using mounted or backed-up user directories.
 - Retry available ports automatically and stop the server from the web interface after active requests finish.
 - Portable SQLite/FTS5 full-text search: Chinese short terms, mixed-language queries, source/project/date/tool filters and offline cached conversations. Reasoning is excluded by default.
-- Extract editable Skill drafts from at least three independent complete conversations. Review evidence and outcomes before explicitly exporting; no model calls, installation or script execution. See [search and draft guide](docs/search-and-skills.md) (Chinese).
+- Extract editable Skill drafts from at least three independent complete conversations. Review evidence and outcomes before explicitly exporting; no model calls, installation or script execution. See [search and draft guide](docs/guide/search-and-skills.md) (Chinese).
 
 | Source | Default conversation location | Support |
 |---|---|---|
@@ -40,13 +40,13 @@ The task home links to migration, moving between devices, full-text search, and 
 | OpenAI Codex | `~/.codex/sessions` | Read, export, write |
 | Tencent Yuanbao JSON exports | Portable root `imports/yuanbao` | Import JSON, read, migrate out, archive and restore export files |
 
-Choose Tencent Yuanbao on the migration page and enter the absolute path of a compatible local JSON export. Obtain the JSON export first: this integration does not read the desktop client database or cloud account, or restore ZIPs into the Yuanbao client. On another device, restore exports into AgentRelay to browse or migrate them out. See the [Yuanbao guide and format contract](docs/formats/yuanbao.md) (Chinese).
+Choose Tencent Yuanbao on the migration page and enter the absolute path of a compatible local JSON export. Obtain the JSON export first: this integration does not read the desktop client database or cloud account, or restore ZIPs into the Yuanbao client. On another device, restore exports into AgentRelay to browse or migrate them out. See the [Yuanbao guide and format contract](docs/reference/formats/yuanbao.md) (Chinese).
 
 CodeBuddy CLI and IDE appear under one source. DSH and WorkBuddy have separate names, configuration, and directories. Claude Agent SDK shares Claude Code's default storage; logs cannot reliably identify the creator. The SDK entry is labelled “Shared Claude records”, and both lists may show the same conversation. CLI history is not automatically relabelled as SDK-specific history.
 
 ## Download and launch
 
-Stable release: [v1.0.0](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v1.0.0). Verified client coverage and file-level support remain distinct; see [compatibility](docs/compatibility.md) (Chinese). **Rolling dev build:** [`dev`](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/dev) — rebuilt on every merge to `main`, always exactly one, may be unstable.
+Stable release: [v1.0.0](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v1.0.0). Verified client coverage and file-level support remain distinct; see [compatibility](docs/reference/compatibility.md) (Chinese). **Rolling dev build:** [`dev`](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/dev) — rebuilt on every merge to `main`, always exactly one, may be unstable.
 
 Download **`AgentRelay-<version>-universal.zip`** from [GitHub Releases](https://github.com/FriedOnion2/agent-relay-portable/releases), extract it completely, and use the launcher for your device. GitHub's automatically generated **Source code** archives are for development.
 
@@ -107,7 +107,7 @@ storage/
 
 Copy archives or the entire `storage/` directory to the destination device. In Conversation storage, choose an archive and an existing local project directory to restore into the corresponding assistant. In Skill storage, choose an archive, destination agent, and actual Skill root, then click **Restore Skill**.
 
-Contents and paths are validated before restoration. Existing conversation IDs and Skill names are not overwritten; choose a new ID or directory name when needed. Skill instructions and scripts are not automatically executed. Archives are unencrypted and are not uploaded to GitHub. Conversation archives restore native records for the corresponding assistant; use **Migrate to target** for conversion between assistants. See [portable storage](docs/portable-storage.md) (Chinese).
+Contents and paths are validated before restoration. Existing conversation IDs and Skill names are not overwritten; choose a new ID or directory name when needed. Skill instructions and scripts are not automatically executed. Archives are unencrypted and are not uploaded to GitHub. Conversation archives restore native records for the corresponding assistant; use **Migrate to target** for conversion between assistants. See [portable storage](docs/guide/portable-storage.md) (Chinese).
 
 ```sh
 python app/cli.py store-sessions codex <ID1> <ID2>
@@ -148,13 +148,13 @@ For Ubuntu → Windows, enter the Windows project path and its mounted path in U
 python3 app/cli.py export-windows codex <session-id> --cwd 'D:\project' --project-path /mnt/data/project
 ```
 
-On Windows, `python app/cli.py ubuntu-use "D:\UbuntuBackup\alice"` selects an accessible Ubuntu user-directory backup; use `python app/cli.py import-ubuntu codex <session-id> --cwd "D:\project"` to import. Windows does not directly read ext4. Both directions preserve source files, reject existing IDs, and do not merge histories continued independently on both devices. A new ID can retain another copy. See [dual-boot instructions](docs/ubuntu-dual-boot.md) and [migration research](docs/session-migration-alternatives.md) (Chinese).
+On Windows, `python app/cli.py ubuntu-use "D:\UbuntuBackup\alice"` selects an accessible Ubuntu user-directory backup; use `python app/cli.py import-ubuntu codex <session-id> --cwd "D:\project"` to import. Windows does not directly read ext4. Both directions preserve source files, reject existing IDs, and do not merge histories continued independently on both devices. A new ID can retain another copy. See [dual-boot instructions](docs/guide/ubuntu-dual-boot.md) and [migration research](docs/research/session-migration-alternatives.md) (Chinese).
 
 ## Configuration and data
 
 Copy `config.example.json` to `config.json` to configure source roots, the port, and browser opening. Directory precedence is: device configuration → shared configuration → `RELAY_<AGENT>_HOME` → assistant environment variable → current user's default directory. Relative roots resolve against the portable folder. DSH respects `DSH_HOME`, WorkBuddy `WORKBUDDY_HOME`, and CodeBuddy `CODEBUDDY_HOME`.
 
-Phase one adds migration previews with preserved/degraded/dropped/unknown categories, consistency tokens, device environment checks, trusted read-only adapter plugins, and daily synthetic format reports. Migration and `restore-session` commands accept `--dry-run` and `--preview-token`; existing direct calls remain compatible. CLI commands `device-config`, `plugins`, and `health --output health-output` expose these features. Native client continuation and latest client versions remain explicitly unverified. See [compatibility evidence](docs/compatibility.md), [adapter API and example](docs/adapters.md), and [portable troubleshooting](docs/troubleshooting.md) (Chinese).
+Phase one adds migration previews with preserved/degraded/dropped/unknown categories, consistency tokens, device environment checks, trusted read-only adapter plugins, and daily synthetic format reports. Migration and `restore-session` commands accept `--dry-run` and `--preview-token`; existing direct calls remain compatible. CLI commands `device-config`, `plugins`, and `health --output health-output` expose these features. Native client continuation and latest client versions remain explicitly unverified. See [compatibility evidence](docs/reference/compatibility.md), [adapter API and example](docs/dev/adapters.md), and [portable troubleshooting](docs/guide/troubleshooting.md) (Chinese).
 
 SDK defaults respect `CLAUDE_CONFIG_DIR`; override separately with `agent_homes.claude_sdk` / `RELAY_CLAUDE_SDK_HOME`. It does not inherit a Claude Code-only `RELAY_CLAUDE_HOME`. Supply an assistant's root directory, not its `projects` / `sessions` subdirectory.
 
@@ -191,7 +191,7 @@ Release builds validate bundled dependencies with an empty `PATH`, DSH import, s
 - DSH import writes native v0 Zstd logs, validated with 0.1.2-rc.1 and strict official 0.2.1-alpha.1 catalog migration to v4. Historical tool calls are disabled; calls missing results become text rather than pending work. Images and non-native blocks become annotated text. The target working directory must be absolute on the current OS.
 - Native DSH migration supports full v4 and verifiable v0 seed records. Migrate a fork's parent first; subagents are not imported separately. CodeBuddy IDE needs a uniquely matching existing native workspace and must be closed during import.
 - SDK `stream-json` output is not a native transcript. Applications with persistence disabled or only an external SessionStore may have no default local history.
-- CodeBuddy CLI/IDE formats are based on observations from third-party consumers, without vendor-native continuation verification; see [source format notes](docs/source-formats.md) (Chinese).
+- CodeBuddy CLI/IDE formats are based on observations from third-party consumers, without vendor-native continuation verification; see [source format notes](docs/reference/source-formats.md) (Chinese).
 - Images, encrypted reasoning, and vendor-specific metadata may not be fully preserved. Tool-name conversion neither installs target tools nor converts their argument protocols.
 - Codex Desktop may require its own database index; generated JSONL does not guarantee appearance in its conversation list.
 - Vendor formats can change. AgentRelay read-back tests do not replace actual continuation checks in the destination assistant.
@@ -199,11 +199,11 @@ Release builds validate bundled dependencies with an empty `PATH`, DSH import, s
 
 ## Further documentation (Chinese)
 
-- [User guide](使用说明.md): launch, batch storage, shutdown, configuration, and CLI.
-- [Portable storage](docs/portable-storage.md): conversation and Skill archives, restoration, and boundaries.
-- [Ubuntu dual boot](docs/ubuntu-dual-boot.md): mounting and native migration in both directions.
-- [Source formats](docs/source-formats.md): format references and official sources.
-- [Native migration research](docs/session-migration-alternatives.md): related projects and implementation differences.
+- [Quick start](使用说明.md) (Chinese): launch and shutdown; see the [CLI reference](docs/reference/cli.md) (Chinese) for all commands.
+- [Portable storage](docs/guide/portable-storage.md): conversation and Skill archives, restoration, and boundaries.
+- [Ubuntu dual boot](docs/guide/ubuntu-dual-boot.md): mounting and native migration in both directions.
+- [Source formats](docs/reference/source-formats.md): format references and official sources.
+- [Native migration research](docs/research/session-migration-alternatives.md): related projects and implementation differences.
 
 ---
 
