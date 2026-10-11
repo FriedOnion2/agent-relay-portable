@@ -1,5 +1,4 @@
 import re
-import subprocess
 import unittest
 from pathlib import Path
 
@@ -8,12 +7,12 @@ SECTIONS = ('guide', 'reference', 'dev', 'research')
 LINK = re.compile(r'\]\(([^)#\s]+)(?:#[^)\s]*)?\)')
 
 
+SKIP_DIRS = {'.git', 'build', 'dist', 'node_modules', '.venv', 'venv'}
+
+
 def markdown_files():
-    out = subprocess.run(['git', '-c', 'core.quotepath=false', 'ls-files', '*.md'], cwd=ROOT,
-                         capture_output=True, text=True)
-    if out.returncode != 0:      # 不在 git 检出里（例如源码包）：退回到直接扫描
-        return sorted(p for p in ROOT.rglob('*.md') if 'build' not in p.parts and '.git' not in p.parts)
-    return [ROOT / name for name in out.stdout.split('\n') if name]
+    return sorted(p for p in ROOT.rglob('*.md')
+                  if not SKIP_DIRS.intersection(p.relative_to(ROOT).parts) and not any(x.endswith('.egg-info') for x in p.parts))
 
 
 class DocsLayoutTests(unittest.TestCase):
