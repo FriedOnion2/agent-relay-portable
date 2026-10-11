@@ -69,3 +69,23 @@ class CliReferenceTests(unittest.TestCase):
         names = [name for action in parser._actions if isinstance(action, argparse._SubParsersAction) for name in action.choices]
         page = (ROOT / 'docs' / 'reference' / 'cli.md').read_text(encoding='utf-8')
         self.assertEqual([name for name in names if '`%s' % name not in page], [])
+
+
+class EnglishDocsTests(unittest.TestCase):
+    def test_english_pages_are_in_nav_and_point_to_the_chinese_original(self):
+        config = (ROOT / 'mkdocs.yml').read_text(encoding='utf-8')
+        pages = sorted((ROOT / 'docs' / 'en').glob('*.md'))
+        self.assertTrue(pages)
+        for page in pages:
+            self.assertIn('en/%s' % page.name, config, page.name)
+            self.assertIn('Chinese', page.read_text(encoding='utf-8'), page.name)
+
+    def test_english_cli_reference_covers_every_command(self):
+        import argparse
+        import sys
+        sys.path.insert(0, str(ROOT / 'app'))
+        import cli
+        parser = cli.build_parser()
+        names = [name for action in parser._actions if isinstance(action, argparse._SubParsersAction) for name in action.choices]
+        page = (ROOT / 'docs' / 'en' / 'cli.md').read_text(encoding='utf-8')
+        self.assertEqual([name for name in names if '`%s' % name not in page], [])

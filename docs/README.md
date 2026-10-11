@@ -1,5 +1,7 @@
 # 文档索引
 
+**English:** a partial translation is in [en/](en/README.md).
+
 回到 [项目首页](../README.md)。文档按读者分四类：
 
 ## 使用指南（`guide/`）：怎么用
@@ -49,5 +51,9 @@
 | [maintenance-review.md](research/maintenance-review.md) | 2026-10-10 |
 | [research-competitors-2026-10-09.md](research/research-competitors-2026-10-09.md) | 2026-10-09 |
 | [product-priority-2026-10-09.md](research/product-priority-2026-10-09.md) | 2026-10-09 |
+
+## English（`en/`）
+
+[en/README.md](en/README.md) 是英文入口：安装、迁移教程、配置、排查、命令行参考、兼容摘要、已知限制。英文页是中文页的翻译，**以中文为准**；改了对应的中文页，请同步英文页。
 
 图片放在 [images/](images/)。新增文档请放进对应目录，并在本页加一行。

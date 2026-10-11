@@ -58,3 +58,12 @@ nav:
       - 测试与 CI: dev/testing.md
       - 界面词条: dev/i18n.md
       - 维护者手册: dev/maintainers.md
+  - English:
+      - Overview: en/README.md
+      - Install and launch: en/install.md
+      - "Tutorial: migrate one session": en/migrate-a-session.md
+      - Configuration: en/configuration.md
+      - Troubleshooting: en/troubleshooting.md
+      - Command-line reference: en/cli.md
+      - Compatibility summary: en/compatibility.md
+      - Known limitations: en/limitations.md
