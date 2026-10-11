@@ -25,7 +25,7 @@ class ReverseMigrationTests(unittest.TestCase):
     def seed_local(self):
         self.make_ide_workspace()
         imported = []
-        for key in cli.AGENTS:
+        for key in registry.cross_system_keys():
             for row in registry.list_sessions("windows_" + key):
                 result = native_import.import_windows(key, row["id"], str(self.cwd))
                 imported.append((key, result["to"]["id"]))
@@ -86,9 +86,9 @@ class ReverseMigrationTests(unittest.TestCase):
             if os.name != "nt":
                 stack.enter_context(patch.object(native_import, "_windows_cwd", return_value=cwd))
             registry._CACHE.update(self.targets)
-            self.assertEqual(len(registry.all_keys()), 12)
+            self.assertEqual(len(registry.all_keys()), 13)
             self.assertFalse(any(k.startswith("windows_") for k in registry.all_keys()))
-            for key in cli.AGENTS:
+            for key in registry.cross_system_keys():
                 for row in registry.list_sessions("ubuntu_" + key):
                     result = native_import.import_ubuntu(key, row["id"], cwd,
                                 session_id=str(uuid.uuid5(uuid.NAMESPACE_URL, key + row["id"])))

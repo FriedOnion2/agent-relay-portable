@@ -45,7 +45,7 @@ def main():
                             assert response.status == 200
                         with urllib.request.urlopen("http://127.0.0.1:%d/api/sources" % port, timeout=20) as response:
                             sources = json.load(response)
-                        assert sources["ok"] and len(sources["sources"]) == 6
+                        assert sources["ok"] and len(sources["sources"]) == 7
                         print("PASS: LaunchServices HTTP 200; server survives launcher exit")
                         dsh = next(s for s in sources["sources"] if s["name"] == "dsh")
                         print("DSH sessions:", dsh.get("session_count"), "unreadable:", dsh.get("unreadable_count"), "error:", dsh.get("error", "none"))

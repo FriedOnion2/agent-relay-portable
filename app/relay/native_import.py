@@ -425,7 +425,7 @@ def context(mode, agent, cwd, project_path=None):
         from .windows import selected_profile
         if platform.system() != 'Linux':
             raise ValueError(message_text('err.export_windows_runs_on_ubuntu_linux'))
-        if agent not in registry._ADAPTERS:
+        if agent not in registry.cross_system_keys():
             raise ValueError(message_text('err.select_a_local_agent_source'))
         profile = selected_profile()
         if not profile or not Path(profile).is_dir():

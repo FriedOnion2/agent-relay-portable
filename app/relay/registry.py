@@ -14,6 +14,7 @@ from .adapters.codex import CodexAdapter
 from .adapters.dsh import DshAdapter
 from .adapters.workbuddy import WorkBuddyAdapter
 from .adapters.codebuddy import CodeBuddyAdapter
+from .adapters.yuanbao import YuanbaoAdapter
 from .adapters.markdown import render as render_markdown
 from .adapters.base import BaseAdapter
 from .windows import WindowsSource, selected_profile
@@ -21,7 +22,7 @@ from .ubuntu import UbuntuSource, selected_profile as selected_ubuntu
 
 _ADAPTERS = {"workbuddy": WorkBuddyAdapter, "dsh": DshAdapter,
              "codebuddy": CodeBuddyAdapter, "claude": ClaudeAdapter,
-             "claude_sdk": ClaudeSdkAdapter, "codex": CodexAdapter}
+             "claude_sdk": ClaudeSdkAdapter, "codex": CodexAdapter, "yuanbao": YuanbaoAdapter}
 
 _CACHE: Dict[str, BaseAdapter] = {}
 
@@ -41,7 +42,7 @@ def get(source: str, **kw) -> BaseAdapter:
         ubuntu = key.startswith("ubuntu_")
         native = key.split("_", 1)[1]
         profile = selected_ubuntu() if ubuntu else selected_profile()
-        if native not in _ADAPTERS or not profile:
+        if native not in cross_system_keys() or not profile:
             raise KeyError(message_text('err.cross_system_source_is_not_configured_run_windows_use_ubuntu_use_first'))
         if kw.keys() - {"clean"}:
             raise ValueError(message_text('err.cross_system_source_roots_are_set_by_windows_user_home_ubuntu_user_home'))
@@ -62,11 +63,15 @@ def get(source: str, **kw) -> BaseAdapter:
     return a
 
 
+def cross_system_keys() -> List[str]:
+    return [key for key, cls in _ADAPTERS.items() if getattr(cls, 'cross_system', True)]
+
+
 def all_keys() -> List[str]:
     from . import plugins
     keys = list(_ADAPTERS)
-    return (keys + list(plugins.entries) + (["windows_" + key for key in keys] if selected_profile() else [])
-            + (["ubuntu_" + key for key in keys] if selected_ubuntu() else []))
+    return (keys + list(plugins.entries) + (["windows_" + key for key in cross_system_keys()] if selected_profile() else [])
+            + (["ubuntu_" + key for key in cross_system_keys()] if selected_ubuntu() else []))
 
 
 def writable_keys() -> List[str]:
@@ -79,7 +84,7 @@ def sources_info() -> List[Dict[str, Any]]:
         try:
             a = get(k)
             info = a.info()
-            if k in _ADAPTERS and selected_profile():
+            if k in cross_system_keys() and selected_profile():
                 info.update(native_export=True, native_export_target="windows_" + k)
             if info["available"]:
                 s = list(a.discover())

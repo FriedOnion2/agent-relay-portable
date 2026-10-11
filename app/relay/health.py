@@ -21,6 +21,9 @@ def check(agent):
                       message_text('msg.dsh_generated_v0_seed_not_every_generation') if agent == 'dsh' else message_text('msg.jsonl_produced_by_the_current_writer'),
            'evidence':'synthetic-roundtrip', 'fixture_version':1, 'client_version':None,
            'latest_client':'unknown', 'native_resume':'not-tested', 'write':bool(cls.can_write)}
+    if agent == 'yuanbao':
+        row.update(label=message_text('ui.yuanbao'), coverage=message_text('msg.yuanbao_health_coverage'),
+                   evidence='synthetic-export-read')
     try:
         with tempfile.TemporaryDirectory(prefix='relay-health-') as temporary:
             root = Path(temporary)
@@ -34,17 +37,29 @@ def check(agent):
             adapter = cls(home=str(home))
             writer = (ClaudeAdapter(home=str(home)) if agent == 'claude_sdk' else
                       WorkBuddyAdapter(home=str(home)) if agent == 'codebuddy' else adapter)
-            writer.write(conv, cwd=str(root), session_id='11111111-1111-4111-8111-111111111111')
+            if agent == 'yuanbao':
+                home.mkdir()
+                (home / 'export.json').write_text(json.dumps({'exportTime': '2026-01-01 00:00:00',
+                    'conversations': [{'id': 'health-export', 'title': 'health export', 'messages': [
+                        {'role': 'user', 'content': 'health fixture request'},
+                        {'role': 'assistant', 'content': 'health fixture response', 'thinking': 'fixture thinking'}]}]}),
+                    encoding='utf-8')
+            else:
+                writer.write(conv, cwd=str(root), session_id='11111111-1111-4111-8111-111111111111')
             discovered = list(adapter.discover())
             if len(discovered) != 1 or not discovered[0].readable:
                 raise ValueError(message_text('msg.the_self_check_listing_did_not_return_exactly_one_readable_session'))
             restored = adapter.read(discovered[0].id)
             content = '\n'.join(turn.text() for turn in restored.turns)
-            if not all(value in content for value in ('health fixture request', 'health fixture response', 'fixture result')):
+            expected = ('health fixture request', 'health fixture response',
+                        'fixture thinking' if agent == 'yuanbao' else 'fixture result')
+            if not all(value in content for value in expected):
                 raise ValueError(message_text('msg.the_self_check_read_lost_expected_content'))
-            if restored.truncated or restored.stats()['tool_call'] != 1:
+            if restored.truncated or restored.stats()['tool_call'] != (0 if agent == 'yuanbao' else 1):
                 raise ValueError(message_text('msg.wrong_tool_call_count_or_truncated_session_in_the_self_check'))
             row.update(status='passed', read='passed', native_file_roundtrip='passed', error='')
+            if agent == 'yuanbao':
+                row['native_file_roundtrip'] = 'unsupported'
     except ImportError as exc:
         row.update(status='unavailable', read='not-tested', native_file_roundtrip='not-tested', error=error_text(exc))
     except Exception as exc:

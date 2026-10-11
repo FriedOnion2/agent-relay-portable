@@ -40,7 +40,12 @@ from relay import plugins  # noqa: E402
 plugins.configure(_CFG.get('plugins', []))
 
 AGENTS = list(bootstrap.SOURCES)
-READ_AGENTS = AGENTS + [prefix + k for prefix in ("windows_", "ubuntu_") for k in AGENTS]
+READ_AGENTS = AGENTS + [prefix + k for prefix in ("windows_", "ubuntu_") for k in registry.cross_system_keys()]
+
+
+def cmd_import_yuanbao(args):
+    from relay import yuanbao
+    _print_json(yuanbao.import_file(args.path))
 
 
 def cmd_windows_users(args):
@@ -479,12 +484,15 @@ def build_parser():
     read_agents = READ_AGENTS + list(plugins.entries)
     p = RelayParser(
         prog="relay",
-        description="读取 WorkBuddy / DeepSeek Harness / CodeBuddy / Claude Code / Claude Agent SDK / Codex 会话",
+        description="读取 WorkBuddy / DeepSeek Harness / CodeBuddy / Claude Code / Claude Agent SDK / Codex / 元宝导出会话",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     from relay import __version__
     p.add_argument("--version", action="version", version="%(prog)s " + __version__)
     sub = p.add_subparsers(dest="cmd", required=True)
+    yuanbao_import = sub.add_parser('import-yuanbao', help='导入元宝 JSON 导出文件（不读取或修改客户端数据库）')
+    yuanbao_import.add_argument('path', help='本机 JSON 导出文件的绝对路径')
+    yuanbao_import.set_defaults(func=cmd_import_yuanbao)
     index = sub.add_parser('index', help='更新便携全文索引；默认不保存思考内容')
     index.add_argument('--source', action='append', choices=read_agents)
     index.add_argument('--include-thinking', action='store_true')
@@ -616,7 +624,7 @@ def build_parser():
     p9.add_argument("--clear", action="store_true")
     p9.set_defaults(func=cmd_windows_use)
     p10 = sub.add_parser("import-windows", help="Windows 会话迁到 Ubuntu 对应软件，保留原生记录")
-    p10.add_argument("agent", choices=READ_AGENTS)
+    p10.add_argument("agent", choices=[key for key in READ_AGENTS if key != 'yuanbao'])
     p10.add_argument("id", help="Windows 来源列表中的完整会话 ID")
     p10.add_argument("--cwd", required=True, help="存在的 Ubuntu 项目目录")
     p10.add_argument("--session-id", help="可选新 ID；默认保留 Windows 原生 ID，已有目标不会覆盖")
@@ -633,7 +641,8 @@ def build_parser():
     for name, help_text in (("export-windows", "Ubuntu 会话写入已挂载的 Windows 对应软件"),
                             ("import-ubuntu", "Windows 导入 Ubuntu 用户目录备份中的原生会话")):
         command = sub.add_parser(name, help=help_text)
-        command.add_argument("agent", choices=AGENTS if name == "export-windows" else READ_AGENTS)
+        command.add_argument("agent", choices=registry.cross_system_keys() if name == "export-windows" else
+                             [key for key in READ_AGENTS if key != 'yuanbao'])
         command.add_argument("id")
         command.add_argument("--cwd", required=True, help="Windows 绝对项目路径，如 D:\\project")
         if name == "export-windows":
@@ -664,23 +673,23 @@ def build_parser():
     restore.add_argument('--preview-token')
     restore.set_defaults(func=cmd_storage)
     skills = sub.add_parser("skills", help="列出 Agent 的 SKILL.md 技能目录（可指定实际路径）")
-    skills.add_argument("agent", choices=READ_AGENTS)
+    skills.add_argument("agent", choices=[key for key in READ_AGENTS if key != 'yuanbao'])
     skills.add_argument("--skills-dir")
     skills.set_defaults(func=cmd_skill_storage)
     skill_store = sub.add_parser("store-skills", help="保存完整 Skill 目录，按 Agent 分类存储")
-    skill_store.add_argument("agent", choices=READ_AGENTS)
+    skill_store.add_argument("agent", choices=[key for key in READ_AGENTS if key != 'yuanbao'])
     skill_store.add_argument("paths", nargs="*")
     skill_store.add_argument("--all", action="store_true")
     skill_store.add_argument("--skills-dir", help="配合 --all 指定实际 Skill 根目录")
     skill_store.add_argument("--storage")
     skill_store.set_defaults(func=cmd_skill_storage)
     stored_skills = sub.add_parser("stored-skills", help="列出已保存的 Skill 包")
-    stored_skills.add_argument("--agent", choices=AGENTS)
+    stored_skills.add_argument("--agent", choices=[key for key in AGENTS if key != 'yuanbao'])
     stored_skills.add_argument("--storage")
     stored_skills.set_defaults(func=cmd_skill_storage)
     skill_restore = sub.add_parser("restore-skill", help="校验并恢复 Skill 包；已有同名目录不覆盖")
     skill_restore.add_argument("package")
-    skill_restore.add_argument("--agent", choices=READ_AGENTS, help="默认对应软件；可显式改分类")
+    skill_restore.add_argument("--agent", choices=[key for key in READ_AGENTS if key != 'yuanbao'], help="默认对应软件；可显式改分类")
     skill_restore.add_argument("--skills-dir", help="目标设备实际的 Skill 根目录")
     skill_restore.add_argument("--name", help="可选新目录名，保留已有 Skill")
     skill_restore.set_defaults(func=cmd_skill_storage)

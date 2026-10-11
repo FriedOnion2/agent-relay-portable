@@ -49,12 +49,12 @@ class WindowsProfilesTests(unittest.TestCase):
         rows = windows.discover_profiles([self.root / "Win volume", self.root / "Win volume"])
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["user"], "中文 user")
-        self.assertEqual(set(rows[0]["sources"]), set(bootstrap.SOURCES))
+        self.assertEqual(set(rows[0]["sources"]), set(registry.cross_system_keys()))
 
     def test_six_windows_sources_read_export_without_touching_source_files(self):
         before = {p: p.read_bytes() for p in self.profile.rglob("*") if p.is_file()}
-        self.assertEqual(len(registry.all_keys()), 12)
-        for native in bootstrap.SOURCES:
+        self.assertEqual(len(registry.all_keys()), 13)
+        for native in registry.cross_system_keys():
             key = "windows_" + native
             adapter = registry.get(key)
             rows = registry.list_sessions(key)

@@ -61,7 +61,7 @@ class LinuxLauncherTests(unittest.TestCase):
                             time.sleep(0.1)
                     else:
                         self.fail("Linux launcher did not become ready")
-                    self.assertEqual(len(rows), 12)
+                    self.assertEqual(len(rows), 13)
                     source = next(row for row in rows if row["name"] == "windows_codex")
                     self.assertEqual(source["session_count"], 1)
                     self.assertFalse(source["can_write"])

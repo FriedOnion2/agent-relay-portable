@@ -168,6 +168,9 @@ def native(agent, sid, mode, cwd, session_id=None, project_path=None, dsh_compre
 def package(package_path, cwd, session_id=None, dsh_compression='zstd'):
     from . import archive, session_store, registry
     manifest, files = archive.read_package(package_path, session_store.KIND)
+    if manifest.get('agent') == 'yuanbao':
+        from . import yuanbao
+        return yuanbao.package_preview(package_path, cwd, session_id, dsh_compression)
     agent = manifest.get('agent')
     if agent not in registry._ADAPTERS:
         raise ValueError(message_text('msg.unknown_native_package_source'))

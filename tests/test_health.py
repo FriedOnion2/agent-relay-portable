@@ -11,11 +11,11 @@ from relay import health, registry
 
 
 class HealthTests(unittest.TestCase):
-    def test_checks_all_six_without_reading_real_sources_or_claiming_vendor_resume(self):
+    def test_checks_all_sources_without_reading_real_sources_or_claiming_vendor_resume(self):
         with patch.object(registry,'get',side_effect=AssertionError('must not inspect user data')):
             result=health.report()
         self.assertTrue(result['ok'])
-        self.assertEqual(len(result['adapters']),6)
+        self.assertEqual(len(result['adapters']),7)
         for row in result['adapters']:
             self.assertEqual(row['status'],'passed')
             self.assertIsNone(row['client_version'])

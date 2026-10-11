@@ -36,6 +36,9 @@ The task home links to migration, moving between devices, full-text search, and 
 | Claude Code | `~/.claude/projects` | Read, export, write |
 | Claude Agent SDK | `~/.claude/projects` (shared with Claude Code) | Read, export, migrate out |
 | OpenAI Codex | `~/.codex/sessions` | Read, export, write |
+| Tencent Yuanbao JSON exports | Portable root `imports/yuanbao` | Import JSON, read, migrate out, archive and restore export files |
+
+Choose Tencent Yuanbao on the migration page and enter the absolute path of a compatible local JSON export. Obtain the JSON export first: this integration does not read the desktop client database or cloud account, or restore ZIPs into the Yuanbao client. On another device, restore exports into AgentRelay to browse or migrate them out. See the [Yuanbao guide and format contract](docs/formats/yuanbao.md) (Chinese).
 
 CodeBuddy CLI and IDE appear under one source. DSH and WorkBuddy have separate names, configuration, and directories. Claude Agent SDK shares Claude Code's default storage; logs cannot reliably identify the creator. The SDK entry is labelled “Claude 共享记录” (shared Claude records), and both lists may show the same conversation. CLI history is not automatically relabelled as SDK-specific history.
 

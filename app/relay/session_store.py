@@ -18,6 +18,9 @@ KIND = "agentrelay-session"
 
 def store_session(agent, sid, root=None):
     source = registry.get(agent)
+    if source.name == 'yuanbao':
+        from . import yuanbao
+        return yuanbao.store(source, sid, root)
     if source.info().get('community'):
         raise ValueError(message_text('err.community_plugins_only_support_reading_and_conversion_native_session_packaging_is_not_avai'))
     native = getattr(source, "source", source.name)
@@ -96,6 +99,10 @@ def store_sessions(agent, ids=None, all_sessions=False, root=None):
 
 
 def restore_session(package, cwd, session_id=None, dsh_compression="zstd", preview_token=None):
+    metadata, _ = archive.read_package(package, KIND, full=False)
+    if metadata.get('agent') == 'yuanbao':
+        from . import yuanbao
+        return yuanbao.restore(package, cwd, session_id, dsh_compression, preview_token)
     if preview_token:
         from . import preview
         preview.check_token(preview_token, preview.package(package, cwd, session_id, dsh_compression)['token'])

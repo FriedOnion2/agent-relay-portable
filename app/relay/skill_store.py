@@ -23,6 +23,8 @@ def _agent(key):
     native = key.split("_", 1)[1] if key.startswith(("windows_", "ubuntu_")) else key
     if native not in registry._ADAPTERS:
         raise ValueError(message_text('err.unknown_agent'))
+    if native == 'yuanbao':
+        raise ValueError(message_text('err.yuanbao_no_skill_store'))
     return native
 
 

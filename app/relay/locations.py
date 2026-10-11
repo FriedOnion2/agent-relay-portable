@@ -12,10 +12,14 @@ SOURCES = {
     "claude": ("Claude Code", "projects"),
     "claude_sdk": ("Claude Agent SDK", "projects"),
     "codex": ("OpenAI Codex", "sessions"),
+    "yuanbao": ("Tencent Yuanbao", ""),
 }
 
 
 def default_home(source: str) -> str:
+    if source == "yuanbao":
+        from .runtime import project_root
+        return str(project_root() / "imports" / "yuanbao")
     home = Path.home()
     if source == "codebuddy-ide":
         system = platform.system()
@@ -32,7 +36,7 @@ def default_home(source: str) -> str:
 def resolve_home(source: str, explicit: str | None = None) -> str:
     agent_env = {"dsh":"DSH_HOME", "workbuddy":"WORKBUDDY_HOME",
                  "codebuddy":"CODEBUDDY_HOME", "claude":"CLAUDE_CONFIG_DIR", "claude_sdk":"CLAUDE_CONFIG_DIR",
-                 "codex":"CODEX_HOME"}[source]
+                 "codex":"CODEX_HOME", "yuanbao":"YUANBAO_EXPORT_HOME"}[source]
     value = next((v.strip() for v in (explicit, os.environ.get("RELAY_" + source.upper() + "_HOME"),
                   os.environ.get(agent_env)) if v and v.strip()), None)
     value = value or default_home(source)
