@@ -47,6 +47,9 @@ def smoke(binary):
                 raise AssertionError(result.stdout + result.stderr)
             return result.stdout
         run('--help')
+        assert 'Status' in run('--lang', 'en', 'sources')
+        assert '状态' in run('--lang', 'fr', 'sources')
+        assert json.loads(run('--lang', 'en', 'plugins', 'list')) == json.loads(run('plugins', 'list'))
         assert 'Release 内置 Python' in run('doctor')
         environment = json.loads(run('device-config'))
         assert environment['runtime']['bundled'] and environment['runtime']['zstandard']
@@ -83,6 +86,10 @@ def smoke(binary):
         assert not json.loads(run('search','hiddenreason','--include-thinking'))['results']
         candidates=json.loads(run('extract-skills'))['candidates']
         assert len(candidates)==1 and candidates[0]['evidence_count']==3
+        english=json.loads(run('--lang', 'en', 'extract-skills'))
+        assert len(english['candidates']) == 1
+        generated=english['candidates'][0]['markdown'] + english['score_note']
+        assert 'Workflow draft awaiting review' in generated and not re.search(r'[\u4e00-\u9fff]', generated)
         draft=root/'reviewed.md';draft.write_text(candidates[0]['markdown'],encoding='utf-8')
         assert 'sensitive-example' not in candidates[0]['markdown'] and not candidates[0]['selected']
         run('export-draft',str(draft),'--directory',str(root),failure=True)

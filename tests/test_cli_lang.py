@@ -1,8 +1,10 @@
 import ast
 import io
+import json
 import os
 import re
 import sys
+import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -12,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'app'))
 
 import cli  # noqa: E402
-from relay.messages import catalog  # noqa: E402
+from relay.messages import catalog, text  # noqa: E402
 
 CJK = re.compile(r'[一-鿿]')
 
@@ -28,6 +30,19 @@ def run(argv, env=None):
 
 
 class CliLanguageTests(unittest.TestCase):
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        homes = {'RELAY_' + source.upper() + '_HOME': str(Path(folder.name) / source)
+                 for source in cli.AGENTS}
+        homes['RELAY_LANG'] = ''
+        env = patch.dict(os.environ, homes)
+        env.start()
+        self.addCleanup(env.stop)
+        cache = patch.dict(cli.registry._CACHE, {}, clear=True)
+        cache.start()
+        self.addCleanup(cache.stop)
+
     def tearDown(self):
         cli.LANG = 'zh'
 
@@ -50,6 +65,52 @@ class CliLanguageTests(unittest.TestCase):
         self.assertIn('状态', out)
         _, out, _ = run(['sources'], {'RELAY_LANG': 'fr'})
         self.assertIn('状态', out)
+
+    def test_language_options_match_parser_semantics(self):
+        for argv, env, expected in (
+            (['--lang', 'fr', 'sources'], {'RELAY_LANG': 'en'}, '状态'),
+            (['--lang', 'zh', '--lang=en', 'sources'], {}, 'Status'),
+            (['sources'], {'RELAY_LANG': 'english'}, '状态'),
+        ):
+            code, out, _ = run(argv, env)
+            self.assertEqual(code, 0)
+            self.assertIn(expected, out)
+        self.assertEqual(cli._resolve_lang(['--', '--lang', 'en']), 'zh')
+        self.assertEqual(run(['--la', 'en', 'sources'])[0], 2)
+
+    def test_plugin_json_is_language_independent(self):
+        with patch.object(cli.plugins, 'entries', {}):
+            zh = run(['--lang', 'zh', 'plugins', 'list'])[1]
+            en = run(['--lang', 'en', 'plugins', 'list'])[1]
+        self.assertEqual(json.loads(zh), json.loads(en))
+
+    def test_english_skill_candidate_uses_requested_language(self):
+        from relay import corpus
+        from test_corpus import workflow
+        docs = [dict(key=str(i), source='workbuddy', sid=str(i), canonical=str(i),
+                     conversation=corpus._snapshot(workflow(), False)[0]) for i in range(3)]
+        for i, doc in enumerate(docs):
+            doc['conversation']['id'] = str(i)
+        with patch.object(corpus.Corpus, 'evidence', return_value=docs):
+            code, out, _ = run(['--lang', 'en', 'extract-skills'])
+        self.assertEqual(code, 0)
+        result = json.loads(out)
+        self.assertEqual(len(result['candidates']), 1)
+        draft = result['candidates'][0]
+        self.assertIn('Workflow draft awaiting review', draft['markdown'])
+        self.assertFalse(CJK.search(draft['description'] + draft['markdown'] + result['score_note']))
+
+    def test_doctor_translates_structured_errors_preserves_external_details(self):
+        report = dict(platform='fixture', app_root='/fixture', media_root='/fixture', media_kind='fixture',
+                      config='', windows_user_home='',
+                      python=dict(ok=True, version='3.12', origin='fixture', cmd='python'),
+                      agents=[dict(key='codex', label='Codex', found=True, files=1, data='/fixture',
+                                   errors=[text('msg.session_unreadable'), 'original 中文 detail'])])
+        out = io.StringIO()
+        with patch.object(cli.bootstrap, 'report', return_value=report), redirect_stdout(out):
+            cli.bootstrap.print_report(lang='en')
+        self.assertIn('Session cannot be read', out.getvalue())
+        self.assertIn('original 中文 detail', out.getvalue())
 
     def test_english_help_has_no_chinese(self):
         for argv in (['--lang', 'en', '--help'], ['--lang', 'en', 'transfer', '--help'], ['--lang', 'en', 'batch', '--help'],

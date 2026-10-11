@@ -151,7 +151,7 @@ class CodexAdapter(BaseAdapter):
         if not sid:
             sid = os.path.splitext(os.path.basename(path))[0]
         return SessionInfo(
-            source=self.name, id=str(sid), title=title or first_user or "未命名会话",
+            source=self.name, id=str(sid), title=title or first_user or message_text('ui.untitled_session'),
             cwd=cwd.replace("\\", "/"), model=model,
             created_ms=created_ms, updated_ms=updated_ms or st["updated_ms"],
             size=st["size"], turns=turns, path=path,

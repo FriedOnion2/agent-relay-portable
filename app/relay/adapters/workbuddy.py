@@ -104,7 +104,7 @@ class WorkBuddyAdapter(BaseAdapter):
         if not title:
             title = first_user
         return SessionInfo(
-            source=self.name, id=sid, title=title or "未命名会话",
+            source=self.name, id=sid, title=title or message_text('ui.untitled_session'),
             cwd=cwd.replace("\\", "/"), model=model,
             created_ms=created_ms, updated_ms=updated_ms or st["updated_ms"],
             size=st["size"], turns=turns, path=path,

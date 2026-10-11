@@ -9,7 +9,7 @@ import json
 from typing import List
 
 from .. import ir
-from ..messages import lang_text
+from ..messages import lang_text, render as render_message
 
 ROLE_CODES = {
     ir.USER: "msg.md_role_user",
@@ -24,7 +24,7 @@ def render(conv: ir.Conversation, include_thinking: bool = True,
         return lang_text(lang, code, **params)
 
     lines: List[str] = []
-    lines.append(f"# {conv.title or t('msg.md_untitled_session')}")
+    lines.append(f"# {render_message(conv.title, lang) or t('msg.md_untitled_session')}")
     lines.append("")
     if conv.cwd:
         lines.append(t("msg.md_working_directory", value=conv.cwd))

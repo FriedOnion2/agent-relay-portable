@@ -22,9 +22,6 @@ function detectLang(){
 let lang = detectLang();
 function tr(key, vars){return RelayI18n.translate(lang,key,vars);}
 function sep(){return lang === 'en' ? ': ' : '：';}
-const PLACEHOLDER_TITLES = {'未命名会话':'ui.untitled_session', 'Claude 读取受限':'ui.claude_read_restricted',
-  'DSH 会话':'ui.dsh_session_title', 'CodeBuddy 会话':'ui.codebuddy_session_title'};
-function displayTitle(title){const key = PLACEHOLDER_TITLES[title]; return key ? tr(key) : title;}
 function ts(value){return RelayI18n.message(lang,value);}
 function tm(row,field){return ts(row?.[field+'_message'] ?? row?.[field]);}
 function tms(row,field){return (row?.[field+'_messages'] ?? row?.[field] ?? []).map(ts);}

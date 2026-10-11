@@ -102,8 +102,8 @@ See [Portable storage](../guide/portable-storage.md) (Chinese).
 | `store-sessions <source> [id …] [--all] [--storage dir]` | Save sessions as independent packages, sorted by tool |
 | `stored-sessions [--agent name] [--storage dir]` | List stored session packages |
 | `restore-session <package> --cwd <dir> [--dry-run]` | Verify and restore a package onto this device |
-| `skills [--skills-dir dir]` | List SKILL.md directories |
-| `store-skills [path …] [--all] [--skills-dir dir]` | Save complete Skill directories |
+| `skills <source> [--skills-dir dir]` | List SKILL.md directories |
+| `store-skills <source> [path …] [--all] [--skills-dir dir]` | Save complete Skill directories |
 | `stored-skills [--agent name]` | List stored Skill packages |
 | `restore-skill <package> [--agent …] [--skills-dir dir] [--name new]` | Verify and restore; an existing directory of the same name is never overwritten |
 

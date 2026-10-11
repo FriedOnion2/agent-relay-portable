@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from relay.messages import text as message_text, error_text, lang_text
+from relay.messages import text as message_text, error_text, lang_text, render
 
 import json
 import os
@@ -382,7 +382,7 @@ def print_report(cfg: dict | None = None, lang: str = "zh") -> int:
             print(f"    · {a['label']:<16} {t('not_installed')}")
             print(f"      {a['data']}")
         for error in a.get("errors", []):
-            print(f"      ↳ {error}")
+            print(f"      ↳ {render(error, lang)}")
         if a["key"] == "claude_sdk":
             print(f"      ↳ {t('sdk_shared')}")
     print()

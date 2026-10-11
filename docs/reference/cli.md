@@ -102,8 +102,8 @@ RELAY_LANG=en python3 app/cli.py doctor
 | `store-sessions <来源> [id …] [--all] [--storage 目录]` | 把会话按软件分类存成独立的包 |
 | `stored-sessions [--agent 名称] [--storage 目录]` | 列出已存的会话包 |
 | `restore-session <包> --cwd <目录> [--dry-run]` | 校验并恢复会话包到当前设备 |
-| `skills [--skills-dir 目录]` | 列出 SKILL.md 技能目录 |
-| `store-skills [路径 …] [--all] [--skills-dir 目录]` | 保存完整 Skill 目录 |
+| `skills <来源> [--skills-dir 目录]` | 列出 SKILL.md 技能目录 |
+| `store-skills <来源> [路径 …] [--all] [--skills-dir 目录]` | 保存完整 Skill 目录 |
 | `stored-skills [--agent 名称]` | 列出已存的 Skill 包 |
 | `restore-skill <包> [--agent …] [--skills-dir 目录] [--name 新名]` | 校验并恢复；已有同名目录不覆盖 |
 

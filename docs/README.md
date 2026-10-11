@@ -29,7 +29,7 @@
 | [limitations.md](reference/limitations.md) | 已知限制与未验证项 |
 | [source-formats.md](reference/source-formats.md) | 各来源的格式与识别依据 |
 | [yuanbao-compatibility.md](reference/yuanbao-compatibility.md) | 腾讯元宝接入范围与格式证据 |
-| [formats/](reference/formats/) | 逐个来源的格式说明（claude、claude_sdk、codebuddy、codex、dsh、workbuddy、yuanbao） |
+| [reference/formats/](reference/source-formats.md) | 逐个来源的格式说明（claude、claude_sdk、codebuddy、codex、dsh、workbuddy、yuanbao） |
 
 ## 开发与维护（`dev/`）
 
@@ -51,9 +51,10 @@
 | [maintenance-review.md](research/maintenance-review.md) | 2026-10-10 |
 | [research-competitors-2026-10-09.md](research/research-competitors-2026-10-09.md) | 2026-10-09 |
 | [product-priority-2026-10-09.md](research/product-priority-2026-10-09.md) | 2026-10-09 |
+| [collaborator-review-2026-10-12.md](research/collaborator-review-2026-10-12.md) | 2026-10-12 |
 
 ## English（`en/`）
 
 [en/README.md](en/README.md) 是英文入口：安装、迁移教程、配置、排查、命令行参考、兼容摘要、已知限制。英文页是中文页的翻译，**以中文为准**；改了对应的中文页，请同步英文页。
 
-图片放在 [images/](images/)。新增文档请放进对应目录，并在本页加一行。
+图片放在 `images/`。新增文档请放进对应目录，并在本页加一行。

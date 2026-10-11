@@ -102,6 +102,18 @@ class MessageTests(unittest.TestCase):
         self.assertEqual(summary, '私钥 1 处')
         self.assertEqual(summary.descriptor()['params']['label']['code'], 'msg.secret_private_key')
 
+    def test_english_export_translates_nested_notes_keeps_user_data(self):
+        from relay.adapters.markdown import render
+        conv = ir.Conversation(title='DSH 会话', meta={'notes': [
+            text('err.claude_first_message_oversized'), text('msg.yuanbao_export_limits'), '用户备注']},
+            turns=[ir.Turn(ir.USER, [ir.Block.text_block('未命名会话')])])
+        output = render(conv, lang='en')
+        self.assertTrue(output.startswith('# DSH 会话'))
+        self.assertIn('用户备注', output)
+        self.assertIn('未命名会话', output)
+        self.assertIn(catalog('en')['err.claude_first_message_oversized'], output)
+        self.assertIn(catalog('en')['msg.yuanbao_export_limits'], output)
+
     def test_background_job_failure_keeps_code_after_deepcopy(self):
         jobs = Jobs()
         def fail(progress, cancel):

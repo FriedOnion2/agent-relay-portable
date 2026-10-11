@@ -46,7 +46,7 @@ function renderList(){
     el.className = 'item';
     el.dataset.id = s.id;
     el.innerHTML = `
-      <h4><button class="session-title" type="button">${esc(displayTitle(s.title) || tr('ui.untitled_session'))}</button></h4>
+      <h4><button class="session-title" type="button">${esc(tm(s,'title') || tr('ui.untitled_session'))}</button></h4>
       <div class="meta">
         <span title="${esc(tr('ui.updated'))}">${esc(s.updated)}</span>
         <span>${esc(s.readable===false?tr('ui.restricted'):s.turns===1?tr('ui.step_1_turn'):tr('ui.n_turns',{n:s.turns}))}</span>
@@ -108,7 +108,7 @@ function renderDetail(){
   const hero = document.createElement('div');
   hero.className = 'hero';
   hero.innerHTML = `
-    <h2>${esc(displayTitle(i.title) || tr('ui.untitled_session'))}</h2>
+    <h2>${esc(tm(i,'title') || tr('ui.untitled_session'))}</h2>
     <div class="sub">
       <span>${esc(tr('ui.source'))} <b>${esc(i.source)}</b></span>
       <span>${esc(tr('ui.turns_turns_tool_calls_tools_thinking_thinking',{turns:st.turns||0,tools:st.tool_call||0,thinking:st.thinking||0}))}</span>

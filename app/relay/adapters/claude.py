@@ -122,7 +122,7 @@ class ClaudeAdapter(BaseAdapter):
             except ValueError as exc:
                 st = self._stat(path)
                 info = SessionInfo(self.name, os.path.splitext(os.path.basename(path))[0],
-                                   "Claude 读取受限", "", "", None, st["updated_ms"], st["size"], 0,
+                                   message_text('ui.claude_read_restricted'), "", "", None, st["updated_ms"], st["size"], 0,
                                    path, False, error_text(exc))
             if info:
                 yield info
@@ -131,13 +131,13 @@ class ClaudeAdapter(BaseAdapter):
         st = self._stat(path)
         conv = self._parse(path)
         if conv.truncated and not conv.turns:
-            return SessionInfo(self.name, conv.id, "Claude 读取受限", conv.cwd, conv.model or "",
+            return SessionInfo(self.name, conv.id, message_text('ui.claude_read_restricted'), conv.cwd, conv.model or "",
                                None, st["updated_ms"], st["size"], 0, path, False,
                                message_text('err.claude_first_message_oversized'))
         if not conv.turns and not conv.title:
             return None
         return SessionInfo(
-            source=self.name, id=conv.id, title=conv.title or conv.first_user_text(60) or "未命名会话",
+            source=self.name, id=conv.id, title=conv.title or conv.first_user_text(60) or message_text('ui.untitled_session'),
             cwd=conv.cwd, model=conv.model or "", created_ms=safe_ms(conv.created_at),
             updated_ms=safe_ms(conv.updated_at) or st["updated_ms"], size=st["size"],
             turns=len(conv.turns), path=path,

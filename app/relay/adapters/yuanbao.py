@@ -101,7 +101,7 @@ def conversation(row, path=''):
         if message['content']:
             blocks.append(ir.Block.text_block(message['content']))
         conv.turns.append(ir.Turn(message['role'], blocks, source_type=FORMAT))
-    conv.title = conv.title or conv.first_user_text(60) or str(text('ui.session'))
+    conv.title = conv.title or conv.first_user_text(60) or text('ui.session')
     return conv
 
 

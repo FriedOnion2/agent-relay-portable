@@ -34,12 +34,12 @@ import bootstrap  # noqa: E402  —— 便携版引导层：读 U 盘上的配�
 def _resolve_lang(argv=None):
     """--lang beats RELAY_LANG; the default stays zh so existing scripts keep their output."""
     argv = sys.argv[1:] if argv is None else list(argv)
-    for i, arg in enumerate(argv):
-        if arg == '--lang' and i + 1 < len(argv):
-            return normalize_lang(argv[i + 1])
-        if arg.startswith('--lang='):
-            return normalize_lang(arg[len('--lang='):])
-    return normalize_lang(os.environ.get('RELAY_LANG', '').strip().lower()[:2])
+    parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    parser.add_argument('--lang', type=normalize_lang,
+                        default=normalize_lang(os.environ.get('RELAY_LANG', '').strip().lower()))
+    parser.add_argument('command', nargs=argparse.REMAINDER)
+    args, _ = parser.parse_known_args(argv)
+    return args.lang
 
 
 LANG = _resolve_lang()
@@ -461,7 +461,7 @@ def cmd_plugins(args):
         return 0 if result['ok'] else 1
     else:
         result = {'ok':True, 'enabled':list(plugins.entries.values()), 'errors':plugins.errors,
-                  'note':T('plugins_note')}
+                  'note':message_text('msg.cli_plugins_note')}
     _print_json(result)
 
 
@@ -478,7 +478,7 @@ def cmd_corpus(args):
     elif args.cmd == 'indexed-session':
         result = dict(ok=True, **store.document(args.key, args.include_thinking))
     elif args.cmd == 'extract-skills':
-        result = extract(store)
+        result = extract(store, lang=LANG)
     else:
         path = Path(args.markdown)
         if path.stat().st_size > 1024 * 1024:
@@ -504,12 +504,13 @@ def build_parser():
     read_agents = READ_AGENTS + list(plugins.entries)
     p = RelayParser(
         prog="relay",
+        allow_abbrev=False,
         description=T('desc'),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     from relay import __version__
     p.add_argument("--version", action="version", version="%(prog)s " + __version__)
-    p.add_argument("--lang", choices=("zh", "en"), default=LANG, help=T('lang_help'))
+    p.add_argument("--lang", type=normalize_lang, default=LANG, metavar="{zh,en}", help=T('lang_help'))
     sub = p.add_subparsers(dest="cmd", required=True)
     yuanbao_import = sub.add_parser('import-yuanbao', help=T('h_import_yuanbao'))
     yuanbao_import.add_argument('path', help=T('h_import_yuanbao_path'))

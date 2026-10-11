@@ -23,7 +23,7 @@ def normalize_lang(value):
 
 def lang_text(lang, code, **params):
     """Plain string in the requested language, for documents the server generates (exports, drafts, reports)."""
-    return catalog(normalize_lang(lang))[code].format(**params)
+    return render(text(code, **params), lang)
 
 
 def render(value, lang):
