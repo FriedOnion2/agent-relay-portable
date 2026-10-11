@@ -8,7 +8,7 @@ const html = fs.readFileSync(path.join(__dirname, '../app/web/index.html'), 'utf
 const catalogs=Object.fromEntries(['zh','en'].map(lang=>[lang,JSON.parse(fs.readFileSync(path.join(__dirname,'../app/web/locales.'+lang+'.json'),'utf8'))]));
 const i18nScript=fs.readFileSync(path.join(__dirname,'../app/web/i18n.js'),'utf8');
 // index.html 按顺序加载若干经典脚本；这里同样逐个执行（共享全局作用域），启动入口 app-start.js 留给真实页面。
-const scriptFiles=Array.from(html.matchAll(/<script src="\/static\/(app-[\w-]+\.js)"><\/script>/g),m=>m[1]);
+const scriptFiles=Array.from(html.matchAll(/<script src="\/static\/(app-[\w-]+\.js)"><\/script>/gi),m=>m[1]);
 const scriptParts=scriptFiles.filter(name=>name!=='app-start.js').map(name=>[name,fs.readFileSync(path.join(__dirname,'../app/web/'+name),'utf8')]);
 const script=scriptParts.map(([,text])=>text).join('\n');
 
