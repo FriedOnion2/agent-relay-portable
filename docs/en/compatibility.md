@@ -6,7 +6,7 @@ A summary of the Chinese page [reference/compatibility.md](../reference/compatib
 
 Windows 10/11 x64, Ubuntu 22.04+ / glibc 2.35+ x64, macOS ARM64 14+ / Intel 15+. The four runtimes ship in one bundle and do not depend on the target machine's Python or Node. Client installation and sign-in, external Skill dependencies, mount permissions and a vendor's actual resumption still have to be checked on the target device.
 
-The web page **环境与兼容** (Environment and compatibility) checks the OS, CPU, write access to the data directory, free space, the runtime directory actually in use, Python and Zstandard. The bundle launcher verifies the runtime archive's SHA-256 on start; the panel never reports an already-unpacked cache as integrity-verified. Read-only media can be browsed; choose a writable local directory for storage, and saving device settings needs a writable portable root.
+The web page **Environment** checks the OS, CPU, write access to the data directory, free space, the runtime directory actually in use, Python and Zstandard. The bundle launcher verifies the runtime archive's SHA-256 on start; the panel never reports an already-unpacked cache as integrity-verified. Read-only media can be browsed; choose a writable local directory for storage, and saving device settings needs a writable portable root.
 
 ## What was verified for 1.0.0
 

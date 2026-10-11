@@ -4,6 +4,10 @@ AgentRelay Portable is a local tool for migrating, exporting, searching and stor
 
 > **About these pages.** The English documentation is a translation of selected Chinese pages and is **not complete**. The Chinese pages are the source of truth: when they differ, the Chinese text wins. Pages not translated yet are linked in Chinese.
 
+## Interface language
+
+The web interface is available in full in English and Chinese. On first load it follows the browser language; use the language button at the top right to switch (the choice is remembered), or open `http://127.0.0.1:8745/?lang=en` once. Markdown exports and Skill drafts created from the page are written in the language you are viewing. Command-line messages are currently Chinese only. Button names in these pages are the ones shown in the English interface.
+
 ## Guides
 
 | Page | Contents |

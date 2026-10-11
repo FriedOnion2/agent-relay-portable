@@ -80,6 +80,15 @@ class EnglishDocsTests(unittest.TestCase):
             self.assertIn('en/%s' % page.name, config, page.name)
             self.assertIn('Chinese', page.read_text(encoding='utf-8'), page.name)
 
+    def test_english_pages_only_contain_chinese_for_file_names(self):
+        names = ('启动_AgentRelay.bat', '启动_AgentRelay.command', '启动_AgentRelay.sh', 'Mac首次准备.command', 'Mac首次运行.command',
+                 'Mac安装依赖.command', 'Ubuntu首次准备.sh')
+        for page in (ROOT / 'docs' / 'en').glob('*.md'):
+            text = page.read_text(encoding='utf-8')
+            for name in names:
+                text = text.replace(name, '')
+            self.assertEqual(re.findall(r'[\u4e00-\u9fff]+', text), [], page.name)
+
     def test_english_cli_reference_covers_every_command(self):
         import argparse
         import sys

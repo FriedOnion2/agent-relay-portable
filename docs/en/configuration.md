@@ -6,7 +6,7 @@ Where conversations are looked up and how settings are stored. Chinese original:
 
 Directory overrides are applied in this priority order, and the first hit wins:
 
-1. This device's settings (`devices/<device-id>.json`, or saved in the page **环境与兼容** / Environment and compatibility)
+1. This device's settings (`devices/<device-id>.json`, or saved in the page **Environment**)
 2. The shared `config.json` (`agent_homes`)
 3. The `RELAY_<AGENT>_HOME` environment variable
 4. The assistant's own environment variable: `CODEX_HOME`, `CLAUDE_CONFIG_DIR`, `DSH_HOME`, `WORKBUDDY_HOME`, `CODEBUDDY_HOME`

@@ -40,7 +40,7 @@ python app/cli.py serve --no-browser --port 8745
 python app/cli.py doctor
 ```
 
-Use `python3` on Linux / macOS if that is your interpreter name; `RELAY_PYTHON` can point to a specific interpreter. The default address is `http://127.0.0.1:8745/`. If the port is busy, the next 5 are tried; the actual address is shown in the startup output. The program **never kills** whatever occupies a port. To free the port of an old AgentRelay, open its page and click **退出服务** (Quit service), or press Ctrl+C in its terminal.
+Use `python3` on Linux / macOS if that is your interpreter name; `RELAY_PYTHON` can point to a specific interpreter. The default address is `http://127.0.0.1:8745/`. If the port is busy, the next 5 are tried; the actual address is shown in the startup output. The program **never kills** whatever occupies a port. To free the port of an old AgentRelay, open its page and click **Stop service**, or press Ctrl+C in its terminal.
 
 ### Install with pip / pipx
 
@@ -56,7 +56,7 @@ The installed modules have top-level names (`cli`, `server`, `bootstrap`, `porta
 
 ### Quitting and restarting
 
-Click **退出服务** at the top right of the page and confirm to stop the service, including the background service started by `.app`. Requests in flight finish first; other pages using the same service disconnect. In a terminal, press Ctrl+C. Closing the page alone does not stop the service. Run the launcher again to resume; after updating the code, stop the old service and restart.
+Click **Stop service** at the top right of the page and confirm to stop the service, including the background service started by `.app`. Requests in flight finish first; other pages using the same service disconnect. In a terminal, press Ctrl+C. Closing the page alone does not stop the service. Run the launcher again to resume; after updating the code, stop the old service and restart.
 
 ### DSH dependency and Mac startup
 
