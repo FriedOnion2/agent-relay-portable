@@ -9,6 +9,17 @@ python3 app/cli.py <命令> --help      # 看该命令的全部参数
 
 下面按用途列出全部命令。完整参数以 `--help` 为准；这里只写最常用的和容易踩坑的。
 
+## 输出语言
+
+命令行输出（含 `--help` 和错误信息）默认是中文。需要英文时，在子命令**之前**加 `--lang en`，或设置环境变量 `RELAY_LANG=en`：
+
+```bash
+python3 app/cli.py --lang en sources
+RELAY_LANG=en python3 app/cli.py doctor
+```
+
+`--lang` 优先于环境变量；写了不认识的语言会回退到中文。语言**不会**从系统区域设置推断，所以已有脚本的输出不会变。`--json` 输出不受影响；`export` 生成的 Markdown 跟随所选语言。
+
 ## 来源名
 
 `list`、`show`、`transfer` 等命令里的「来源」取下列之一：

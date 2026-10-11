@@ -9,6 +9,17 @@ python3 app/cli.py <command> --help      # all options of that command
 
 Commands are grouped by purpose below. `--help` is authoritative for full options; this page lists the common ones and the pitfalls. Chinese original: [reference/cli.md](../reference/cli.md).
 
+## Output language
+
+Command-line output (including `--help` and error messages) is Chinese by default. For English, put `--lang en` **before** the subcommand, or set the environment variable `RELAY_LANG=en`:
+
+```bash
+python3 app/cli.py --lang en sources
+RELAY_LANG=en python3 app/cli.py doctor
+```
+
+`--lang` wins over the environment variable, and an unknown language falls back to Chinese. The language is **not** taken from your system locale, so existing scripts keep their output. `--json` output is unaffected; the Markdown written by `export` follows the chosen language.
+
 ## Source names
 
 In `list`, `show`, `transfer` and similar commands, a "source" is one of:
