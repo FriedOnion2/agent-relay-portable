@@ -5,6 +5,7 @@ from pathlib import Path
 
 
 LANGUAGES = ('zh', 'en')
+_FILES = {'zh': 'locales.zh.json', 'en': 'locales.en.json'}
 
 
 @lru_cache(maxsize=None)
@@ -13,7 +14,7 @@ def catalog(lang='zh'):
     if not (root / 'locales.zh.json').is_file():
         import relay_web
         root = Path(list(relay_web.__path__)[0])
-    return json.loads((root / ('locales.%s.json' % lang)).read_text(encoding='utf-8'))
+    return json.loads((root / _FILES[lang if lang in _FILES else 'zh']).read_text(encoding='utf-8'))
 
 
 def normalize_lang(value):
