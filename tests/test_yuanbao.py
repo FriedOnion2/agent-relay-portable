@@ -184,6 +184,8 @@ class YuanbaoTests(unittest.TestCase):
         restored = session_store.restore_session(str(moved), str(self.project), preview_token=plan['token'])
         conv = target.read(restored['to']['id'])
         self.assertEqual(conv.cwd, str(self.project))
+        self.assertEqual(Path(restored['to']['path']).parent, Path(target.home))
+        self.assertEqual(list(self.project.iterdir()), [])  # cwd is metadata, never a write destination.
         self.assertEqual(conv.turns[1].blocks[0].text, '独立思考')
         before = Path(restored['to']['path']).read_bytes()
         with self.assertRaises(FileExistsError):
@@ -237,16 +239,22 @@ class YuanbaoTests(unittest.TestCase):
         thread = threading.Thread(target=srv.serve_forever, daemon=True)
         thread.start()
         try:
-            def request(path):
+            def request(path, origin=None):
                 con = http.client.HTTPConnection('127.0.0.1', srv.server_port, timeout=5)
                 try:
+                    headers = {'Content-Type': 'application/json'}
+                    if origin:
+                        headers['Origin'] = origin
                     con.request('POST', '/api/import-yuanbao', json.dumps({'path': path}),
-                                {'Content-Type': 'application/json'})
+                                headers)
                     response = con.getresponse()
                     return response.status, json.loads(response.read())
                 finally:
                     con.close()
-            status, result = request(str(self.source))
+            status, result = request(str(self.source), 'https://attacker.example')
+            self.assertEqual(status, 403)
+            self.assertEqual(list(self.home.iterdir()), [])
+            status, result = request(str(self.source), 'http://127.0.0.1:%d' % srv.server_port)
             self.assertEqual(status, 200)
             self.assertEqual(result['imported'], 2)
             status, result = request('relative.json')
