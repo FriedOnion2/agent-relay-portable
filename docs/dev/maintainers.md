@@ -93,4 +93,5 @@ mkdocs build --strict   # 与 CI 相同：任何警告都算失败
 - 新页面除了登记 `docs/README.md`，还要加进 `mkdocs.yml` 的 `nav`（`tests/test_docs.py` 会检查）。
 - `docs/research/` 会被构建但不在导航里。
 - 指向 `docs/` 之外的相对链接（如 `../../README.md`）由 `scripts/mkdocs_hooks.py` 在构建时改写成 GitHub 地址。
-- CI 目前只做构建检查；发布到 GitHub Pages 需要仓库管理员在 Settings → Pages 启用后再加部署步骤。
+- GitHub Pages 的 Source 设为 **GitHub Actions**。文档工作流在 PR 中只做严格构建检查，合并到 `main` 后上传并部署站点；也可从 Actions → docs → Run workflow 手动部署 `main`。部署 job 使用 `github-pages` 环境，Pages 写权限只授予这个 job。
+- 文档站点：[AgentRelay Portable](https://friedonion2.github.io/agent-relay-portable/)。首次部署要等文档工作流合并到 `main`；文档部署不创建软件 tag 或 Release。
