@@ -75,7 +75,7 @@ class CodeBuddyAdapter(ReadOnlyAdapter, WorkBuddyAdapter):
                 conv = self._parse_source(path, format_name)
             except (ValueError, OSError, TypeError, AttributeError, KeyError) as exc:
                 error = error_text(exc)
-            yield SessionInfo(self.name, sid, (conv.title if conv else "CodeBuddy 会话") or "未命名会话",
+            yield SessionInfo(self.name, sid, (conv.title if conv else message_text('ui.codebuddy_session_title')) or message_text('ui.untitled_session'),
                               conv.cwd if conv else "", (conv.model or "") if conv else "",
                               safe_ms(conv.created_at) if conv else None,
                               safe_ms(conv.updated_at) if conv else st["updated_ms"], st["size"],

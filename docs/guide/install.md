@@ -1,6 +1,6 @@
 # 下载、安装与启动
 
-Release 总包与源码两种启动方式、端口与退出说明。回到 [README](../README.md)。
+Release 总包与源码两种启动方式、端口与退出说明。回到 [README](../../README.md)。
 
 ## Release 下载即用
 
@@ -79,9 +79,35 @@ python -m pip install -r requirements-optional.txt
 
 Mac 首次准备自动创建 `runtime/macos-<架构>/` 虚拟环境并安装 `zstandard`；安装失败可执行
 `bash Mac安装依赖.command` 重试。换机器需重新准备，虚拟环境依赖本机 Python，不能当作跨设备便携解释器。
-Ubuntu 首次准备使用用户级虚拟环境，避免系统 pip 的 PEP 668 限制。完整运行时说明见 [runtime/README.txt](../runtime/README.txt)。
+Ubuntu 首次准备使用用户级虚拟环境，避免系统 pip 的 PEP 668 限制。完整运行时说明见 [runtime/README.txt](../../runtime/README.txt)。
 缺少解码器时仍会列出 DSH 会话并显示安装提示；损坏、未写完、过大或未知版本的日志会显示读取受限。
 
 Mac `.app` 在 HTTP 就绪后打开浏览器，尊重 `open_browser` 配置。日志优先写入项目 `logs/`，
 外置盘禁止写日志时改用 `~/Library/Logs/AgentRelay/`。文稿目录内双击曾出现 Python 探测停住，
 可改用终端启动器，并检查 macOS 文件与文件夹访问权限；这不属于已确认根因。
+
+## 换机器后先体检
+
+```bash
+python3 app/cli.py doctor      # 或 python3 app/bootstrap.py
+```
+
+会告诉你 Python 找没找到、版本够不够，以及当前主机上各来源的会话目录在哪、有多少会话：
+
+```
+  当前系统     Darwin 24.0.0 (arm64)
+  所在盘       /Volumes/SanDisk/agent-relay-portable  [外置宗卷]
+  ✓ Python     3.11  via Homebrew
+      /opt/homebrew/bin/python3
+
+  当前主机上的会话目录：
+    ✓ Claude Code      127 个会话文件
+      /Users/alice/.claude/projects
+    · OpenAI Codex     未安装 / 目录不存在
+      /Users/alice/.codex/sessions
+```
+
+## 源码用户：没有 Python 怎么办
+
+1. **目标机器已经装了 Python**（最常见）：什么都不用做，程序会自己找到。识别范围：Windows 的 `py` 启动器、PATH、`%LOCALAPPDATA%\Programs\Python`；macOS 的 Homebrew（含 Apple Silicon 的 `/opt/homebrew`）、系统 Python、python.org 安装包。
+2. **没装 Python**：往盘里放一份便携版，见 [runtime/README.txt](../../runtime/README.txt)。Windows 推荐 python.org 的 Windows embeddable package，解压到 `runtime\python\`；macOS 不建议拷贝解释器（动态库路径会失效），装 Homebrew 的 Python 更省事。

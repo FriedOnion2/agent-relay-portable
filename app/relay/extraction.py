@@ -1,6 +1,6 @@
 """Deterministic, local workflow candidates. Drafts are evidence, not instructions to execute."""
 
-from .messages import text as message_text
+from .messages import text as message_text, lang_text
 import collections
 import json
 import re
@@ -59,7 +59,10 @@ def _segments(doc):
         yield value
 
 
-def extract(store=None, progress=None, cancel=None, max_documents=500, max_seconds=60):
+def extract(store=None, progress=None, cancel=None, max_documents=500, max_seconds=60, lang='zh'):
+    def t(code, **params):
+        return lang_text(lang, code, **params)
+
     if type(max_documents) is not int or not 1 <= max_documents <= 500 or not 0 < max_seconds <= 60:
         raise ValueError(message_text('err.invalid_extraction_scope'))
     store = store or corpus.Corpus()
@@ -124,28 +127,28 @@ def extract(store=None, progress=None, cancel=None, max_documents=500, max_secon
             counts = collections.Counter(v for m in members for v in m['outcomes'])
             name = 'workflow-' + identity[:12]
             tools = ', '.join(dict.fromkeys(n for n,shape in sequence))
-            description = '当需要复现包含 %s 的重复工作流时使用；先核对证据和项目约束。' % tools
+            description = t('msg.draft_description', tools=tools)
             lines = ['---', 'name: ' + name, 'description: ' + json.dumps(description, ensure_ascii=False), '---', '',
-                     '# 待审核的工作流草稿', '', '适用条件：用户任务与下列证据中的目标相同；请先补充明确的触发条件。', '',
-                     '## 抽象流程', '']
+                     t('msg.draft_title'), '', t('msg.draft_conditions'), '',
+                     t('msg.draft_steps_heading'), '']
             for i,(tool,shape) in enumerate(sequence,1):
-                params = ', '.join('%s=<%s>' % (k,t) for k,t in shape) or '由用户提供并核对参数'
-                lines.append('%d. 使用 `%s`；%s。检查返回状态，再决定下一步。' % (i,tool,params))
-            lines.extend(['', '## 证据', ''])
+                params = ', '.join('%s=<%s>' % (k,t) for k,t in shape) or t('msg.draft_params_default')
+                lines.append(t('msg.draft_step', index=i, tool=tool, params=params))
+            lines.extend(['', t('msg.draft_evidence_heading'), ''])
             for m in members[:20]:
                 d = m['doc']
                 lines.append('- [%s / %s](http://127.0.0.1:8745/?document=%s) — %s' %
                              (d['source'], corpus.digest(d['sid'])[:12], d['key'], ', '.join(m['outcomes'])))
-            lines.extend(['', '工具结果统计：' + ', '.join('%s=%d' % (k,counts[k]) for k in ('nonempty','error','empty','unknown')), '',
-                          'nonempty 仅表示有非空且未标错的工具返回，不证明任务成功。', '', '## 待检查项', '',
-                          '- [ ] 补充任务目标、适用条件及成功判据。', '- [ ] 核对所有证据，剔除失败步骤和不适用分支。',
-                          '- [ ] 用占位参数替换设备路径；检查账号、密钥和个人信息。',
-                          '- [ ] 在目标设备审核后另行安装；本工具不执行此草稿。', ''])
+            lines.extend(['', t('msg.draft_result_stats', stats=', '.join('%s=%d' % (k,counts[k]) for k in ('nonempty','error','empty','unknown'))), '',
+                          t('msg.draft_nonempty_note'), '', t('msg.draft_checklist_heading'), '',
+                          t('msg.draft_check_goal'), t('msg.draft_check_evidence'),
+                          t('msg.draft_check_privacy'),
+                          t('msg.draft_check_install'), ''])
             groups.append(dict(id=identity, name=name, description=description, selected=False,
                                evidence_count=len(members), evidence=[m['doc']['key'] for m in members[:20]],
                                score=len(members) * len(sequence), outcomes=dict(counts), markdown='\n'.join(lines)))
     state['candidates'] = sorted(groups, key=lambda g:g['score'], reverse=True)[:30]
-    state['score_note'] = '排序分 = 独立会话数 × 抽象步骤数，不是成功概率。最多扫描500份完整缓存会话。'
+    state['score_note'] = t('msg.draft_score_note')
     if progress:
         progress(dict(state))
     return state

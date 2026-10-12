@@ -48,6 +48,35 @@ class CorpusTests(unittest.TestCase):
         self.assertEqual(self.store.search('发布')['results'],[])
         self.assertFalse((self.root/'index').exists())
 
+    def test_title_metadata_survives_index_restart_without_guessing_user_titles(self):
+        from relay.messages import text, annotate
+        conv = workflow()
+        conv.title = text('ui.untitled_session')
+        db = self.store._connect(write=True)
+        with closing(db):
+            self.store._put(db, 'placeholder', '', 'workbuddy', 'placeholder', 'package', '', '', '', conv, False)
+            conv.title = 'DSH 会话'
+            self.store._put(db, 'custom', '', 'workbuddy', 'custom', 'package', '', '', '', conv, False)
+            # Legacy records carry no descriptor; their literal title is retained.
+            payload = json.loads(db.execute("SELECT payload FROM docs WHERE key='placeholder'").fetchone()[0])
+            payload.pop('title_message')
+            with db:
+                db.execute("UPDATE docs SET payload=? WHERE key='placeholder'", (json.dumps(payload),))
+            conv.title = text('ui.untitled_session')
+            self.store._put(db, 'structured', '', 'workbuddy', 'structured', 'package', '', '', '', conv, False)
+        reopened = corpus.Corpus(self.root)
+        for key in ('placeholder', 'custom'):
+            self.assertNotIn('title_message', reopened.document(key))
+        result = reopened.document('structured')
+        self.assertEqual(result['title_message']['code'], 'ui.untitled_session')
+        self.assertEqual(result['conversation']['title_message']['code'], 'ui.untitled_session')
+        self.assertEqual(annotate(result)['title'], '未命名会话')
+        rows = reopened.search('portable')['results']
+        self.assertEqual(len(rows), 3)
+        indexed = next(row for row in rows if row['key'] == 'structured')
+        self.assertEqual(indexed['title_message']['code'], 'ui.untitled_session')
+        self.assertTrue(all('title_message' not in row for row in rows if row['key'] != 'structured'))
+
     def test_status_reports_index_file_time_without_modifying_it(self):
         self.update()
         stamp = self.store.path.stat().st_mtime_ns
@@ -203,6 +232,10 @@ class CorpusTests(unittest.TestCase):
         draft=result['candidates'][0]
         self.assertEqual(draft['evidence_count'],3);self.assertFalse(draft['selected'])
         self.assertNotIn('SECRET_TOKEN',draft['markdown']);self.assertNotIn('/private',draft['markdown'])
+        english=extraction.extract(self.store,lang='en')
+        self.assertIn('Workflow draft awaiting review',english['candidates'][0]['markdown'])
+        self.assertNotRegex(english['candidates'][0]['markdown']+english['score_note']+english['candidates'][0]['description'],r'[\u4e00-\u9fff]')
+        self.assertRegex(result['score_note'],r'[\u4e00-\u9fff]')
         self.assertNotIn('rm dangerous',draft['markdown'])
         self.assertEqual(draft['outcomes']['nonempty'],6)
         self.source.write(workflow(),session_id='four');self.update()

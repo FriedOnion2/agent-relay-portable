@@ -4,7 +4,7 @@ DELETE journaling keeps completed transactions in one movable SQLite file.
 Only an explicit update reads agent data; queries never create a database.
 """
 
-from .messages import text as message_text, error_text
+from .messages import text as message_text, error_text, Message
 import hashlib
 import json
 import re
@@ -104,6 +104,10 @@ def _snapshot(conv, include_thinking):
     partial |= len(conv.turns) > 4000
     payload = dict(source=conv.source, id=conv.id, title=conv.title[:1000], cwd=conv.cwd[:4000],
                    turns=turns, truncated=partial)
+    if not conv.title:
+        payload['title_message'] = message_text('ui.untitled_session').descriptor()
+    elif isinstance(conv.title, Message):
+        payload['title_message'] = conv.title.descriptor()
     return payload, '\n'.join(texts), '\n'.join(tools), '\n'.join(thinking), partial
 
 
@@ -341,6 +345,9 @@ class Corpus:
 
     def _public(self, row):
         value = {k:row[k] for k in ('key','source','sid','origin','title','cwd','updated_ms','partial')}
+        payload = json.loads(row['payload'])
+        if 'title_message' in payload:
+            value['title_message'] = payload['title_message']
         value['offline'] = bool(row['offline'] or (row['origin'] == 'local' and row['device'] != self.owner))
         return value
 

@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from relay.messages import text as message_text, annotate, error_text
+from relay.messages import text as message_text, annotate, error_text, normalize_lang, lang_text
 
 import errno
 import json
@@ -196,7 +196,8 @@ class Handler(BaseHTTPRequestHandler):
                 })
             if path == "/api/preview-md":
                 return self._json({"ok": True, "markdown": registry.export_markdown(
-                    (q.get("agent") or [""])[0], (q.get("id") or [""])[0])})
+                    (q.get("agent") or [""])[0], (q.get("id") or [""])[0],
+                    lang=normalize_lang((q.get("lang") or [""])[0]))})
             return self._error("unknown endpoint", 404)
         except FileNotFoundError as e:
             return self._error(e, 404)
@@ -247,7 +248,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(yuanbao.import_file(body.get('path')))
             if u.path == '/api/extract':
                 from relay.extraction import extract
-                return self._json(self.server.jobs.start('extract', lambda progress,cancel:extract(progress=progress,cancel=cancel)))
+                return self._json(self.server.jobs.start('extract', lambda progress,cancel:extract(progress=progress,cancel=cancel,lang=normalize_lang(body.get('lang')))))
             if u.path == '/api/undo':
                 from relay import oplog
                 if not isinstance(body.get('id'), str) or not body['id']:
@@ -381,6 +382,7 @@ class Handler(BaseHTTPRequestHandler):
                     include_thinking=bool(body.get("include_thinking", True)),
                     include_tools=bool(body.get("include_tools", True)),
                     redact_secrets=bool(body.get("redact_secrets", False)),
+                    lang=normalize_lang(body.get("lang")),
                 )
                 return self._json({"ok": True, "markdown": md})
             if u.path == "/api/scan":
@@ -416,13 +418,16 @@ def create_server(host: str, port: int):
     raise OSError(errno.EADDRINUSE, message_text('err.ports_occupied', port=port))
 
 
-def run(host: str = "127.0.0.1", port: int = 8745, open_browser: bool = True):
+def run(host: str = "127.0.0.1", port: int = 8745, open_browser: bool = True, lang: str = "zh"):
+    def say(code, **params):
+        print(lang_text(lang, "msg.cli_s_" + code, **params))
+
     srv = create_server(host, port)
     if port and srv.server_address[1] != port:
-        print(f"端口 {port} 已被占用，自动改用 {srv.server_address[1]}")
+        say("port", port=port, actual=srv.server_address[1])
     url = f"http://{host}:{srv.server_address[1]}/"
-    print(f"AgentRelay Web 已启动: {url}")
-    print("点击网页右上角「退出服务」或按 Ctrl+C 停止")
+    say("started", url=url)
+    say("stop_hint")
     if open_browser:
         timer = threading.Timer(0.6, lambda: webbrowser.open(url))
         timer.daemon = True
@@ -430,7 +435,7 @@ def run(host: str = "127.0.0.1", port: int = 8745, open_browser: bool = True):
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
-        print("\n已停止")
+        say("stopped")
     finally:
         srv.server_close()
 

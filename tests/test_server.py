@@ -42,6 +42,18 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn(b".task-panel", css)
 
+    def test_every_asset_referenced_by_the_page_is_served(self):
+        import re
+        _, body = self.request("GET", "/")
+        assets = re.findall(rb'(?:src|href)="/static/([^"]+)"', body)
+        self.assertIn(b"app-core.js", assets)
+        self.assertIn(b"app-start.js", assets)
+        self.assertNotIn(b"<script>", body)
+        for name in assets:
+            status, content = self.request("GET", "/static/" + name.decode())
+            self.assertEqual(status, 200, name)
+            self.assertTrue(content, name)
+
     def test_corpus_reads_are_readonly_and_export_requires_confirmation(self):
         from relay import corpus
         with tempfile.TemporaryDirectory() as folder, patch.object(corpus,'project_root',return_value=Path(folder)):

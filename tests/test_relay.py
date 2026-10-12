@@ -303,6 +303,25 @@ class PathsTests(unittest.TestCase):
             adapter.find_path("")
 
 
+class MarkdownLanguageTests(unittest.TestCase):
+    def test_markdown_export_follows_the_requested_language(self):
+        from relay.adapters.markdown import render
+        conv = ir.Conversation(source="synthetic", title="", cwd="/tmp/p", model="m", truncated=True, turns=[
+            ir.Turn(ir.USER, [ir.Block.text_block("hello")]),
+            ir.Turn(ir.ASSISTANT, [ir.Block.thinking_block("plan"), ir.Block.tool_call("c1", "Bash", '{"command":"pwd"}'),
+                                   ir.Block.tool_result("c1", "x" * 50)])])
+        english = render(conv, max_text=5, lang="en")
+        self.assertIn("# Untitled session", english)
+        self.assertIn("Tool call: `Bash`", english)
+        self.assertIn("Reasoning", english)
+        self.assertIn("truncated (50 characters in total)", english)
+        self.assertNotRegex(english, r"[\u4e00-\u9fff]")
+        chinese = render(conv, max_text=5)
+        self.assertIn("# 未命名会话", chinese)
+        self.assertIn("工具调用：`Bash`", chinese)
+        self.assertEqual(render(conv, max_text=5, lang="fr"), chinese)
+
+
 class CliParserTests(unittest.TestCase):
     def test_subcommands_are_registered_once(self):
         # Python 3.11+ 对重复的子命令名直接抛 ArgumentError，3.10 及以下会静默覆盖；按源码检查，所有版本都能发现

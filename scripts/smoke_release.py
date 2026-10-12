@@ -1,5 +1,6 @@
 """Verify frozen CLI, bundled Zstd, shared data root, HTTP and graceful exit."""
 import json
+import re
 import http.client
 import os
 import shutil
@@ -46,6 +47,9 @@ def smoke(binary):
                 raise AssertionError(result.stdout + result.stderr)
             return result.stdout
         run('--help')
+        assert 'Status' in run('--lang', 'en', 'sources')
+        assert '状态' in run('--lang', 'fr', 'sources')
+        assert json.loads(run('--lang', 'en', 'plugins', 'list')) == json.loads(run('plugins', 'list'))
         assert 'Release 内置 Python' in run('doctor')
         environment = json.loads(run('device-config'))
         assert environment['runtime']['bundled'] and environment['runtime']['zstandard']
@@ -82,6 +86,10 @@ def smoke(binary):
         assert not json.loads(run('search','hiddenreason','--include-thinking'))['results']
         candidates=json.loads(run('extract-skills'))['candidates']
         assert len(candidates)==1 and candidates[0]['evidence_count']==3
+        english=json.loads(run('--lang', 'en', 'extract-skills'))
+        assert len(english['candidates']) == 1
+        generated=english['candidates'][0]['markdown'] + english['score_note']
+        assert 'Workflow draft awaiting review' in generated and not re.search(r'[\u4e00-\u9fff]', generated)
         draft=root/'reviewed.md';draft.write_text(candidates[0]['markdown'],encoding='utf-8')
         assert 'sensitive-example' not in candidates[0]['markdown'] and not candidates[0]['selected']
         run('export-draft',str(draft),'--directory',str(root),failure=True)
@@ -187,6 +195,14 @@ def smoke(binary):
                     if actual is None:
                         time.sleep(.1)
                 assert actual, 'Packaged HTTP server did not start'
+                with opener.open('http://127.0.0.1:%d/' % actual, timeout=5) as response:
+                    page = response.read().decode('utf-8')
+                assert '<script>' not in page, 'Page should only load external scripts'
+                assets = re.findall(r'(?:src|href)="/static/([^"]+)"', page)
+                assert 'app-core.js' in assets and assets[-1] == 'app-start.js', assets
+                for asset in assets:
+                    with opener.open('http://127.0.0.1:%d/static/%s' % (actual, asset), timeout=5) as response:
+                        assert response.status == 200 and response.read(), 'Packaged page asset missing: ' + asset
                 with opener.open('http://127.0.0.1:%d/static/workflow.css' % actual, timeout=5) as response:
                     assert b'.task-panel' in response.read(), 'Packaged task stylesheet missing'
                 catalogs = {}

@@ -33,8 +33,9 @@ Ubuntu 也可以直接运行 `Ubuntu首次准备.sh` 建立隔离环境。
 
 ## 新增来源适配器
 
-见 [docs/adapters.md](docs/adapters.md) 与 [examples/plaintext_adapter.py](examples/plaintext_adapter.py)。
-新格式请同时补充 `docs/formats/` 下的格式说明与合成样本测试。
+见 [docs/dev/adapters.md](docs/dev/adapters.md) 与 [examples/plaintext_adapter.py](examples/plaintext_adapter.py)。
+新增文档请放进 `docs/guide/`（怎么用）、`docs/reference/`（事实与边界）、`docs/dev/`（开发维护）或 `docs/research/`（带日期的调研）之一，并在 `docs/README.md` 加一行；`tests/test_docs.py` 会检查链接与索引。英文页在 `docs/en/`，是中文页的翻译、以中文为准，改了中文页请同步。
+新格式请同时补充 `docs/reference/formats/` 下的格式说明与合成样本测试。
 
 ## 报告问题
 

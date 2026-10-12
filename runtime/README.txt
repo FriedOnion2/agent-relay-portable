@@ -46,7 +46,7 @@ runtime/ —— 可选的自带 Python（放了它才算真正免安装）
   便携 Linux runtime 需要完整标准库和动态库，并匹配 Ubuntu 的 CPU / glibc；
   不要仅复制 python3 文件，Windows python.exe 不能当 Linux Python 使用。
   若项目盘 noexec，用 bash 启动脚本；Python/venv 本身需在允许执行的 Linux 文件系统上。
-  双系统读取 Windows 会话见 docs/ubuntu-dual-boot.md。
+  双系统读取 Windows 会话见 docs/guide/ubuntu-dual-boot.md。
 
 
 放好之后，双击「启动_AgentRelay.bat」或运行：
