@@ -210,7 +210,7 @@ def cmd_list(args):
     print("-" * 100)
     for i, r in enumerate(rows, 1):
         sid = r["id"]
-        print(f"{i:>3}  {sid:<38} {r['updated']:<20} {r['turns']:>4}  {r['title'][:50]}")
+        print(f"{i:>3}  {sid:<38} {r['updated']:<20} {r['turns']:>4}  {R(r['title'])[:50]}")
         if r.get("variant_count", 1) > 1:
             print(T('list_variants', count=r['variant_count'], native_id=r['native_id']))
             print(T('list_file', path=r['path']))

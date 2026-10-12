@@ -125,6 +125,25 @@ class CliLanguageTests(unittest.TestCase):
         self.assertTrue(err.startswith('Error: '), err)
         self.assertFalse(CJK.search(err), err)
 
+    def test_session_titles_translate_only_generated_messages(self):
+        from relay import ir
+        from relay.adapters.base import SessionInfo
+        for title in (text('ui.untitled_session'), '未命名会话'):
+            expected = 'Untitled session' if hasattr(title, 'code') else title
+            row = SessionInfo('codex', 'fixture', title, '', '', None, None, 0, 0, '').to_dict()
+            conv = ir.Conversation(source='codex', id='fixture', title=title)
+            with patch.object(cli.registry, 'list_sessions', return_value=[row]):
+                code, out, _ = run(['--lang', 'en', 'list', 'codex'])
+                self.assertEqual(code, 0)
+                self.assertIn(expected, out)
+                zh = run(['list', 'codex', '--json'])[1]
+                en = run(['--lang', 'en', 'list', 'codex', '--json'])[1]
+                self.assertEqual(json.loads(zh), json.loads(en))
+            with patch.object(cli.registry, 'read_conversation', return_value=conv):
+                code, out, _ = run(['--lang', 'en', 'show', 'codex', 'fixture'])
+                self.assertEqual(code, 0)
+                self.assertIn('Title: ' + expected, out)
+
     def test_doctor_report_in_english(self):
         _, out, _ = run(['--lang', 'en', 'doctor'])
         self.assertIn('environment check', out)
