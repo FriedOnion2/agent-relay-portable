@@ -90,6 +90,17 @@ def encode(row):
                        ensure_ascii=False, sort_keys=True) + '\n').encode('utf-8')
 
 
+def _title(row):
+    if row['title']:
+        return row['title']
+    for message in row['messages']:
+        if message['role'] == ir.USER:
+            value = '\n'.join(part for part in (message['thinking'], message['content']) if part).strip()
+            if value:
+                return ir.summarize_line(value, 60)
+    return text('ui.session')
+
+
 def conversation(row, path=''):
     conv = ir.Conversation(source='yuanbao', id=row['id'], title=row['title'], path=path,
                            cwd=row.get('cwd', ''), model=row.get('model') or None,
@@ -101,7 +112,7 @@ def conversation(row, path=''):
         if message['content']:
             blocks.append(ir.Block.text_block(message['content']))
         conv.turns.append(ir.Turn(message['role'], blocks, source_type=FORMAT))
-    conv.title = conv.title or conv.first_user_text(60) or text('ui.session')
+    conv.title = _title(row)
     return conv
 
 
@@ -144,12 +155,12 @@ class YuanbaoAdapter(ReadOnlyAdapter):
         for path in self._files():
             stamp = self._stat(path)
             try:
+                prefix = self._prefix(path)
                 for index, row in enumerate(decode(archive.read_file(path))):
-                    conv = conversation(row, path)
-                    yield SessionInfo(self.name, self._prefix(path) + str(index), conv.title, conv.cwd,
-                                      conv.model or '', safe_ms(conv.created_at),
-                                      safe_ms(conv.updated_at) or stamp['updated_ms'], stamp['size'],
-                                      len(conv.turns), path, native_id=conv.id)
+                    yield SessionInfo(self.name, prefix + str(index), _title(row), row.get('cwd', ''),
+                                      row.get('model', ''), safe_ms(row.get('created_at')),
+                                      safe_ms(row.get('updated_at')) or stamp['updated_ms'], stamp['size'],
+                                      len(row['messages']), path, native_id=row['id'])
             except (ValueError, OSError) as exc:
                 yield SessionInfo(self.name, self._prefix(path) + 'error', Path(path).name, '', '', None,
                                   stamp['updated_ms'], stamp['size'], 0, path, False, error_text(exc))

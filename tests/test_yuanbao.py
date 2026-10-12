@@ -75,6 +75,33 @@ class YuanbaoTests(unittest.TestCase):
         for path in self.home.glob('*.json'):
             self.assertNotIn(b'never-import-credential', path.read_bytes())
 
+    def test_listing_summary_matches_detail_for_generated_and_user_titles(self):
+        rows = []
+        for number, (title, messages) in enumerate([
+            ('constructor', [{'role': 'user', 'content': 'do not rename my title'}]),
+            ('', [{'role': 'user', 'content': '  \n  '},
+                  {'role': 'assistant', 'content': 'skip assistant'},
+                  {'role': 'user', 'content': '正文 ' * 40, 'thinking': '思考\n第一行'}]),
+            ('', [{'role': 'assistant', 'content': 'assistant only'}]),
+            ('', [{'role': 'user', 'content': '  中文\n多行标题  '}]),
+        ]):
+            rows.append({'id': 'summary-%d' % number, 'title': title, 'messages': messages,
+                         'cwd': str(self.project), 'model': 'fixture',
+                         'created_at': '2026-10-12T01:00:00Z', 'updated_at': '2026-10-12T02:00:00Z'})
+        self.source.write_text(json.dumps({'exportTime': 'fixture', 'conversations': rows}), encoding='utf-8')
+        yuanbao.import_file(str(self.source))
+        for summary in self.adapter.discover():
+            with self.subTest(sid=summary.native_id):
+                detail = self.adapter.read(summary.id)
+                self.assertEqual(summary.title, detail.title)
+                self.assertEqual(getattr(summary.title, 'code', None), getattr(detail.title, 'code', None))
+                self.assertEqual(summary.native_id, detail.id)
+                self.assertEqual(summary.cwd, detail.cwd)
+                self.assertEqual(summary.model, detail.model)
+                self.assertEqual(summary.turns, len(detail.turns))
+                self.assertEqual(summary.created_ms, 1791766800000)
+                self.assertEqual(summary.updated_ms, 1791770400000)
+
     def test_lookalikes_bad_roles_empty_content_and_invalid_unicode_fail_before_writes(self):
         values = [[], {'messages': []}, {'source': 'codex', 'id': 'x', 'messages': []},
                   dict(document(), conversations=[])]
