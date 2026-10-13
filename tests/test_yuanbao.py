@@ -18,6 +18,7 @@ import server
 from relay import archive, health, ir, locations, preview, registry, session_store, skill_store, yuanbao
 from relay.adapters.yuanbao import YuanbaoAdapter, decode
 from relay.corpus import Corpus
+from relay.messages import render
 
 
 def document():
@@ -230,6 +231,20 @@ class YuanbaoTests(unittest.TestCase):
         with ThreadPoolExecutor(max_workers=8) as workers:
             list(workers.map(request, range(64)))
         self.assertEqual(list(self.adapter.discover()), expected)
+
+    def test_generated_title_metadata_is_independent_on_cold_and_cached_lists(self):
+        data = {'source': 'yuanbao', 'id': 'assistant-only',
+                'messages': [{'role': 'assistant', 'content': 'fixture'}]}
+        (self.home / 'placeholder.json').write_text(json.dumps(data), encoding='utf-8')
+        for _ in range(2):
+            row = next(self.adapter.discover())
+            self.assertEqual(render(row.title, 'en'), 'Session')
+            self.assertEqual(row.title.params, {})
+            row.title.code = 'ui.untitled_session'
+            row.title.params['caller-local'] = 'mutation'
+        fresh = next(self.adapter.discover())
+        self.assertEqual(render(fresh.title, 'en'), 'Session')
+        self.assertEqual(fresh.title.params, {})
 
     def test_partial_publication_failure_rolls_back_all_created_exports(self):
         original = yuanbao.atomic_write

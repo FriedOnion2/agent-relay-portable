@@ -7,7 +7,7 @@ import os
 import threading
 from pathlib import Path
 from collections import Counter, OrderedDict
-from dataclasses import replace
+from copy import deepcopy
 
 from .. import archive, ir
 from ..locations import resolve_home
@@ -181,7 +181,7 @@ class YuanbaoAdapter(ReadOnlyAdapter):
             cached = self._list_cache.get(path)
             if cached and cached[0] == stamp:
                 self._list_cache.move_to_end(path)
-                return [replace(row) for row in cached[1]]
+                return deepcopy(list(cached[1]))
             self._list_cache.pop(path, None)
         prefix = self._prefix(path)
         rows = [SessionInfo(self.name, prefix + str(index), _title(row), row.get('cwd', ''),
@@ -192,7 +192,7 @@ class YuanbaoAdapter(ReadOnlyAdapter):
         characters = sum(len(value) for row in rows for value in vars(row).values() if isinstance(value, str))
         if len(rows) <= MAX_CACHE_ROWS and characters <= MAX_CACHE_TEXT and self._list_stamp(path) == stamp:
             with self._list_lock:
-                self._list_cache[path] = (stamp, tuple(replace(row) for row in rows), characters)
+                self._list_cache[path] = (stamp, tuple(deepcopy(rows)), characters)
                 self._list_cache.move_to_end(path)
                 while (len(self._list_cache) > MAX_CACHE_FILES
                        or sum(len(entry[1]) for entry in self._list_cache.values()) > MAX_CACHE_ROWS
