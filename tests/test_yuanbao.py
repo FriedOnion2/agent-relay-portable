@@ -7,6 +7,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 
@@ -123,6 +124,112 @@ class YuanbaoTests(unittest.TestCase):
             decode(b'{"source":"yuanbao","source":"codex"}')
         with patch.object(archive, 'MAX_FILE', 5), self.assertRaises(ValueError):
             decode(b'{"messages":[]}')
+
+    def test_repeated_lists_reuse_summaries_without_reusing_detail_content(self):
+        shutil.copyfile(self.source, self.home / 'batch.json')
+        with patch('relay.adapters.yuanbao.decode', wraps=decode) as decoded:
+            first = list(self.adapter.discover())
+            first[0].title = 'caller modification'
+            first[0].variant_count = 99
+            second = list(self.adapter.discover())
+            self.assertEqual(decoded.call_count, 1)
+            self.assertEqual(second[0].title, document()['conversations'][0]['title'])
+            self.assertEqual(second[0].variant_count, 1)
+            self.assertEqual(self.adapter.read(second[0].id).turns[1].text(), '独立思考\n中文答案')
+            self.assertEqual(decoded.call_count, 2)  # Detail always rereads the source.
+
+    def test_list_refreshes_replaced_added_deleted_and_repaired_files(self):
+        path = self.home / 'batch.json'
+        shutil.copyfile(self.source, path)
+        first = list(self.adapter.discover())
+        stamp = path.stat()
+        replacement = self.home / 'replacement.tmp'
+        replacement.write_bytes(path.read_bytes().replace(b'other-private-title', b'newer-private-title'))
+        os.utime(replacement, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
+        os.replace(replacement, path)  # Same size and mtime; identity/ctime must invalidate.
+        second = list(self.adapter.discover())
+        self.assertEqual({row.id for row in first}, {row.id for row in second})
+        self.assertIn('newer-private-title', [row.title for row in second])
+        duplicate = self.home / 'duplicate.json'
+        shutil.copyfile(path, duplicate)
+        self.assertEqual({row.variant_count for row in self.adapter.discover()}, {2})
+        duplicate.unlink()
+        self.assertEqual({row.variant_count for row in self.adapter.discover()}, {1})
+        path.write_text('{broken', encoding='utf-8')
+        with patch('relay.adapters.yuanbao.decode', wraps=decode) as decoded:
+            self.assertFalse(next(self.adapter.discover()).readable)
+            self.assertFalse(next(self.adapter.discover()).readable)
+            self.assertEqual(decoded.call_count, 2)  # Failed reads must not stick in cache.
+        shutil.copyfile(self.source, path)
+        self.assertTrue(all(row.readable for row in self.adapter.discover()))
+        path.unlink()
+        self.assertEqual(list(self.adapter.discover()), [])
+
+    def test_list_does_not_cache_a_file_changed_during_decode(self):
+        path = self.home / 'batch.json'
+        shutil.copyfile(self.source, path)
+        def change_after_decode(raw):
+            rows = decode(raw)
+            path.write_bytes(raw.replace(b'other-private-title', b'newer-private-title'))
+            return rows
+        with patch('relay.adapters.yuanbao.decode', side_effect=change_after_decode):
+            list(self.adapter.discover())
+        self.assertIn('newer-private-title', [row.title for row in self.adapter.discover()])
+
+    def test_list_cache_limits_files_rows_and_text_without_hiding_sessions(self):
+        path = self.home / 'batch.json'
+        shutil.copyfile(self.source, path)
+        # Oversized summaries remain listable but are decoded on every request.
+        for limit in ('MAX_CACHE_ROWS', 'MAX_CACHE_TEXT'):
+            with self.subTest(limit=limit), patch('relay.adapters.yuanbao.' + limit, 1):
+                adapter = YuanbaoAdapter(home=str(self.home))
+                with patch('relay.adapters.yuanbao.decode', wraps=decode) as decoded:
+                    self.assertEqual(len(list(adapter.discover())), 2)
+                    self.assertEqual(len(list(adapter.discover())), 2)
+                    self.assertEqual(decoded.call_count, 2)
+        shutil.copyfile(path, self.home / 'second.json')
+        with patch('relay.adapters.yuanbao.MAX_CACHE_FILES', 1):
+            adapter = YuanbaoAdapter(home=str(self.home))
+            with patch('relay.adapters.yuanbao.decode', wraps=decode) as decoded:
+                self.assertEqual(len(list(adapter.discover())), 4)
+                list(adapter.discover())
+                self.assertGreater(decoded.call_count, 2)  # Evicted files are reloaded.
+            self.assertLessEqual(len(adapter._list_cache), 1)
+
+        data = document()
+        for row in data['conversations']:
+            row['title'] = 'x' * 1000
+        for filename in ('batch.json', 'second.json'):
+            (self.home / filename).write_text(json.dumps(data), encoding='utf-8')
+        for limit, maximum in [('MAX_CACHE_ROWS', 3), ('MAX_CACHE_TEXT', 3000)]:
+            with self.subTest(total=limit), patch('relay.adapters.yuanbao.' + limit, maximum):
+                adapter = YuanbaoAdapter(home=str(self.home))
+                with patch('relay.adapters.yuanbao.decode', wraps=decode) as decoded:
+                    list(adapter.discover())
+                    list(adapter.discover())
+                    self.assertGreater(decoded.call_count, 2)
+                self.assertLessEqual(len(adapter._list_cache), 1)
+
+    def test_cached_list_still_rejects_links_and_details_detect_new_corruption(self):
+        shutil.copyfile(self.source, self.home / 'batch.json')
+        rows = list(self.adapter.discover())
+        with patch.object(archive, 'is_link', return_value=True):
+            self.assertFalse(next(self.adapter.discover()).readable)
+        (self.home / 'batch.json').write_text('{broken', encoding='utf-8')
+        with self.assertRaises(ValueError):
+            self.adapter.read(rows[0].id)
+
+    def test_parallel_list_requests_have_independent_rows(self):
+        shutil.copyfile(self.source, self.home / 'batch.json')
+        expected = list(self.adapter.discover())
+        def request(_):
+            rows = list(self.adapter.discover())
+            self.assertEqual(rows, expected)
+            rows[0].title = 'request-local title'
+            rows[0].variant_count = 99
+        with ThreadPoolExecutor(max_workers=8) as workers:
+            list(workers.map(request, range(64)))
+        self.assertEqual(list(self.adapter.discover()), expected)
 
     def test_partial_publication_failure_rolls_back_all_created_exports(self):
         original = yuanbao.atomic_write
