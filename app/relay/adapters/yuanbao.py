@@ -4,8 +4,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import threading
 from pathlib import Path
-from collections import Counter
+from collections import Counter, OrderedDict
+from copy import deepcopy
 
 from .. import archive, ir
 from ..locations import resolve_home
@@ -16,6 +18,9 @@ from .base import ReadOnlyAdapter, SessionInfo
 FORMAT = "yuanbao-export-json"
 MAX_CONVERSATIONS = 4096
 MAX_MESSAGES = 100000
+MAX_CACHE_FILES = 128
+MAX_CACHE_ROWS = 4096
+MAX_CACHE_TEXT = 256 * 1024  # Characters across retained summary fields; never retain message bodies.
 
 
 def _object(pairs):
@@ -124,6 +129,8 @@ class YuanbaoAdapter(ReadOnlyAdapter):
 
     def __init__(self, home=None, clean=True):
         self.root = self.home = resolve_home(self.name, home)
+        self._list_cache = OrderedDict()
+        self._list_lock = threading.Lock()
 
     def info(self):
         result = super().info()
@@ -155,15 +162,43 @@ class YuanbaoAdapter(ReadOnlyAdapter):
         for path in self._files():
             stamp = self._stat(path)
             try:
-                prefix = self._prefix(path)
-                for index, row in enumerate(decode(archive.read_file(path))):
-                    yield SessionInfo(self.name, prefix + str(index), _title(row), row.get('cwd', ''),
-                                      row.get('model', ''), safe_ms(row.get('created_at')),
-                                      safe_ms(row.get('updated_at')) or stamp['updated_ms'], stamp['size'],
-                                      len(row['messages']), path, native_id=row['id'])
+                yield from self._list_file(path)
             except (ValueError, OSError) as exc:
                 yield SessionInfo(self.name, self._prefix(path) + 'error', Path(path).name, '', '', None,
                                   stamp['updated_ms'], stamp['size'], 0, path, False, error_text(exc))
+
+    @staticmethod
+    def _list_stamp(path):
+        if archive.is_link(path):
+            raise ValueError(text('err.only_regular_files_can_be_packaged_symbolic_links_are_excluded'))
+        st = os.stat(path)
+        return (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns, st.st_mode)
+
+    def _list_file(self, path):
+        """Bounded LRU of detached summaries; details always read the original file."""
+        stamp = self._list_stamp(path)
+        with self._list_lock:
+            cached = self._list_cache.get(path)
+            if cached and cached[0] == stamp:
+                self._list_cache.move_to_end(path)
+                return deepcopy(list(cached[1]))
+            self._list_cache.pop(path, None)
+        prefix = self._prefix(path)
+        rows = [SessionInfo(self.name, prefix + str(index), _title(row), row.get('cwd', ''),
+                            row.get('model', ''), safe_ms(row.get('created_at')),
+                            safe_ms(row.get('updated_at')) or stamp[3] // 1000000, stamp[2],
+                            len(row['messages']), path, native_id=row['id'])
+                for index, row in enumerate(decode(archive.read_file(path)))]
+        characters = sum(len(value) for row in rows for value in vars(row).values() if isinstance(value, str))
+        if len(rows) <= MAX_CACHE_ROWS and characters <= MAX_CACHE_TEXT and self._list_stamp(path) == stamp:
+            with self._list_lock:
+                self._list_cache[path] = (stamp, tuple(deepcopy(rows)), characters)
+                self._list_cache.move_to_end(path)
+                while (len(self._list_cache) > MAX_CACHE_FILES
+                       or sum(len(entry[1]) for entry in self._list_cache.values()) > MAX_CACHE_ROWS
+                       or sum(entry[2] for entry in self._list_cache.values()) > MAX_CACHE_TEXT):
+                    self._list_cache.popitem(last=False)
+        return rows
 
     def read(self, sid):
         if not isinstance(sid, str) or not sid.strip():
