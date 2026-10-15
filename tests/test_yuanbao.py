@@ -171,11 +171,14 @@ class YuanbaoTests(unittest.TestCase):
         shutil.copyfile(self.source, path)
         def change_after_decode(raw):
             rows = decode(raw)
-            path.write_bytes(raw.replace(b'other-private-title', b'newer-private-title'))
+            # A same-size rewrite can share mtime/ctime on coarse filesystems.
+            # Change size so the race is observable without waiting for a clock tick.
+            path.write_bytes(raw.replace(b'other-private-title', b'newer-private-title-after-edit'))
             return rows
         with patch('relay.adapters.yuanbao.decode', side_effect=change_after_decode):
             list(self.adapter.discover())
-        self.assertIn('newer-private-title', [row.title for row in self.adapter.discover()])
+        self.assertNotIn(str(path), self.adapter._list_cache)
+        self.assertIn('newer-private-title-after-edit', [row.title for row in self.adapter.discover()])
 
     def test_list_cache_limits_files_rows_and_text_without_hiding_sessions(self):
         path = self.home / 'batch.json'
