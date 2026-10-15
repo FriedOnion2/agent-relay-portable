@@ -29,7 +29,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
       - run: python -m pip install -r requirements-optional.txt
@@ -45,7 +45,7 @@ jobs:
           PYTHONIOENCODING: utf-8
         run: python scripts/smoke_all.py --json smoke-${{ matrix.os_name }}.json
       - if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: smoke-${{ matrix.os_name }}
           path: smoke-${{ matrix.os_name }}.json
@@ -56,7 +56,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: smoke-*
           path: results
@@ -74,7 +74,7 @@ jobs:
       issues: write
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: smoke-*
           path: results
