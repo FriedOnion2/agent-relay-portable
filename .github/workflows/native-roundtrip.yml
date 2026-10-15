@@ -13,12 +13,12 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
       - run: npm install -g @openai/codex
       - run: python scripts/smoke_cross_device.py --phase windows-source --output outgoing
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: native-windows-source
           path: outgoing/
@@ -32,16 +32,16 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
       - run: npm install -g @openai/codex
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: native-windows-source
           path: incoming
       - run: python scripts/smoke_cross_device.py --phase ubuntu --input incoming --output outgoing
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: native-ubuntu-return
           path: outgoing/
@@ -55,16 +55,16 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
       - run: npm install -g @openai/codex
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: native-ubuntu-return
           path: incoming
       - run: python scripts/smoke_cross_device.py --phase windows-return --input incoming --output outgoing
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: native-windows-return
           path: outgoing/
