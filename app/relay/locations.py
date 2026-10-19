@@ -16,6 +16,8 @@ SOURCES = {
     "yuanbao": ("Tencent Yuanbao", ""),
 }
 
+CROSS_ACCOUNT_SOURCES = ('windows_workbuddy_ai', 'ubuntu_workbuddy_ai')
+
 
 def default_home(source: str) -> str:
     if source == "yuanbao":

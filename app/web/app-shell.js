@@ -107,7 +107,12 @@ function bind(){
   $('#btnEnvironment').onclick=async()=>{
     showPage('environment');
     const selector=$('#deviceAgent');selector.innerHTML='';
-    for(const [key,label] of Object.entries(AGENTS)){
+    const homes={...AGENTS};
+    for(const prefix of ['windows','ubuntu']){
+      const key=prefix+'_workbuddy_ai';
+      if(state.sources.some(source=>source.name===key))homes[key]=prefix+' · '+AGENTS.workbuddy_ai;
+    }
+    for(const [key,label] of Object.entries(homes)){
       const option=document.createElement('option');option.value=key;option.textContent=label;selector.appendChild(option);
     }
     try{showEnvironment(await api('/api/environment'));}catch(e){toast(e.message,true);}

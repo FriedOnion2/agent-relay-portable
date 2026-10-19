@@ -24,7 +24,7 @@ import subprocess
 import sys
 from pathlib import Path
 from relay.runtime import project_root
-from relay.locations import SOURCES
+from relay.locations import SOURCES, CROSS_ACCOUNT_SOURCES
 from relay.windows import PROFILE_ENV, selected_profile
 
 MIN_PY = (3, 8)
@@ -213,7 +213,7 @@ def load_config() -> dict:
         homes = cfg.get("agent_homes", {})
         if not isinstance(homes, dict):
             raise ValueError(message_text('err.agent_homes_must_be_a_json_object'))
-        for key in SOURCES:
+        for key in (*SOURCES, *CROSS_ACCOUNT_SOURCES):
             if key in homes and not isinstance(homes[key], str):
                 raise ValueError(message_text('err.agent_homes_key_must_be_a_string', key=key))
         if "port" in cfg and (type(cfg["port"]) is not int or not 1 <= cfg["port"] <= 65535):
@@ -262,7 +262,7 @@ def apply_config(cfg: dict | None = None) -> list[str]:
         _APPLIED_ENV[UBUNTU_ENV] = os.environ[UBUNTU_ENV]
         applied.append(f"Ubuntu 用户目录（只读） ← {ubuntu}")
     homes = cfg.get("agent_homes") or {}
-    for key in SOURCES:
+    for key in (*SOURCES, *CROSS_ACCOUNT_SOURCES):
         envname = "RELAY_" + key.upper() + "_HOME"
         v = (homes.get(key) or "").strip()
         if v:

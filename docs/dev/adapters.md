@@ -2,7 +2,7 @@
 
 API v1 复用 `relay.adapters.base.BaseAdapter` 与 `relay.ir.Conversation`。每个来源有独立 `name`、`label`、`home`、`api_version = 1` 和 `can_write`；`available()` 判断数据目录，`discover()` 返回 `SessionInfo`，`read(id)` 返回统一会话。`info()` 描述能力，不能以目录存在证明客户端已安装或可续聊。
 
-内置来源分别声明读取、Markdown 导出、通用写入、原生打包/恢复、Skill 存储。`write()` 仅用于四个通用目标；原生恢复由专门模块检查格式、ID 冲突与索引并处理失败撤回。新增 writer 必须满足这些约定，不能直接把可写属性打开。
+内置来源分别声明读取、Markdown 导出、通用写入、原生打包/恢复、Skill 存储。`write()` 仅用于五个通用目标；原生恢复由专门模块检查格式、ID 冲突与索引并处理失败撤回。新增 writer 必须满足这些约定，不能直接把可写属性打开。
 
 社区首版支持可信的单个 `.py` 文件，使用标准库与 `relay` 接口。它可以读取、导出和作为通用转换来源，不能通过 AgentRelay 原生打包、原生恢复、写入或管理 Skill。不自动扫描执行插件，不通过 pip 自动发现；源码和冻结程序都使用相同 worker 入口。
 

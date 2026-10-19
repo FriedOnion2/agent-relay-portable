@@ -1,4 +1,5 @@
 {
+  "err.workbuddy_ai_cross_account_directory": "跨系统账号目录必须是所选系统用户 .workbuddy-ai 下已存在的 user-* 直接子目录，且不能是链接。",
   "err.workbuddy_ai_select_account_directory": "发现多个 WorkBuddy AI 账号。请在本机目录配置中将 workbuddy_ai 指向要传输的 .workbuddy-ai/user-... 目录后再操作。",
   "msg.workbuddy_ai_file_support": "国际版 WorkBuddy AI JSONL 对话，识别账号目录。支持文件层传输；桌面侧栏索引与真实客户端续聊尚未验证。不搬迁账号数据库和登录凭据。",
   "err.a_directory_and_clear_cannot_be_used_together": "目录与 --clear 不能同时使用",

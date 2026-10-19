@@ -719,7 +719,8 @@ def build_parser():
     health.add_argument('--output', help=T('h_health_output'))
     health.set_defaults(func=cmd_health)
     device = sub.add_parser('device-config', help=T('h_device'))
-    device.add_argument('--agent', choices=AGENTS)
+    from relay.locations import CROSS_ACCOUNT_SOURCES
+    device.add_argument('--agent', choices=[*AGENTS, *CROSS_ACCOUNT_SOURCES])
     device.add_argument('--home', help=T('h_device_home'))
     device.set_defaults(func=cmd_device)
     plugin = sub.add_parser('plugins', help=T('h_plugins'))

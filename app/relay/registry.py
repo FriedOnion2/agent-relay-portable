@@ -48,7 +48,8 @@ def get(source: str, **kw) -> BaseAdapter:
         if kw.keys() - {"clean"}:
             raise ValueError(message_text('err.cross_system_source_roots_are_set_by_windows_user_home_ubuntu_user_home'))
         cached = _CACHE.get(key)
-        if not kw and cached and cached.profile == profile:
+        account_home = os.environ.get('RELAY_' + key.upper() + '_HOME', '').strip() if native == 'workbuddy_ai' else ''
+        if not kw and cached and cached.profile == profile and cached.account_home == account_home:
             return cached
         a = (UbuntuSource if ubuntu else WindowsSource)(native, _ADAPTERS[native], profile, **kw)
         if not kw:

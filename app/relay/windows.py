@@ -87,12 +87,25 @@ def discover_profiles(roots=None):
 
 class WindowsSource(ReadOnlyAdapter):
     """Delegate format parsing while enforcing read-only at the adapter boundary."""
+    profile_prefix = 'windows'
+
     def __init__(self, source, factory, profile, clean=True):
         self.name = "windows_" + source
         self.label = "Windows · " + SOURCES[source][0]
         self.profile = profile
         self.source = source
-        self.adapter = factory(home=str(Path(profile) / PROFILE_DIRS[source]), clean=clean)
+        root = Path(profile) / PROFILE_DIRS[source]
+        self.account_home = (os.environ.get('RELAY_' + self.profile_prefix.upper() + '_WORKBUDDY_AI_HOME', '').strip()
+                             if source == 'workbuddy_ai' else '')
+        if self.account_home:
+            from . import archive
+            selected = Path(self.account_home).expanduser()
+            if (not selected.is_absolute() or not selected.is_dir() or archive.is_link(root)
+                    or archive.is_link(selected) or selected.parent.resolve() != root.resolve()
+                    or not selected.name.startswith('user-')):
+                raise ValueError(message_text('err.workbuddy_ai_cross_account_directory'))
+            root = selected
+        self.adapter = factory(home=str(root), clean=clean)
         if source == "codebuddy":
             self.adapter.roots = [self.adapter.root, str(Path(profile) / "AppData" / "Local"
                                   / "CodeBuddyExtension" / "Data")]

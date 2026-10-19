@@ -7,7 +7,7 @@
 - WorkBuddy / Claude / SDK / Codex / CodeBuddy CLI 最多读取 32 MiB，超出时可导出带标记的部分内容，迁移会停止；DSH 普通/解压数据与 CodeBuddy IDE 总读取量超过限制会拒绝读取。
 - Claude / SDK 默认读取当前 parentUuid 主链，不合并旧分支与子代理；压缩前的旧原文仍在原文件中，但不作为当前上下文重复迁移。
 - DSH 导出保留事件历史，不重放 surface replacement、compaction、seed 或 native resume 状态。
-- 网页及 CLI 提供 WorkBuddy、DSH、Claude、Codex 四个迁移目标；CodeBuddy、SDK 仍只读。
+- 网页及 CLI 提供 WorkBuddy、WorkBuddy AI 国际版、DSH、Claude、Codex 五个迁移目标；CodeBuddy、SDK 仍只读。
 - 腾讯元宝仅支持兼容 JSON 导出：需要先取得本地 JSON，ZIP 恢复到 AgentRelay 导出目录。未实现桌面数据库自动读取、元宝原生写回、云端采集或元宝 Skill 管理；合成格式测试不能证明真实导出完整或客户端续聊可用，见[元宝格式契约](formats/yuanbao.md)。
 - DSH 导入写入 v0 原生 Zstd 日志，兼容本机 0.1.2-rc.1，亦已通过官方 0.2.1-alpha.1 格式目录严格迁移到 v4 的验证。导入历史会关闭工具调用；缺失结果的工具调用保留为文字，不作为待执行工作。图片及非原生内容块降级为标注文本。目标工作目录必须是当前系统的绝对路径。
 - CodeBuddy/SDK 的通用转换目标限制不影响双向对应软件原生文件迁移；后者保留原生记录，

@@ -126,8 +126,8 @@ def merge(shared, local=None):
 
 
 def set_home(agent, home):
-    from .locations import SOURCES
-    if agent not in SOURCES:
+    from .locations import SOURCES, CROSS_ACCOUNT_SOURCES
+    if agent not in SOURCES and agent not in CROSS_ACCOUNT_SOURCES:
         raise ValueError(message_text('msg.choose_a_built_in_agent'))
     if home:
         path = Path(home).expanduser()

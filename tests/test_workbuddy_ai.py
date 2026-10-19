@@ -147,6 +147,63 @@ class WorkBuddyAITests(unittest.TestCase):
         self.assertEqual(result['status'], 'passed')
         self.assertEqual(result['native_resume'], 'not-tested')
 
+    def test_cross_system_multi_account_selection_and_native_roundtrip(self):
+        from relay import device, native_import
+        remote_profile = self.root / 'remote-profile'
+        remote_root = remote_profile / '.workbuddy-ai'
+        first = remote_root / 'user-first-personal'
+        second = remote_root / 'user-second-personal'
+        first.mkdir(parents=True)
+        second.mkdir()
+        WorkBuddyAIAdapter(home=str(first)).write(sample(), session_id='remote-first')
+        WorkBuddyAIAdapter(home=str(second)).write(sample(), session_id='remote-second')
+        for prefix, system in (('windows', 'Linux'), ('ubuntu', 'Windows')):
+            key = prefix + '_workbuddy_ai'
+            envkey = 'RELAY_' + key.upper() + '_HOME'
+            with self.subTest(prefix=prefix), patch('platform.system', return_value=system), patch.dict(os.environ, {
+                    'RELAY_' + prefix.upper() + '_USER_HOME': str(remote_profile), envkey: ''}):
+                registry._CACHE.pop(key, None)
+                with self.assertRaises(ValueError):
+                    registry.get(key)
+                with patch.object(device, 'config_path', return_value=self.root / (prefix + '.json')):
+                    device.set_home(key, str(first))
+                    bootstrap.apply_config(device.read())
+                    self.assertEqual(Path(registry.get(key).adapter.root), first)
+                    device.set_home(key, str(second))
+                    bootstrap.apply_config(device.read())
+                remote = registry.get(key)
+                self.assertEqual(Path(remote.adapter.root), second)
+                self.assertIn('remote-second', [row.id for row in remote.discover()])
+                self.assertNotIn('remote-first', [row.id for row in remote.discover()])
+                mode = 'import-windows' if prefix == 'windows' else 'import-ubuntu'
+                # Synthetic Windows target paths are validated independently of
+                # the host's real filesystem in this OS-selection test.
+                with patch.object(native_import, '_windows_cwd', return_value=str(self.project)):
+                    src, dst, cwd, target_name, target_os = native_import.context(mode, key, str(self.project))
+                    result = native_import._migrate(src, dst, 'remote-second', cwd, prefix + '-copy',
+                                                   'none', mode, target_name, target_os)
+                self.assertEqual(content(self.source.read(result['to']['id'])), content(sample()))
+                if prefix == 'windows':
+                    result = native_import.export_windows('workbuddy_ai', result['to']['id'], 'D:/project',
+                                                          project_path=str(self.project), session_id='back-copy')
+                    self.assertIn(second, Path(result['to']['path']).parents)
+                    self.assertEqual(content(remote.adapter.read('back-copy')), content(sample()))
+                self.assertEqual([row.id for row in WorkBuddyAIAdapter(home=str(first)).discover()], ['remote-first'])
+
+    def test_cross_account_override_cannot_escape_selected_profile(self):
+        from relay.windows import WindowsSource
+        root = self.root / 'profile' / '.workbuddy-ai'
+        account = root / 'user-valid-personal'
+        account.mkdir(parents=True)
+        for invalid in (self.account, root, account / 'missing'):
+            with self.subTest(path=invalid), patch.dict(os.environ, {'RELAY_WINDOWS_WORKBUDDY_AI_HOME': str(invalid)}):
+                with self.assertRaises(ValueError) as error:
+                    WindowsSource('workbuddy_ai', WorkBuddyAIAdapter, root.parent)
+                self.assertEqual(error.exception.args[0].code, 'err.workbuddy_ai_cross_account_directory')
+        with patch.dict(os.environ, {'RELAY_WINDOWS_WORKBUDDY_AI_HOME': str(account)}), \
+                patch.object(archive, 'is_link', return_value=True), self.assertRaises(ValueError):
+            WindowsSource('workbuddy_ai', WorkBuddyAIAdapter, root.parent)
+
     def test_project_directory_matches_584_client_path_fixtures(self):
         # Expected outputs acquired by replaying only the shipped pure path
         # helpers in Node; the client itself and its network are never started.
