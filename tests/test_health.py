@@ -15,7 +15,7 @@ class HealthTests(unittest.TestCase):
         with patch.object(registry,'get',side_effect=AssertionError('must not inspect user data')):
             result=health.report()
         self.assertTrue(result['ok'])
-        self.assertEqual(len(result['adapters']),7)
+        self.assertEqual(len(result['adapters']),8)
         for row in result['adapters']:
             self.assertEqual(row['status'],'passed')
             self.assertIsNone(row['client_version'])

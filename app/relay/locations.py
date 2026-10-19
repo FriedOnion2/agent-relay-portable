@@ -7,6 +7,7 @@ from pathlib import Path
 
 SOURCES = {
     "workbuddy": ("WorkBuddy", "projects"),
+    "workbuddy_ai": ("WorkBuddy AI (International)", "projects"),
     "dsh": ("DeepSeek Harness", "sessions"),
     "codebuddy": ("CodeBuddy", ""),
     "claude": ("Claude Code", "projects"),
@@ -29,12 +30,12 @@ def default_home(source: str) -> str:
         if system == "Darwin":
             return str(home / "Library" / "Application Support" / "CodeBuddyExtension" / "Data")
         return str(home / ".config" / "CodeBuddyExtension" / "Data")
-    return str(home / {"dsh":".dsh", "workbuddy":".workbuddy",
+    return str(home / {"dsh":".dsh", "workbuddy":".workbuddy", "workbuddy_ai":".workbuddy-ai",
                        "codebuddy":".codebuddy", "claude":".claude", "claude_sdk":".claude", "codex":".codex"}[source])
 
 
 def resolve_home(source: str, explicit: str | None = None) -> str:
-    agent_env = {"dsh":"DSH_HOME", "workbuddy":"WORKBUDDY_HOME",
+    agent_env = {"dsh":"DSH_HOME", "workbuddy":"WORKBUDDY_HOME", "workbuddy_ai":"WORKBUDDY_AI_HOME",
                  "codebuddy":"CODEBUDDY_HOME", "claude":"CLAUDE_CONFIG_DIR", "claude_sdk":"CLAUDE_CONFIG_DIR",
                  "codex":"CODEX_HOME", "yuanbao":"YUANBAO_EXPORT_HOME"}[source]
     value = next((v.strip() for v in (explicit, os.environ.get("RELAY_" + source.upper() + "_HOME"),

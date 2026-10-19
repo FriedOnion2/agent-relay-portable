@@ -20,6 +20,7 @@ CLIENTS = [
     ('Claude Code', '需要登录才能续聊，且无法无头驱动'),
     ('CodeBuddy', 'AgentRelay 只读取 CodeBuddy，没有写入路径可测'),
     ('WorkBuddy', '桌面应用，无法在无界面环境启动'),
+    ('WorkBuddy AI (International)', '已覆盖隔离 JSONL 传输；桌面侧栏与真实续聊未验证'),
 ]
 
 

@@ -13,7 +13,7 @@ from .locations import SOURCES
 from .adapters.base import ReadOnlyAdapter
 
 PROFILE_ENV = "RELAY_WINDOWS_USER_HOME"
-PROFILE_DIRS = {"workbuddy": ".workbuddy", "dsh": ".dsh", "codebuddy": ".codebuddy",
+PROFILE_DIRS = {"workbuddy": ".workbuddy", "workbuddy_ai": ".workbuddy-ai", "dsh": ".dsh", "codebuddy": ".codebuddy",
                 "claude": ".claude", "claude_sdk": ".claude", "codex": ".codex"}
 
 

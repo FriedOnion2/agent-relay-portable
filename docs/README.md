@@ -29,7 +29,7 @@
 | [limitations.md](reference/limitations.md) | 已知限制与未验证项 |
 | [source-formats.md](reference/source-formats.md) | 各来源的格式与识别依据 |
 | [yuanbao-compatibility.md](reference/yuanbao-compatibility.md) | 腾讯元宝接入范围与格式证据 |
-| [reference/formats/](reference/source-formats.md) | 逐个来源的格式说明（claude、claude_sdk、codebuddy、codex、dsh、workbuddy、yuanbao） |
+| [reference/formats/](reference/source-formats.md) | 逐个来源的格式说明（claude、claude_sdk、codebuddy、codex、dsh、workbuddy、workbuddy_ai、yuanbao） |
 
 ## 开发与维护（`dev/`）
 

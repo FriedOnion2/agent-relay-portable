@@ -13,6 +13,7 @@ from .adapters.claude_sdk import ClaudeSdkAdapter
 from .adapters.codex import CodexAdapter
 from .adapters.dsh import DshAdapter
 from .adapters.workbuddy import WorkBuddyAdapter
+from .adapters.workbuddy_ai import WorkBuddyAIAdapter
 from .adapters.codebuddy import CodeBuddyAdapter
 from .adapters.yuanbao import YuanbaoAdapter
 from .adapters.markdown import render as render_markdown
@@ -20,7 +21,7 @@ from .adapters.base import BaseAdapter
 from .windows import WindowsSource, selected_profile
 from .ubuntu import UbuntuSource, selected_profile as selected_ubuntu
 
-_ADAPTERS = {"workbuddy": WorkBuddyAdapter, "dsh": DshAdapter,
+_ADAPTERS = {"workbuddy": WorkBuddyAdapter, "workbuddy_ai": WorkBuddyAIAdapter, "dsh": DshAdapter,
              "codebuddy": CodeBuddyAdapter, "claude": ClaudeAdapter,
              "claude_sdk": ClaudeSdkAdapter, "codex": CodexAdapter, "yuanbao": YuanbaoAdapter}
 

@@ -181,6 +181,7 @@ DEFAULT_CONFIG = {
         "codex": "",
         "dsh": "",
         "workbuddy": "",
+        "workbuddy_ai": "",
         "codebuddy": "",
         "yuanbao": "",
     },

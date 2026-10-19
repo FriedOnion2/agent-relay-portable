@@ -22,6 +22,8 @@ SDK 默认尊重 `CLAUDE_CONFIG_DIR`；独立覆盖为 `agent_homes.claude_sdk` 
 不会继承仅为 Claude Code 设置的 `RELAY_CLAUDE_HOME`。
 目录应填写工具根目录，不要填写其 `projects` / `sessions` 子目录。
 
+**WorkBuddy AI 国际版** 使用独立键 `workbuddy_ai`、`RELAY_WORKBUDDY_AI_HOME` / `WORKBUDDY_AI_HOME`，默认 `~/.workbuddy-ai`；不继承国内版 WorkBuddy 或 CodeBuddy 的目录。新版检测到唯一 `user-…` 子目录时使用该账号根目录；多个账号时停止并要求在「环境与兼容」选择具体账号目录，不能填 `projects`。切换账号后重新选择本机目录。操作说明见[国际版格式契约](../reference/formats/workbuddy_ai.md)。
+
 `windows_user_home` / `RELAY_WINDOWS_USER_HOME` 指向 Ubuntu 挂载的 Windows 用户目录，只在 Linux 生效。
 临时 `--windows-user` 优先于保存的选择；此项追加只读来源，不改变本机写入目标。
 

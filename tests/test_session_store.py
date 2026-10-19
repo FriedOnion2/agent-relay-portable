@@ -47,7 +47,7 @@ class SessionStoreTests(unittest.TestCase):
         moved = self.root / "other-device-storage"
         shutil.move(str(storage), str(moved))
         rows = archive.list_packages(session_store.KIND, root=moved)
-        self.assertEqual(len(rows), 7)
+        self.assertEqual(len(rows), 8)
 
     def test_dsh_seed_writer_can_be_stored_and_restored_without_ir_conversion(self):
         source = self.targets["dsh"]

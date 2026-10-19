@@ -25,6 +25,8 @@ Windows ↔ Ubuntu 的对应软件迁移复制完整 v4 或可验证 v0 seed 原
 
 ## WorkBuddy 与 CodeBuddy
 
+国际版 WorkBuddy AI 使用独立来源 `workbuddy_ai`。2026-10-19 对本机 5.8.4 安装包静态核查确认 JSONL 存储、账号分目录及新的项目路径编码；[国际版格式契约](formats/workbuddy_ai.md) 记录路径、原生传输范围与测试证据。它不与 `.workbuddy` 或 `.codebuddy` 合并识别。
+
 - WorkBuddy 使用原有 Tencent JSONL adapter，根目录独立为 `.workbuddy/projects`。
 - [tokscale CodeBuddy CLI reader](https://github.com/junhoyeo/tokscale/blob/main/crates/tokscale-core/src/sessions/codebuddy.rs)：`.codebuddy/projects` 与 `message/function_call` 同族记录。
 - [AgentsView CodeBuddy IDE reader](https://github.com/kenn-io/agentsview/blob/main/internal/parser/codebuddy.go)：`history/<workspace>/<session>/index.json` 与 `messages/<id>.json`，按 manifest 顺序读取。

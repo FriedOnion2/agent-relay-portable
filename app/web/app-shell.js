@@ -61,7 +61,7 @@ function buildTabs(){
 function buildTarget(){
   const sel = $('#target'); sel.innerHTML='';
   const opts = [...new Set([...Object.keys(AGENTS),...state.sources.map(s=>s.name)])].filter(k=>k!==state.source &&
-    (state.sources.find(s=>s.name===k)?.can_write ?? ['workbuddy','dsh','claude','codex'].includes(k)));
+    (state.sources.find(s=>s.name===k)?.can_write ?? ['workbuddy','workbuddy_ai','dsh','claude','codex'].includes(k)));
   const same = state.source.replace(/^(windows_|ubuntu_)/,'');
   state.target = opts.includes(same) ? same : (opts.includes(state.target) ? state.target : opts[0]);
   opts.forEach(k=>{
