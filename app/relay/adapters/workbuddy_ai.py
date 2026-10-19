@@ -30,7 +30,14 @@ class WorkBuddyAIAdapter(WorkBuddyAdapter):
         # WorkBuddy AI 5.8.4 compressWorkspacePathName: preserve case, Unicode
         # and spaces; long components use a UTF-8 byte hash, not the legacy slug.
         native_absolute = os.path.isabs(cwd) and (os.name != 'nt' or is_windows_path(cwd))
-        canonical = os.path.realpath(cwd) if native_absolute else cwd
+        canonical = cwd
+        if native_absolute:
+            try:
+                # Match the client's realpathSync try/catch: a missing full
+                # path stays unchanged, even when a parent is a macOS link.
+                canonical = str(Path(cwd).resolve(strict=True))
+            except (OSError, RuntimeError):
+                pass
         value = re.sub(r'-+', '-', re.sub(r'[/\\:]', '-', canonical)).strip('-')
         raw = value.encode('utf-8')
         if len(raw) <= 255:
