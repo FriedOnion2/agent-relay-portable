@@ -1,6 +1,6 @@
 {
   "err.workbuddy_ai_cross_account_directory": "The cross-system account must be an existing user-* directory directly under the selected profile's .workbuddy-ai, without links.",
-  "err.workbuddy_ai_select_account_directory": "Multiple WorkBuddy AI accounts found. Set this device's workbuddy_ai directory to the intended .workbuddy-ai/user-... directory before transferring conversations.",
+  "err.workbuddy_ai_select_account_directory": "Multiple WorkBuddy AI accounts found. Configure the matching local or cross-system international source with the intended .workbuddy-ai/user-... directory before transferring conversations.",
   "msg.workbuddy_ai_file_support": "WorkBuddy AI international JSONL conversations; account-scoped directories are recognized. File transfer is supported; desktop sidebar indexing and real client resume have not been verified. Account databases and credentials are not transferred.",
   "err.a_directory_and_clear_cannot_be_used_together": "A directory and --clear cannot be used together",
   "err.a_dsh_subagent_session_needs_its_complete_parent_relationship_and_cannot_be_imported_alone": "A DSH subagent session needs its complete parent relationship and cannot be imported alone; export Markdown instead",
