@@ -214,7 +214,7 @@ CodeBuddy/SDK 支持读取及对应软件原生恢复。国际版恢复尚不登
 DSH 导入写入 v0 历史；图片、加密思考及特有工具协议不能保证完整跨工具转换。
 Codex Desktop 的索引可能需要额外刷新，JSONL 写入不保证自动出现在桌面列表。
 Skill 只复制文件，不执行脚本、不安装依赖或转换目标工具接口。
-本地运行，不上传数据、不调用模型。开发预览版请先用副本验证。
+本地运行，不上传数据、不调用模型。迁移前请先备份，并按兼容表用副本验证目标客户端。
 完整使用说明：https://github.com/FriedOnion2/agent-relay-portable
 '''.format(tag=tag, kind='滚动开发版' if '-dev' in tag else '正式版'))
     asset = output / (name + '.zip')

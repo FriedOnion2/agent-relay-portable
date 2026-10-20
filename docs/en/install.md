@@ -4,7 +4,7 @@ The Release bundle and running from source, ports and quitting. Chinese original
 
 ## Release bundle (no Python needed)
 
-Stable release: [v1.0.0](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v1.0.0) (Latest). **Rolling dev build:** [`dev`](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/dev) — rebuilt on every merge to `main`, always exactly one, may be unstable.
+Stable release: [v1.1.0](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v1.1.0) (Latest). **Rolling dev build:** [`dev`](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/dev) — rebuilt on every merge to `main`, always exactly one, may be unstable.
 
 Download **`AgentRelay-<version>-universal.zip`** from [GitHub Releases](https://github.com/FriedOnion2/agent-relay-portable/releases), extract it completely and run the launcher for your device. One bundle contains Windows x64, Mac (Apple Silicon / Intel) and Linux x64 runtimes, with Python and `zstandard` built in; you do not need to install Python or Node.js. Do not pick GitHub's automatically generated **Source code** archive; that is the development source.
 
