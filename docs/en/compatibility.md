@@ -1,5 +1,7 @@
 # Compatibility summary
 
+The development build adds [WorkBuddy AI International](../reference/formats/workbuddy_ai.md): static checks of the installed 5.8.4 package and isolated synthetic tests cover reading, writing, native archives, and file transfer between Windows and Ubuntu. Desktop sidebar indexing and real client resume remain unverified. Domestic WorkBuddy and the international edition are configured separately.
+
 A summary of the Chinese page [reference/compatibility.md](../reference/compatibility.md), which holds the full evidence and wins if the two differ.
 
 ## Supported systems

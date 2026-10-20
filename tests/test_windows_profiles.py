@@ -17,6 +17,7 @@ from relay import registry, windows, device
 from relay.adapters.codex import CodexAdapter
 from relay.adapters.claude import ClaudeAdapter
 from relay.adapters.workbuddy import WorkBuddyAdapter
+from relay.adapters.workbuddy_ai import WorkBuddyAIAdapter
 from test_relay import sample, content
 import test_sources
 
@@ -29,7 +30,7 @@ class WindowsProfilesTests(unittest.TestCase):
         self.profile = self.root / "Win volume" / "Users" / "中文 user"
         self.profile.mkdir(parents=True)
         for cls, folder in ((CodexAdapter, ".codex"), (ClaudeAdapter, ".claude"),
-                            (WorkBuddyAdapter, ".workbuddy")):
+                            (WorkBuddyAdapter, ".workbuddy"), (WorkBuddyAIAdapter, ".workbuddy-ai")):
             cls(home=str(self.profile / folder)).write(sample(), session_id="fixture")
         WorkBuddyAdapter(home=str(self.profile / ".codebuddy")).write(sample(), session_id="cli")
         test_sources.CodeBuddyTests().fixture(str(self.profile / "AppData/Local/CodeBuddyExtension/Data"))
@@ -53,7 +54,7 @@ class WindowsProfilesTests(unittest.TestCase):
 
     def test_six_windows_sources_read_export_without_touching_source_files(self):
         before = {p: p.read_bytes() for p in self.profile.rglob("*") if p.is_file()}
-        self.assertEqual(len(registry.all_keys()), 13)
+        self.assertEqual(len(registry.all_keys()), 15)
         for native in registry.cross_system_keys():
             key = "windows_" + native
             adapter = registry.get(key)
@@ -71,7 +72,7 @@ class WindowsProfilesTests(unittest.TestCase):
                 adapter.write(sample())
             with self.assertRaisesRegex(ValueError, "迁移目标"):
                 registry.transfer("codex", "missing", key)
-        self.assertEqual(registry.writable_keys(), ["workbuddy", "dsh", "claude", "codex"])
+        self.assertEqual(registry.writable_keys(), ["workbuddy", "workbuddy_ai", "dsh", "claude", "codex"])
         self.assertEqual(before, {p: p.read_bytes() for p in self.profile.rglob("*") if p.is_file()})
         self.assertTrue(registry.get("codex").root.endswith(".codex"))
         self.assertNotEqual(registry.get("codex").root, str(self.profile / ".codex"))

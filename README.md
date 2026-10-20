@@ -10,7 +10,7 @@
 
 **在本机浏览、导出和迁移 AI 编程助手的对话与 Skill，并可打包到移动盘，在另一台设备恢复。**
 
-支持 **WorkBuddy、DeepSeek Harness（DSH）、CodeBuddy、Claude Code、Claude Agent SDK、OpenAI Codex、腾讯元宝 JSON 导出**，提供中英文网页和命令行，适用于 Windows、macOS、Ubuntu / Linux。
+支持 **WorkBuddy、WorkBuddy AI 国际版、DeepSeek Harness（DSH）、CodeBuddy、Claude Code、Claude Agent SDK、OpenAI Codex、腾讯元宝 JSON 导出**，提供中英文网页和命令行，适用于 Windows、macOS、Ubuntu / Linux。
 
 ![AgentRelay 任务首页：迁移会话、跨设备搬运、全文搜索与 Skill 资产](docs/images/task-home.jpg)
 
@@ -19,7 +19,7 @@
 ## 能做什么
 
 - **查看与导出**：按来源浏览、搜索、预览会话，导出为 Markdown。
-- **跨软件迁移**：把会话转换到 WorkBuddy、DSH、Claude Code、Codex，保留可表达的正文、思考和工具历史。
+- **跨软件迁移**：把会话转换到 WorkBuddy、WorkBuddy AI 国际版、DSH、Claude Code、Codex，保留可表达的正文、思考和工具历史。
 - **跨设备存储**：把对话、Skill 保存为原生 ZIP 包，复制到另一台设备后恢复到对应软件。
 - **全文搜索**：本地 SQLite/FTS5 索引，支持中文短词、中英混合与来源 / 项目 / 时间 / 工具筛选。
 - **提炼 Skill 草稿**：从多条相似的历史会话提炼带证据的 Skill 草稿，由你审核后导出，不自动安装或执行。
@@ -69,6 +69,7 @@ Ubuntu / macOS 可用 `Ubuntu首次准备.sh` / `Mac首次准备.command` 自动
 | 来源 | 默认会话位置 | 读取 / 导出 | 作为迁移目标 | 实机验证 |
 |---|---|:-:|:-:|---|
 | WorkBuddy | `~/.workbuddy/projects` | ✅ | ✅ | 仅文件层核对 |
+| WorkBuddy AI 国际版 | `~/.workbuddy-ai/[user-…/]projects` | ✅ | ✅ | 5.8.4 安装包静态核查 + 合成文件测试；未验证客户端续聊 |
 | DeepSeek Harness / DSH | `~/.dsh/sessions` | ✅（v0–v4） | ✅ | 真实客户端已验证 |
 | CodeBuddy CLI / IDE | `~/.codebuddy/projects` 等 | ✅ | — | 仅文件层核对 |
 | Claude Code | `~/.claude/projects` | ✅ | ✅ | 导出已验证 |

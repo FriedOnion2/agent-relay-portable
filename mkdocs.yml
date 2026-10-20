@@ -52,6 +52,7 @@ nav:
           - Codex: reference/formats/codex.md
           - DSH: reference/formats/dsh.md
           - WorkBuddy: reference/formats/workbuddy.md
+          - WorkBuddy AI 国际版: reference/formats/workbuddy_ai.md
           - 元宝: reference/formats/yuanbao.md
   - 开发与维护:
       - 适配器接口: dev/adapters.md

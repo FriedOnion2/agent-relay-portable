@@ -89,7 +89,7 @@ class IndependentSourcesTests(unittest.TestCase):
                 with patch.object(WorkBuddyAdapter, "read", side_effect=AssertionError("must not read")):
                     with self.assertRaisesRegex(ValueError, "迁移目标"):
                         registry.transfer("workbuddy", "none", target)
-        self.assertEqual(registry.writable_keys(), ["workbuddy", "dsh", "claude", "codex"])
+        self.assertEqual(registry.writable_keys(), ["workbuddy", "workbuddy_ai", "dsh", "claude", "codex"])
 
 
 class DshTests(unittest.TestCase):

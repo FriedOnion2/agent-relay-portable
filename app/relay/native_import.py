@@ -156,7 +156,7 @@ def _find_native_id(rows, fallback):
 def _native_jsonl(source, target, conv, cwd, requested_id):
     rows = _jsonl(conv.path)
     native = source.source
-    old_id = _find_native_id(rows, Path(conv.path).stem) if native in ("workbuddy", "codebuddy") else conv.id
+    old_id = _find_native_id(rows, Path(conv.path).stem) if native in ("workbuddy", "workbuddy_ai", "codebuddy") else conv.id
     sid = validate_session_id(requested_id or old_id)
     if requested_id and native in ("claude", "claude_sdk", "codex"):
         try:
@@ -197,7 +197,7 @@ def _native_jsonl(source, target, conv, cwd, requested_id):
                 payload["cwd"] = cwd
                 if isinstance(payload.get("sandbox_policy"), dict):
                     _metadata(payload["sandbox_policy"], conv.cwd, cwd, sid, old_id)
-        elif native in ("claude", "claude_sdk", "workbuddy", "codebuddy") and "cwd" in row:
+        elif native in ("claude", "claude_sdk", "workbuddy", "workbuddy_ai", "codebuddy") and "cwd" in row:
             # A record may describe an old working directory; only map matching
             # roots, retaining the history of directory changes.
             _metadata(row, conv.cwd, cwd, sid, old_id)

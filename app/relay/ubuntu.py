@@ -20,6 +20,8 @@ def selected_profile():
 
 
 class UbuntuSource(WindowsSource):
+    profile_prefix = 'ubuntu'
+
     def __init__(self, source, factory, profile, clean=True):
         super().__init__(source, factory, profile, clean=clean)
         self.name = "ubuntu_" + source

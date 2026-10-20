@@ -49,7 +49,7 @@ function renderHome(){
     const button=document.createElement('button');button.className='btn';button.textContent=source.available?tr('ui.browse_sessions'):tr('ui.configure_directories');
     button.onclick=async()=>{
       if(source.available){workflow.carrying=false;state.source=source.name;buildTabs();showPage('sessions');await loadSessions();}
-      else{await $('#btnEnvironment').onclick();if(source.name in AGENTS)$('#deviceAgent').value=source.name;$('#deviceHome').focus?.();}
+      else{await $('#btnEnvironment').onclick();if([...$('#deviceAgent').options].some(option=>option.value===source.name))$('#deviceAgent').value=source.name;$('#deviceHome').focus?.();}
     };card.appendChild(button);box.appendChild(card);
   }
 }

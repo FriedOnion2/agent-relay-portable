@@ -1,6 +1,6 @@
 // 全局状态、界面语言、API 调用、勾选与按钮状态、toast
 // 经典脚本，由 index.html 按顺序加载并共享全局作用域。
-const AGENTS = {workbuddy:'WorkBuddy', dsh:'DeepSeek Harness', codebuddy:'CodeBuddy', claude:'Claude Code', claude_sdk:'Claude Agent SDK', codex:'OpenAI Codex', yuanbao:'Tencent Yuanbao'};
+const AGENTS = {workbuddy:'WorkBuddy', workbuddy_ai:'WorkBuddy AI (International)', dsh:'DeepSeek Harness', codebuddy:'CodeBuddy', claude:'Claude Code', claude_sdk:'Claude Agent SDK', codex:'OpenAI Codex', yuanbao:'Tencent Yuanbao'};
 const state = {source:'workbuddy', target:'claude', sources:[], sessions:[], current:null, turnLimit:40,
   listRequest:0, sessionRequest:0, transferring:false, detail:null, yuanbaoResult:null};
 

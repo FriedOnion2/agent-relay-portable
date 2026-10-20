@@ -30,6 +30,7 @@ Persistent: rename `config.example.json` to `config.json` and fill in real paths
     "codex": "",
     "dsh": "",
     "workbuddy": "",
+    "workbuddy_ai": "",
     "codebuddy": ""
   },
   "port": 8745,
@@ -53,6 +54,8 @@ python app/cli.py health --output health-output
 `windows-use` / `ubuntu-use` also only save a choice for this machine. A damaged device config is reported and never overwritten; a damaged shared config still lets valid device settings be read.
 
 ## Specifics
+
+- **WorkBuddy AI (International)** uses `workbuddy_ai`, `RELAY_WORKBUDDY_AI_HOME` / `WORKBUDDY_AI_HOME`, and defaults to `~/.workbuddy-ai`. It never inherits domestic WorkBuddy or CodeBuddy overrides. A single `user-...` child is selected automatically; with multiple accounts, choose the intended account directory in this device's settings, not its `projects` child. Reselect the directory after switching accounts. See the [format contract](../reference/formats/workbuddy_ai.md) (Chinese).
 
 - **Claude Agent SDK** honours `CLAUDE_CONFIG_DIR` by default; its own override is `agent_homes.claude_sdk` / `RELAY_CLAUDE_SDK_HOME`. It does not inherit `RELAY_CLAUDE_HOME`, which is for Claude Code only.
 - **Upgrading an old config:** if `agent_homes.dsh` or `RELAY_DSH_HOME` pointed at `.workbuddy`, move that value to `workbuddy` / `RELAY_WORKBUDDY_HOME`. `dsh` now means DeepSeek Harness only and is never silently aliased to WorkBuddy.

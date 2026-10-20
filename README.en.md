@@ -21,7 +21,7 @@ The task home links to migration, moving between devices, full-text search, and 
 ## Features and supported sources
 
 - Browse, search, preview, and export conversations to Markdown.
-- Convert conversations to WorkBuddy, DSH, Claude Code, or Codex, preserving representable text, reasoning, and tool history.
+- Convert conversations to WorkBuddy, WorkBuddy AI, DSH, Claude Code, or Codex, preserving representable text, reasoning, and tool history.
 - Save individual or selected conversations as native ZIP archives for another device.
 - Archive complete Skill directories, including `SKILL.md`, scripts, and resources; select multiple items or the entire current list.
 - Transfer native records between the same assistant on Windows and Ubuntu using mounted or backed-up user directories.
@@ -32,6 +32,7 @@ The task home links to migration, moving between devices, full-text search, and 
 | Source | Default conversation location | Support |
 |---|---|---|
 | WorkBuddy | `~/.workbuddy/projects` | Read, export, write |
+| WorkBuddy AI (International) | `~/.workbuddy-ai/[user-…/]projects` | Read, export, write, native archives; synthetic file checks, client resume unverified |
 | DeepSeek Harness / DSH | `~/.dsh/sessions` | Read v0–v4, export, write native compressed history |
 | CodeBuddy CLI | `~/.codebuddy/projects` | Read, export, migrate out |
 | CodeBuddy CN IDE / Extension | System `CodeBuddyExtension/Data/**/history` | Read manifests and messages, export, migrate out |
@@ -142,7 +143,7 @@ bash 启动_AgentRelay.sh
 python3 app/cli.py import-windows codex <session-id> --cwd /home/<user>/<project>
 ```
 
-The web interface keeps Ubuntu sources and adds six read-only Windows sources. Select a Windows conversation, enter an existing Ubuntu project directory, and click **Migrate to the Ubuntu counterpart** to preserve native records. Supported sources include WorkBuddy, Claude, SDK, Codex, DSH v4 / v0 seed, and CodeBuddy CLI/IDE; create the local IDE workspace first. Historical Windows paths are not automatically rewritten.
+The web interface keeps Ubuntu sources and adds seven read-only Windows sources. Select a Windows conversation, enter an existing Ubuntu project directory, and click **Migrate to the Ubuntu counterpart** to preserve native records. Supported sources include WorkBuddy, Claude, SDK, Codex, DSH v4 / v0 seed, and CodeBuddy CLI/IDE; create the local IDE workspace first. Historical Windows paths are not automatically rewritten.
 
 For Ubuntu → Windows, enter the Windows project path and its mounted path in Ubuntu, then click **Migrate to the Windows counterpart**, or run:
 
@@ -189,7 +190,7 @@ Release builds validate bundled dependencies with an empty `PATH`, DSH import, s
 - WorkBuddy / Claude / SDK / Codex / CodeBuddy CLI read at most 32 MiB; oversized records may export marked partial content but cannot be converted. Oversized DSH input/decompressed data and CodeBuddy IDE aggregate input are rejected.
 - Claude / SDK read the current `parentUuid` main chain, without merging old branches or subagents. Pre-compaction text remains in the original file but is not duplicated into the current migrated context.
 - DSH export preserves event history without replaying surface replacement, compaction, seed, or native resume state.
-- Generic conversion has four targets: WorkBuddy, DSH, Claude, and Codex. CodeBuddy and SDK are read-only for generic conversion. This restriction does not prevent same-assistant native migration or archive restoration.
+- Generic conversion has five targets: WorkBuddy, WorkBuddy AI, DSH, Claude, and Codex. CodeBuddy and SDK are read-only for generic conversion. This restriction does not prevent same-assistant native migration or archive restoration.
 - DSH import writes native v0 Zstd logs, validated with 0.1.2-rc.1 and strict official 0.2.1-alpha.1 catalog migration to v4. Historical tool calls are disabled; calls missing results become text rather than pending work. Images and non-native blocks become annotated text. The target working directory must be absolute on the current OS.
 - Native DSH migration supports full v4 and verifiable v0 seed records. Migrate a fork's parent first; subagents are not imported separately. CodeBuddy IDE needs a uniquely matching existing native workspace and must be closed during import.
 - SDK `stream-json` output is not a native transcript. Applications with persistence disabled or only an external SessionStore may have no default local history.

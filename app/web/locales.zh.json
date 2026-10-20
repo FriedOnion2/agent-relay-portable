@@ -1,4 +1,7 @@
 {
+  "err.workbuddy_ai_cross_account_directory": "跨系统账号目录必须是所选系统用户 .workbuddy-ai 下已存在的 user-* 直接子目录，且不能是链接。",
+  "err.workbuddy_ai_select_account_directory": "发现多个 WorkBuddy AI 账号。请在目录配置中选择对应的本机或跨系统国际版来源，并指向要传输的 .workbuddy-ai/user-... 目录后再操作。",
+  "msg.workbuddy_ai_file_support": "国际版 WorkBuddy AI JSONL 对话，识别账号目录。支持文件层传输；桌面侧栏索引与真实客户端续聊尚未验证。不搬迁账号数据库和登录凭据。",
   "err.a_directory_and_clear_cannot_be_used_together": "目录与 --clear 不能同时使用",
   "err.a_dsh_subagent_session_needs_its_complete_parent_relationship_and_cannot_be_imported_alone": "DSH 子代理会话需要完整主会话关系，暂不单独导入；可以导出 Markdown",
   "err.a_file_exceeds_32_mib": "单个文件超过 32 MiB",

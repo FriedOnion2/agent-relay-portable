@@ -16,13 +16,14 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'app'))
 from relay import ir
 from relay.adapters.workbuddy import WorkBuddyAdapter
+from relay.adapters.workbuddy_ai import WorkBuddyAIAdapter
 
 
 def smoke(binary):
     binary = Path(binary).resolve()
     with tempfile.TemporaryDirectory(prefix='AgentRelay release 中文 ') as folder:
         root = Path(folder)
-        homes = {name: str(root / name) for name in ('workbuddy', 'dsh', 'codebuddy', 'claude', 'claude_sdk', 'codex', 'yuanbao')}
+        homes = {name: str(root / name) for name in ('workbuddy', 'workbuddy_ai', 'dsh', 'codebuddy', 'claude', 'claude_sdk', 'codex', 'yuanbao')}
         for home in homes.values():
             Path(home).mkdir()
         (root / 'config.json').write_text(json.dumps({'agent_homes': homes, 'open_browser': False}), encoding='utf-8')
@@ -55,7 +56,7 @@ def smoke(binary):
         assert environment['runtime']['bundled'] and environment['runtime']['zstandard']
         assert environment['runtime']['fts5'] and environment['runtime']['sqlite']
         health = json.loads(run('health', '--output', str(root / 'health-output')))
-        assert health['ok'] and {row['agent'] for row in health['adapters']} == {'workbuddy', 'dsh', 'codebuddy', 'claude', 'claude_sdk', 'codex', 'yuanbao'}
+        assert health['ok'] and {row['agent'] for row in health['adapters']} == set(homes)
         assert all(row['native_resume'] == 'not-tested' for row in health['adapters'])
         arguments = ('transfer', 'workbuddy', 'fixture', '--to', 'dsh', '--cwd', str(root), '--json')
         plan = json.loads(run(*arguments, '--dry-run'))
@@ -102,6 +103,13 @@ def smoke(binary):
         (skill / 'SKILL.md').write_text('---\nname: fixture-skill\ndescription: portable fixture\n---\nFixture', encoding='utf-8')
         (skill / 'resources/data.bin').write_bytes(bytes(range(256)))
         run('store-skills', 'workbuddy', str(skill))
+        # Separate international account scope and native archive survive a move.
+        international_account = Path(homes['workbuddy_ai']) / 'user-fixture-personal'
+        international_account.mkdir()
+        WorkBuddyAIAdapter(home=homes['workbuddy_ai']).write(conversation, session_id='international-fixture')
+        assert 'international-fixture' in run('list', 'workbuddy_ai', '--json')
+        assert 'portable fixture' in run('export', 'workbuddy_ai', 'international-fixture')
+        run('store-sessions', 'workbuddy_ai', 'international-fixture')
         # Yuanbao exports are carried separately from client-native history.
         yuanbao_json = root / '元宝导出.json'
         yuanbao_json.write_text(json.dumps({'exportTime': '2026-10-12 09:30:00', 'conversations': [
@@ -133,6 +141,11 @@ def smoke(binary):
         plan = json.loads(run(*restore_args, '--dry-run', device_root=other))
         run(*restore_args, '--preview-token', plan['token'], device_root=other)
         assert 'portable fixture' in run('export', 'workbuddy', 'fixture', device_root=other)
+        international_package = next((other / 'storage/conversations/workbuddy_ai').glob('*.zip'))
+        international_restore = json.loads(run('restore-session', str(international_package), '--cwd', str(other),
+                                              device_root=other))
+        assert international_restore['ok']
+        assert 'portable fixture' in run('export', 'workbuddy_ai', 'international-fixture', device_root=other)
         assert run(*restore_args, device_root=other, failure=True)
         yuanbao_package = next((other / 'storage/conversations/yuanbao').glob('*.zip'))
         yuanbao_args = ('restore-session', str(yuanbao_package), '--cwd', str(other))

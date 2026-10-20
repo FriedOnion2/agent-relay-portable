@@ -236,21 +236,37 @@ test('export failure is shown to the user and does not reject the event handler'
   assert.match(t.el('#toast').children[0].textContent,/offline/);
 });
 
-test('seven source tabs and only supported writable targets are offered',()=>{
+test('eight source tabs and only supported writable targets are offered',()=>{
   const t=setup();
   t.app.buildTabs();
   assert.deepEqual(t.el('#tabs').children.map(x=>x.textContent),
-    ['WorkBuddy','DeepSeek Harness','CodeBuddy','Claude Code','Claude Agent SDK','OpenAI Codex','Tencent Yuanbao']);
+    ['WorkBuddy','WorkBuddy AI (International)','DeepSeek Harness','CodeBuddy','Claude Code','Claude Agent SDK','OpenAI Codex','Tencent Yuanbao']);
   t.app.state.source='dsh';
   t.app.buildTarget();
-  assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','claude','codex']);
+  assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','workbuddy_ai','claude','codex']);
   t.app.state.sources=[{name:'codex',can_write:false}];
   t.app.buildTarget();
-  assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','claude']);
+  assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','workbuddy_ai','claude']);
   t.app.state.source='codex';
   t.app.state.sources=[];
   t.app.buildTarget();
-  assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','dsh','claude']);
+  assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','workbuddy_ai','dsh','claude']);
+});
+
+test('international WorkBuddy stays separate and selects its cross-system counterpart',()=>{
+  const t=setup();
+  t.app.state.sources=[{name:'workbuddy_ai',label:'WorkBuddy AI (International)',can_write:true,
+    home:'/fixture/.workbuddy-ai/user-example-personal/projects',read_note:'international file support'},
+    {name:'windows_workbuddy_ai',label:'Windows · WorkBuddy AI (International)',can_write:false}];
+  t.app.state.source='windows_workbuddy_ai';
+  t.app.buildTabs();t.app.buildTarget();
+  assert.equal(t.app.state.target,'workbuddy_ai');
+  assert.ok(t.el('#target').children.some(x=>x.value==='workbuddy'));
+  assert.ok(!t.el('#target').children.some(x=>x.value==='windows_workbuddy_ai'));
+  t.app.state.source='workbuddy_ai';t.app.buildTabs();t.app.buildTarget();
+  assert.match(t.el('#sourceNote').textContent,/international file support/);
+  assert.match(t.el('#sourceNote').textContent,/user-example-personal/);
+  assert.ok(!t.el('#target').children.some(x=>x.value==='workbuddy_ai'));
 });
 
 test('SDK selection shows shared-storage attribution and offers only writable targets',()=>{
@@ -260,7 +276,7 @@ test('SDK selection shows shared-storage attribution and offers only writable ta
   t.app.buildTarget();
   assert.match(t.el('#sourceNote').textContent,/共用会话存储/);
   assert.equal(t.el('#sourceNote').style.display,'');
-  assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','dsh','claude','codex']);
+  assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','workbuddy_ai','dsh','claude','codex']);
   t.app.state.source='claude';
   t.app.buildTabs();
   assert.equal(t.el('#sourceNote').style.display,'none');
@@ -273,10 +289,10 @@ test('Windows sources appear separately with paths and never become writable tar
   t.app.state.source='windows_codex';
   t.app.buildTabs();
   t.app.buildTarget();
-  assert.equal(t.el('#tabs').children.length,8);
+  assert.equal(t.el('#tabs').children.length,9);
   assert.equal(t.el('#tabs').children.at(-1).textContent,'Windows · OpenAI Codex');
   assert.match(t.el('#sourceNote').textContent,/\/media\/Win/);
-  assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','dsh','claude','codex']);
+  assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','workbuddy_ai','dsh','claude','codex']);
   assert.equal(t.app.state.target,'codex');
 });
 
@@ -886,7 +902,7 @@ test('export-to-package handoff uses the successfully exported directory without
 test('Yuanbao offers export import and migration out without native or Skill targets',()=>{
   const t=setup();t.app.state.source='yuanbao';t.app.buildTabs();t.app.buildTarget();t.app.buildSkillAgents();
   assert.equal(t.el('#yuanbaoImport').style.display,'');
-  assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','dsh','claude','codex']);
+  assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','workbuddy_ai','dsh','claude','codex']);
   assert.equal(t.el('#skillAgent').children.some(x=>x.value==='yuanbao'),false);
   assert.equal(t.el('#skillTargetAgent').children.some(x=>x.value==='yuanbao'),false);
   assert.equal(t.el('#skillAgent').value,'codex');
