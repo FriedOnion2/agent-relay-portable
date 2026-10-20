@@ -12,6 +12,58 @@ const scriptFiles=Array.from(html.matchAll(/<script src="\/static\/(app-[\w-]+\.
 const scriptParts=scriptFiles.filter(name=>name!=='app-start.js').map(name=>[name,fs.readFileSync(path.join(__dirname,'../app/web/'+name),'utf8')]);
 const script=scriptParts.map(([,text])=>text).join('\n');
 
+test('three independent export buttons capture modes and agents and expose a durable download',async()=>{
+  for(const [button,mode] of [['backupAll','all'],['backupSessions','sessions'],['backupMarkdown','markdown']]){
+    const t=setup();t.app.state.sources=[{name:'workbuddy',available:true}];t.app.bind();
+    const exporting=t.el('#'+button).onclick();
+    await t.el('#'+button).onclick();assert.equal(t.requests.length,1);
+    assert.equal(t.requests[0].url,'/api/backup-export');
+    const payload=JSON.parse(t.requests[0].options.body);
+    assert.equal(payload.mode,mode);assert.deepEqual(payload.agents,['workbuddy']);
+    t.response(0,{ok:true,id:'job',status:'running'});
+    await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(t.requests[1].url,'/api/job');
+    t.response(1,{ok:true,id:'job',status:'completed',result:{ok:true,processed:2,path:'/storage/backups/p.zip',download:'/api/backup-download?id=fixture'}});
+    await exporting;
+    assert.equal(t.el('#backupDownload').children[0].href,'/api/backup-download?id=fixture');
+    assert.equal(t.el('#backupDownload').children[0].clicked,true);
+    assert.equal(t.app.state.transferring,false);
+  }
+});
+
+test('backup upload uses the selected file and changed mappings invalidate import confirmation',async()=>{
+  const t=setup();t.app.bind();t.el('#backupConflict').value='skip';
+  const file={size:100};t.el('#backupFile').files=[file];
+  const uploading=t.el('#backupFile').onchange();
+  assert.equal(t.requests[0].url,'/api/backup-upload');assert.equal(t.requests[0].options.body,file);
+  t.response(0,{ok:true,path:'/storage/backups/import.zip',count:2,projects:['C:/old'],skill_agents:['workbuddy'],errors:[]});
+  await uploading;
+  assert.equal(t.el('#backupPath').value,'/storage/backups/import.zip');
+  t.app.backupState.projects[0].input.value='/new/project';
+  const checking=t.app.previewBackup();
+  assert.equal(t.requests[1].url,'/api/backup-preview');
+  assert.equal(JSON.parse(t.requests[1].options.body).options.projects['C:/old'],'/new/project');
+  t.response(1,{ok:true,token:'checked',ready:2,blocked:0,skip:0,rows:[],errors:[]});await checking;
+  assert.equal(t.el('#importBackup').disabled,false);
+  t.app.backupState.projects[0].input.value='/changed';
+  await t.app.importBackup();assert.equal(t.requests.length,2);
+  assert.equal(t.el('#importBackup').disabled,true);
+});
+
+test('batch import sends the preview token and reports partial results without claiming success',async()=>{
+  const t=setup();t.app.bind();t.el('#backupPath').value='/backup.zip';t.el('#backupConflict').value='skip';
+  const checking=t.app.previewBackup();
+  t.response(0,{ok:true,token:'checked',ready:2,blocked:0,skip:0,rows:[],errors:[]});await checking;
+  const importing=t.app.importBackup();
+  assert.equal(JSON.parse(t.requests[1].options.body).preview_token,'checked');
+  t.response(1,{ok:true,id:'import',status:'running'});await new Promise(resolve=>setImmediate(resolve));
+  t.response(2,{ok:true,id:'import',status:'completed',result:{ok:false,restored:[{agent:'workbuddy',title:'fixture',result:{path:'/new'}}],skipped:[],errors:[{agent:'workbuddy_ai',error:'fixture failure'}]}});
+  await new Promise(resolve=>setImmediate(resolve));t.response(3,{ok:true,sources:[]});await importing;
+  assert.match(t.el('#backupReport').textContent,/fixture failure/);
+  assert.match(t.el('#backupReport').textContent,/未全部成功/);
+  assert.equal(t.el('#importBackup').disabled,true);
+});
+
 test('returning to search preserves the selected search and index sources',async()=>{
   const t=setup();t.app.bind();
   t.app.state.sources=[{name:'workbuddy'},{name:'codex'}];
@@ -103,12 +155,14 @@ test('progress uses Chinese counts and reviewed evidence links follow the actual
 
 function setup({automaticPreview=true,confirmed=true,randomUUID}={}){
   class Element {
-    constructor(){ this.children=[]; this.value=''; this.checked=true; this.disabled=false;
+    constructor(tag=''){ this.tagName=tag.toUpperCase();this.children=[]; this.value=''; this.checked=true; this.disabled=false;
       this.style={}; this.dataset={}; this.classList={add(){}, remove(){}}; this._html=''; }
     setAttribute(name,value){this[name]=value;}
     set innerHTML(value){this._html=value; this.children=[];}
     get innerHTML(){return this._html;}
     appendChild(child){this.children.push(child); return child;}
+    querySelectorAll(tag){return this.children.flatMap(child=>[...(child.tagName===tag.toUpperCase()?[child]:[]),...(child.querySelectorAll?.(tag)||[])]);}
+    click(){this.clicked=true;}
   }
   const elements = new Map();
   const requests=[];
@@ -117,7 +171,7 @@ function setup({automaticPreview=true,confirmed=true,randomUUID}={}){
     body:new Element(),
     querySelector(selector){if(!elements.has(selector)) elements.set(selector,new Element()); return elements.get(selector);},
     querySelectorAll(){return [];},
-    createElement(){return new Element();},
+    createElement(tag){return new Element(tag);},
     createTextNode(text){return {textContent:text};},
   };
   const context = vm.createContext({document, encodeURIComponent, Blob, URL, navigator:{}, crypto:randomUUID?{randomUUID}:undefined, location:{origin:'http://127.0.0.1:18945'}, confirm(){return confirmed;},
@@ -130,7 +184,7 @@ function setup({automaticPreview=true,confirmed=true,randomUUID}={}){
   vm.runInContext(i18nScript,context);
   context.RelayI18n.configure(catalogs.zh,catalogs.en);
   for(const [name,text] of scriptParts)vm.runInContext(text,context,{filename:name});
-  vm.runInContext('globalThis.app={importYuanbao,workflow,showPage,renderOperationResult,selectPackage,selections,selectAll,storeBatch,state,loadSessions,openSession,doTransfer,doImportWindows,updateActions,bind,buildTarget,buildTabs,loadSources,storeCurrent,refreshStorage,restoreStored,buildSkillAgents,loadSkills,refreshSkillPackages,storeSelectedSkill,restoreSelectedSkill,corpusState,searchCorpus,openCorpusDocument,renderDraftCandidates,exportDraft,updateDraftAction,startCorpusJob,pollCorpusJob,cancelCorpusJob,setLang,sep,tr,ts,applyStatic,renderChips,renderList,renderDetail,doBatch,openHistory,refreshHistory,renderHistory,undoOperation,getLang:()=>lang};',context);
+  vm.runInContext('globalThis.app={backupState,backupOptions,buildBackupAgents,exportBackup,inspectBackup,previewBackup,importBackup,importYuanbao,workflow,showPage,renderOperationResult,selectPackage,selections,selectAll,storeBatch,state,loadSessions,openSession,doTransfer,doImportWindows,updateActions,bind,buildTarget,buildTabs,loadSources,storeCurrent,refreshStorage,restoreStored,buildSkillAgents,loadSkills,refreshSkillPackages,storeSelectedSkill,restoreSelectedSkill,corpusState,searchCorpus,openCorpusDocument,renderDraftCandidates,exportDraft,updateDraftAction,startCorpusJob,pollCorpusJob,cancelCorpusJob,setLang,sep,tr,ts,applyStatic,renderChips,renderList,renderDetail,doBatch,openHistory,refreshHistory,renderHistory,undoOperation,getLang:()=>lang};',context);
   const response = (index,body,status=200)=>requests[index].resolve({ok:status<400,status,json:async()=>body});
   return {app:context.app, elements, requests, previews, response, document, el:document.querySelector};
 }

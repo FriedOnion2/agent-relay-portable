@@ -150,6 +150,18 @@ def _print_json(obj):
     print(json.dumps(obj, ensure_ascii=False, indent=2, default=str))
 
 
+def cmd_backup(args):
+    from relay import archive, backup
+    if args.cmd == 'backup':
+        result = backup.export(args.mode, args.agents, not args.no_thinking, lang=LANG)
+    else:
+        options = json.loads(archive.read_file(args.mapping).decode('utf-8-sig')) if args.mapping else None
+        result = (backup.plan(args.package, options) if args.dry_run else
+                  backup.restore(args.package, options, args.preview_token))
+    _print_json(result)
+    return 0 if result['ok'] and not result.get('blocked') else 1
+
+
 def cmd_storage(args):
     from relay import archive, session_store
     if args.cmd == "store-sessions":
@@ -512,6 +524,17 @@ def build_parser():
     p.add_argument("--version", action="version", version="%(prog)s " + __version__)
     p.add_argument("--lang", type=normalize_lang, default=LANG, metavar="{zh,en}", help=T('lang_help'))
     sub = p.add_subparsers(dest="cmd", required=True)
+    backup_command = sub.add_parser('backup', help=lang_text(LANG, 'msg.backup_cli_export'))
+    backup_command.add_argument('--mode', choices=('all', 'sessions', 'markdown'), default='all')
+    backup_command.add_argument('--agents', nargs='+', choices=list(registry._ADAPTERS))
+    backup_command.add_argument('--no-thinking', action='store_true')
+    backup_command.set_defaults(func=cmd_backup)
+    import_backup = sub.add_parser('import-backup', help=lang_text(LANG, 'msg.backup_cli_import'))
+    import_backup.add_argument('package')
+    import_backup.add_argument('--mapping', help=lang_text(LANG, 'msg.backup_cli_mapping'))
+    import_backup.add_argument('--dry-run', action='store_true')
+    import_backup.add_argument('--preview-token')
+    import_backup.set_defaults(func=cmd_backup)
     yuanbao_import = sub.add_parser('import-yuanbao', help=T('h_import_yuanbao'))
     yuanbao_import.add_argument('path', help=T('h_import_yuanbao_path'))
     yuanbao_import.set_defaults(func=cmd_import_yuanbao)

@@ -38,6 +38,46 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn(b"AgentRelay", body)
         self.assertIn(b'/static/workflow.css', body)
+
+    def test_backup_upload_download_preview_and_confirmed_background_restore(self):
+        import os
+        from relay import backup, registry
+        from relay.adapters.workbuddy import WorkBuddyAdapter
+        from test_relay import sample
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            project = root / 'project'
+            project.mkdir()
+            source = WorkBuddyAdapter(home=str(root / 'source'))
+            source.write(sample(), cwd=str(project), session_id='http-fixture')
+            headers = {'Content-Type': 'application/json'}
+            with patch.dict(os.environ, {'RELAY_STORAGE_HOME': str(root / 'storage')}), \
+                    patch.dict(registry._CACHE, {'workbuddy': source}, clear=True), \
+                    patch('relay.oplog.log_path', return_value=root / 'operations.jsonl'):
+                exported = backup.export('sessions', ['workbuddy'])
+                raw = Path(exported['path']).read_bytes()
+                self.assertEqual(self.request('POST', '/api/backup-upload', raw, headers)[0], 415)
+                status, payload = self.request('POST', '/api/backup-upload', raw, {'Content-Type': 'application/zip'})
+                self.assertEqual(status, 200)
+                uploaded = json.loads(payload)
+                self.assertEqual(self.request('GET', '/api/backup-download?id=' + uploaded['id']), (200, raw))
+                self.assertEqual(self.request('GET', '/api/backup-download?id=../../config')[0], 400)
+                self.assertEqual(self.request('POST', '/api/backup-upload', b'bad', {'Content-Type': 'application/zip'})[0], 400)
+                target = WorkBuddyAdapter(home=str(root / 'target'))
+                registry._CACHE['workbuddy'] = target
+                payload = {'package': uploaded['path'], 'options': {'projects': {uploaded['projects'][0]: str(project)}}}
+                status, raw_plan = self.request('POST', '/api/backup-preview', json.dumps(payload), headers)
+                self.assertEqual(status, 200)
+                plan = json.loads(raw_plan)
+                self.assertEqual(plan['ready'], 1)
+                self.assertFalse(Path(target.root).exists())
+                payload['preview_token'] = plan['token']
+                self.assertEqual(self.request('POST', '/api/backup-import', json.dumps(payload), headers)[0], 200)
+                self.srv.jobs.thread.join(5)
+                result = self.srv.jobs.status()
+                self.assertEqual(result['status'], 'completed', result)
+                self.assertTrue(result['result']['ok'], result)
+                self.assertEqual(len(list(target.discover())), 1)
         status, css = self.request("GET", "/static/workflow.css")
         self.assertEqual(status, 200)
         self.assertIn(b".task-panel", css)

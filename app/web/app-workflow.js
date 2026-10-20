@@ -70,6 +70,7 @@ function renderSelectedPackage(){
   if(row.agent==='yuanbao')$('#selectedPackage').textContent+='\n'+tr('ui.yuanbao_package_selected');
 }
 function bindWorkflow(){
+  bindBackup();
   $('#btnHome').onclick=()=>showPage('home');
   $('#btnSessions').onclick=()=>{workflow.carrying=false;showPage('sessions');updateActions();};
   $('#homeMigrate').onclick=()=>$('#btnSessions').onclick();

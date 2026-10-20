@@ -20,6 +20,20 @@ RELAY_LANG=en python3 app/cli.py doctor
 
 `--lang` wins over the environment variable, and an unknown language falls back to Chinese. The language is **not** taken from your system locale, so existing scripts keep their output. `--json` output is unaffected; the Markdown written by `export` follows the chosen language.
 
+## Batch backup and import
+
+`backup` exports a full native backup, sessions only, or a ZIP of Markdown reading files. All three return JSON with the archive path, counts and errors. Without `--agents`, it scans built-in local sources. Partial exports return a nonzero exit code, retain successful items and list failures in the manifest.
+
+```bash
+python3 app/cli.py backup --mode all --agents workbuddy workbuddy_ai codex
+python3 app/cli.py backup --mode sessions --agents claude codex
+python3 app/cli.py backup --mode markdown --agents claude --no-thinking
+python3 app/cli.py import-backup <backup.zip> --mapping mapping.json --dry-run
+python3 app/cli.py import-backup <backup.zip> --mapping mapping.json --preview-token <token>
+```
+
+`import-backup` accepts native backups; Markdown archives are for reading only. Example mapping: `{"projects":{"C:/old/project":"/home/alice/project"},"skills":{"codex":"/home/alice/.agents/skills"},"conflict":"skip"}`. Project directories must exist. The conflict policy is `skip` (default) or `copy`. Preview writes nothing; import requires its token. Blockers prevent all writes; individual failures during execution are reported while completed restores are kept. See [installation and storage](install.md).
+
 ## Source names
 
 In `list`, `show`, `transfer` and similar commands, a "source" is one of:

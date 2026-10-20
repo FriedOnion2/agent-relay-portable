@@ -20,6 +20,20 @@ RELAY_LANG=en python3 app/cli.py doctor
 
 `--lang` 优先于环境变量；写了不认识的语言会回退到中文。语言**不会**从系统区域设置推断，所以已有脚本的输出不会变。`--json` 输出不受影响；`export` 生成的 Markdown 跟随所选语言。
 
+## 一键搬家与阅读导出
+
+`backup` 提供三个独立模式，输出 JSON（含持久包路径、数量和错误）；不选 `--agents` 时扫描内置本机来源。失败返回非零状态，部分导出的包会保留成功项并列出错误。
+
+```bash
+python3 app/cli.py backup --mode all --agents workbuddy workbuddy_ai codex
+python3 app/cli.py backup --mode sessions --agents claude codex
+python3 app/cli.py backup --mode markdown --agents claude --no-thinking
+python3 app/cli.py import-backup <搬家包.zip> --mapping mapping.json --dry-run
+python3 app/cli.py import-backup <搬家包.zip> --mapping mapping.json --preview-token <预览输出的token>
+```
+
+`import-backup` 只接受原生搬家包，不能导入 Markdown 阅读包。映射文件是 JSON，例如 `{"projects":{"C:/old/project":"/home/alice/project"},"skills":{"codex":"/home/alice/.agents/skills"},"conflict":"skip"}`。目录以本机实际路径为准；`conflict` 可为 `skip`（默认）或 `copy`。预览本身不写入；确认导入必须带 token。有阻断项时全部停止，执行中的单项失败则保留其他已完成项并报告。完整限制见[跨设备存储](../guide/portable-storage.md)。
+
 ## 来源名
 
 `list`、`show`、`transfer` 等命令里的「来源」取下列之一：

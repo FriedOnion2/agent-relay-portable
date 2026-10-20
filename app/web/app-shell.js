@@ -18,6 +18,7 @@ async function init(){
 async function loadSources(){
   const r = await api('/api/sources');
   state.sources = r.sources || [];
+  buildBackupAgents();
   renderChips();
   renderHome();
   if (!state.listRequest && !(r.sources||[]).some(s=>s.available && s.name===state.source)){

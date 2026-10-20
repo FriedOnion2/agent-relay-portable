@@ -118,6 +118,19 @@ class Handler(BaseHTTPRequestHandler):
         q = parse_qs(u.query)
         path = u.path
         try:
+            if path == '/api/backup-download':
+                from relay import backup
+                import shutil
+                package = backup.download_path((q.get('id') or [''])[0])
+                with package.open('rb') as stream:
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/zip')
+                    self.send_header('Content-Length', str(os.fstat(stream.fileno()).st_size))
+                    self.send_header('Content-Disposition', 'attachment; filename="AgentRelay-backup.zip"')
+                    self.send_header('Cache-Control', 'no-store')
+                    self.end_headers()
+                    shutil.copyfileobj(stream, self.wfile)
+                return
             if path == "/" or path.startswith("/index"):
                 return self._static("index.html")
             if path.startswith("/static/"):
@@ -213,6 +226,14 @@ class Handler(BaseHTTPRequestHandler):
         if not self._local_request():
             return
         u = urlparse(self.path)
+        if u.path == '/api/backup-upload':
+            if self.headers.get_content_type() != 'application/zip':
+                return self._error(message_text('msg.backup_zip_required'), 415)
+            try:
+                from relay import backup
+                return self._json(backup.receive(self.rfile, int(self.headers.get('Content-Length') or 0)))
+            except (OSError, ValueError, KeyError) as exc:
+                return self._error(error_text(exc))
         if self.headers.get_content_type() != "application/json":
             return self._error(message_text('msg.the_request_must_use_application_json'), 415)
         try:
@@ -235,6 +256,20 @@ class Handler(BaseHTTPRequestHandler):
             return self._error(message_text('err.failed_to_parse_request_body_e', e=e))
 
         try:
+            if u.path in ('/api/backup-export', '/api/backup-inspect', '/api/backup-preview', '/api/backup-import'):
+                from relay import backup
+                if u.path == '/api/backup-export':
+                    return self._json(self.server.jobs.start('backup-export', lambda progress, cancel: backup.export(
+                        body.get('mode', 'all'), body.get('agents'), body.get('include_thinking', True),
+                        progress, cancel, normalize_lang(body.get('lang')))))
+                if not body.get('package'):
+                    return self._error(message_text('msg.backup_invalid_package'))
+                if u.path == '/api/backup-inspect':
+                    return self._json(backup.inspect(body['package']))
+                if u.path == '/api/backup-preview':
+                    return self._json(backup.plan(body['package'], body.get('options')))
+                return self._json(self.server.jobs.start('backup-import', lambda progress, cancel: backup.restore(
+                    body['package'], body.get('options'), body.get('preview_token'), progress, cancel)))
             if u.path == '/api/index':
                 from relay.corpus import Corpus
                 sources = body.get('sources')
