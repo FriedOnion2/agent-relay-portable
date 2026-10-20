@@ -85,7 +85,8 @@ exit $LASTEXITCODE
         script = '''#!/bin/bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-case "$(uname -m)" in
+@ARCHITECTURE@
+case "$MACHINE" in
 @CASES@
   *) printf 'Unsupported CPU architecture.\\n' >&2; exit 1 ;;
 esac
@@ -116,7 +117,11 @@ export RELAY_PORTABLE_ROOT="$ROOT"
 exec "$DEST/@BINARY@" serve "$@"
 '''
         script = script.replace('@CASES@', '\n'.join(cases))
+        architecture = 'MACHINE="$(uname -m)"'
         if system == 'macos':
+            # LaunchServices can run a script app's bash under Rosetta. Select
+            # the hardware-native runtime, not the translated shell's uname.
+            architecture += '\nif [ "$(/usr/sbin/sysctl -n hw.optional.arm64 2>/dev/null || true)" = 1 ]; then MACHINE=arm64; fi'
             script = script.replace('@HASH@', 'ACTUAL="$(/usr/bin/shasum -a 256 "$ARCHIVE" | cut -d " " -f 1)"')
             script = script.replace('@CACHE@', '"$HOME/Library/Caches/AgentRelay/' + tag + '"')
             script = script.replace('@BINARY@', 'AgentRelay.app/Contents/MacOS/AgentRelay')
@@ -128,6 +133,7 @@ exec "$DEST/@BINARY@" serve "$@"
             script = script.replace('@BINARY@', 'AgentRelay')
             script = script.replace('@EXTRACT@', 'tar -xzf "$ARCHIVE" -C "$TEMP"')
             filename = '启动_AgentRelay.sh'
+        script = script.replace('@ARCHITECTURE@', architecture)
         write_utf8(stage / filename, script)
         (stage / filename).chmod(0o755)
     app = stage / 'AgentRelay.app'
