@@ -12,6 +12,8 @@
 
 支持 **WorkBuddy、WorkBuddy AI 国际版、DeepSeek Harness（DSH）、CodeBuddy、Claude Code、Claude Agent SDK、OpenAI Codex、腾讯元宝 JSON 导出**，提供中英文网页和命令行，适用于 Windows、macOS、Ubuntu / Linux。
 
+**WorkBuddy 国内版与国际版已分开识别**：国内版使用 `workbuddy` / `~/.workbuddy`，国际版使用 `workbuddy_ai` / `~/.workbuddy-ai`。两版拥有独立的来源、目标、目录配置和原生包标识，不自动混合会话；DSH、CodeBuddy 也保持独立。两版之间及各自与 DSH、Claude Code、Codex 的双向文件转换已加入回归验证；CodeBuddy、Claude Agent SDK、元宝仅支持迁出到两版。文件转换通过不代表客户端续聊通过，详见[互传验证矩阵](docs/reference/compatibility.md#workbuddy-国内版与国际版互传)。
+
 ![AgentRelay 任务首页：迁移会话、跨设备搬运、全文搜索与 Skill 资产](docs/images/task-home.jpg)
 
 > 🔒 **数据只在本机处理。** 服务只监听本机地址，不上传会话，不调用模型；迁移前先预览“保留 / 降级 / 丢弃 / 未知”，确认后才写入。
@@ -68,7 +70,7 @@ Ubuntu / macOS 可用 `Ubuntu首次准备.sh` / `Mac首次准备.command` 自动
 
 | 来源 | 默认会话位置 | 读取 / 导出 | 作为迁移目标 | 实机验证 |
 |---|---|:-:|:-:|---|
-| WorkBuddy | `~/.workbuddy/projects` | ✅ | ✅ | 仅文件层核对 |
+| WorkBuddy 国内版 | `~/.workbuddy/projects` | ✅ | ✅ | 仅文件层核对 |
 | WorkBuddy AI 国际版 | `~/.workbuddy-ai/[user-…/]projects` | ✅ | ✅ | 5.8.4 原生读取及 ZIP 文件往返实测；不登记桌面历史索引，恢复副本续聊未通过验证 |
 | DeepSeek Harness / DSH | `~/.dsh/sessions` | ✅（v0–v4） | ✅ | 真实客户端已验证 |
 | CodeBuddy CLI / IDE | `~/.codebuddy/projects` 等 | ✅ | — | 仅文件层核对 |

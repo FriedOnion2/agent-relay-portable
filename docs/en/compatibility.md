@@ -1,8 +1,29 @@
 # Compatibility summary
 
-The development build adds [WorkBuddy AI International](../reference/formats/workbuddy_ai.md): static checks of the installed 5.8.4 package and isolated synthetic tests cover reading, writing, native archives, and file transfer between Windows and Ubuntu. Desktop sidebar indexing and real client resume remain unverified. Domestic WorkBuddy and the international edition are configured separately.
+The development build adds [WorkBuddy AI International](../reference/formats/workbuddy_ai.md): static checks of the installed 5.8.4 package, isolated synthetic tests, and a synthetic conversation created through the Windows client. Native reading and ZIP file roundtrip passed. The restored copy has no desktop history index and was absent from the sidebar and global search; restored-session resume has not passed validation. Domestic WorkBuddy and the international edition are configured separately.
 
 A summary of the Chinese page [reference/compatibility.md](../reference/compatibility.md), which holds the full evidence and wins if the two differ.
+
+## WorkBuddy edition transfer matrix
+
+The 2026-10-20 isolated regressions cover 14 writable directions, six imports from read-only sources, and six rejected reverse attempts. No user history, model calls, or historical tool execution is involved.
+
+| Other endpoint | Domestic WorkBuddy (`workbuddy`) | WorkBuddy AI International (`workbuddy_ai`) |
+|---|---|---|
+| Domestic WorkBuddy | — | Bidirectional file conversion passed |
+| WorkBuddy AI International | Bidirectional file conversion passed | — |
+| DSH | Bidirectional file conversion passed | Bidirectional file conversion passed |
+| Claude Code | Bidirectional file conversion passed | Bidirectional file conversion passed |
+| Codex | Bidirectional file conversion passed | Bidirectional file conversion passed |
+| CodeBuddy CLI | Import passed; reverse rejected | Import passed; reverse rejected |
+| Claude Agent SDK shared store | Import passed; reverse rejected | Import passed; reverse rejected |
+| Compatible Yuanbao JSON exports | Import passed; reverse rejected | Import passed; reverse rejected |
+
+Writable routes check text, readable reasoning, tool order, arguments, results and error flags, title, project mapping, unchanged source files, and conversion back to the original edition. Tool names follow existing mappings; this does not prove target tool interface compatibility. Read-only sources retain representable content: CodeBuddy uses CLI JSONL here, the SDK uses shared Claude JSONL without inferring its creator, and Yuanbao contains text and reasoning only.
+
+Another regression places the same session ID with different content in each edition and checks separate listing identities, archive `agent` / `source` fields, restore destinations, and unchanged source files. Codex roundtrip previously lost tool-result error flags; Relay-generated records now preserve an explicit annotation (see the [format contract](../reference/formats/codex.md)). These are file-level checks. They do not establish domestic client recovery, international desktop indexing, or resumed conversations in either edition.
+
+All 14 directions also passed actual CLI `transfer --json` invocations against temporary stores, checking source/target identities, content, error flags, project mapping, and unchanged source files. Local Codex `0.163.0-alpha.10.2` read the imported fixture through `app-server thread/resume` (two turns, 5 / 2 history items), confirming that the annotation does not block history recovery in this version. No new model turn was requested, and this is not evidence of WorkBuddy client resume.
 
 ## Supported systems
 
