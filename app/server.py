@@ -126,7 +126,7 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_response(200)
                     self.send_header('Content-Type', 'application/zip')
                     self.send_header('Content-Length', str(os.fstat(stream.fileno()).st_size))
-                    self.send_header('Content-Disposition', 'attachment; filename="AgentRelay-' + package.name + '"')
+                    self.send_header('Content-Disposition', 'attachment; filename="AgentRelay-backup.zip"')
                     self.send_header('Cache-Control', 'no-store')
                     self.end_headers()
                     shutil.copyfileobj(stream, self.wfile)

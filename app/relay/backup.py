@@ -111,10 +111,13 @@ def export(mode='all', agents=None, include_thinking=True, progress=None, cancel
 def download_path(key):
     if not isinstance(key, str) or not re.fullmatch(r'[0-9a-f]{32}', key):
         _fail('invalid_package')
-    path = archive.storage_root() / 'backups' / (key + '.zip')
-    if archive.is_link(path):
-        _fail('invalid_package')
-    return path
+    # Resolve an existing server-owned entry, never construct a path from HTTP input.
+    for path in (archive.storage_root() / 'backups').iterdir():
+        if path.name == key + '.zip':
+            if archive.is_link(path) or not path.is_file():
+                _fail('invalid_package')
+            return path
+    raise FileNotFoundError(message_text('msg.backup_invalid_package'))
 
 
 def receive(stream, length):
@@ -249,7 +252,7 @@ def _plan(manifest, files, options):
                         from .adapters.dsh import read_records
                         entry = archive.safe_name(inner.get('entry'))
                         data, _ = files['items/%s/%s' % (key, entry)]
-                        path = Path(temporary) / (key + ('.zstd' if entry.endswith('.zstd') else '.jsonl'))
+                        path = Path(temporary) / (uuid.uuid4().hex + ('.zstd' if entry.endswith('.zstd') else '.jsonl'))
                         path.write_bytes(data)
                         header = read_records(str(path))[0]
                         row.update(native_id=header['id'], parent=header.get('parentSession'), origin=header.get('origin'))
