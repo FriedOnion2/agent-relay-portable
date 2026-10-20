@@ -127,12 +127,21 @@ def smoke(asset):
             config['port'] = native_port
             (root / 'config.json').write_text(json.dumps(config), encoding='utf-8')
             subprocess.run(['/usr/bin/open', '-n', str(root / 'AgentRelay.app')], check=True)
+            ready = False
             try:
                 wait(native_port)
+                ready = True
                 stored = request(native_port, '/api/store-session', {'source':'workbuddy', 'id':'fixture'})
                 assert Path(stored['path']).is_relative_to(root / 'storage')
+            except Exception as exc:
+                # These are isolated fixture logs. Retain diagnostics before
+                # TemporaryDirectory removes them, and keep the original error.
+                diagnostics = '\n'.join(path.name + ':\n' + path.read_text(encoding='utf-8', errors='replace')[-8000:]
+                                        for path in sorted((root / 'logs').glob('server-*.log'))[-3:])
+                raise AssertionError('Finder launcher failed: %s\n%s' % (exc, diagnostics or 'No launcher log created')) from exc
             finally:
-                request(native_port, '/api/shutdown', {})
+                if ready:
+                    request(native_port, '/api/shutdown', {})
             # Confirm no service is left pointing at the temporary root.
             deadline = time.monotonic() + 10
             while time.monotonic() < deadline:
