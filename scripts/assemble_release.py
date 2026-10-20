@@ -41,7 +41,7 @@ $manifest = Get-Content -LiteralPath (Join-Path $portableRoot 'version.json') -R
 $payload = $manifest.runtimes.'windows-x64'
 $archivePath = Join-Path (Join-Path $portableRoot 'runtimes') $payload.file
 if ((Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLower() -ne $payload.sha256) { throw 'Runtime checksum mismatch' }
-$cacheRoot = Join-Path $env:LOCALAPPDATA ('AgentRelay\\' + $manifest.version)
+$cacheRoot = Join-Path (Join-Path $env:LOCALAPPDATA ('AgentRelay\\' + $manifest.version)) $payload.sha256.Substring(0, 16)
 New-Item -ItemType Directory -Force -Path $cacheRoot | Out-Null
 $folderName = 'AgentRelay-' + $manifest.version + '-windows-x64'
 $destination = Join-Path $cacheRoot $folderName
@@ -85,7 +85,7 @@ esac
 ARCHIVE="$ROOT/runtimes/$PAYLOAD"
 @HASH@
 [ "$ACTUAL" = "$EXPECTED" ] || { printf 'Runtime checksum mismatch.\\n' >&2; exit 1; }
-CACHE=@CACHE@
+CACHE=@CACHE@/"${EXPECTED:0:16}"
 mkdir -p "$CACHE"
 DEST="$CACHE/$FOLDER"
 LOCK="$CACHE/$FOLDER.lock"
@@ -166,6 +166,7 @@ Mac 缓存：~/Library/Caches/AgentRelay/{tag}/
 Linux 缓存：~/.cache/agentrelay/{tag}/（尊重 XDG_CACHE_HOME）。
 移动盘中共用 config.json、storage/、index/ 和启动器，切换设备无需重新下载其他版本。
 首次运行时解压需要等待；后续复用缓存。若解压中断，删除该版本缓存后重试。
+各版本缓存内按运行时 SHA-256 前16位分目录，同版本重打包不会误用旧代码；每次启动校验完整归档摘要。
 
 浏览器自动打开。默认端口 8745，占用时尝试后续 5 个端口；查看实际网址。
 退出：网页右上角「退出服务」；终端启动也可 Ctrl+C。仅关闭网页不会停止服务。
@@ -194,7 +195,9 @@ Linux 缓存：~/.cache/agentrelay/{tag}/（尊重 XDG_CACHE_HOME）。
 社区插件：API v1 可信单文件 Python 读取插件，CLI 显式启用；换设备需重新批准。
   插件支持导出和迁出，暂不进行原生打包或写入；独立进程不是安全沙箱。
 
-通用写入目标：WorkBuddy、DSH、Claude Code、Codex。CodeBuddy/SDK 支持读取及对应软件原生恢复。
+通用写入目标：WorkBuddy 国内版、WorkBuddy AI 国际版、DSH、Claude Code、Codex。
+国内版 workbuddy/.workbuddy 与国际版 workbuddy_ai/.workbuddy-ai 分开识别和配置，不自动混合。
+CodeBuddy/SDK 支持读取及对应软件原生恢复。国际版恢复尚不登记桌面历史索引，续聊未通过验证。
 DSH 导入写入 v0 历史；图片、加密思考及特有工具协议不能保证完整跨工具转换。
 Codex Desktop 的索引可能需要额外刷新，JSONL 写入不保证自动出现在桌面列表。
 Skill 只复制文件，不执行脚本、不安装依赖或转换目标工具接口。
