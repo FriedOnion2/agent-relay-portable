@@ -59,7 +59,8 @@ class UniversalLauncherTests(unittest.TestCase):
                                str(portable / 'Start-AgentRelay.ps1')]
                 elif sys.platform == 'darwin':
                     env['HOME'] = str(cache)
-                    native_arm = subprocess.check_output(['/usr/sbin/sysctl', '-n', 'hw.optional.arm64']).strip() == b'1'
+                    hardware = subprocess.run(['/usr/sbin/sysctl', '-n', 'hw.optional.arm64'], capture_output=True)
+                    native_arm = hardware.stdout.strip() == b'1'
                     expected = marker + ('-macos-arm64' if native_arm else '-macos-x64')
                     command = ['/bin/bash', str(portable / '启动_AgentRelay.command')]
                 else:
