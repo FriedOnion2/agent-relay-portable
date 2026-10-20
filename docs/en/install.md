@@ -4,6 +4,10 @@ The Release bundle and running from source, ports and quitting. Chinese original
 
 ## Release bundle (no Python needed)
 
+Development builds after 1.1.0 add three separate buttons at the top of **Move between devices**: full backup (conversations + Skills), sessions-only backup, and Markdown reading export. Select local agents and export once; a durable copy stays in `storage/backups/` and the browser downloads the ZIP. To import a native backup, choose its ZIP, map each project to an existing local directory, review the batch preview and confirm. Markdown archives cannot restore native sessions. Shared Claude/SDK file paths are exported once; custom Skill roots can still use the existing individual Skill storage.
+
+Existing IDs/names are skipped by default. Independent copies use stable new IDs/names so retries skip completed copies. Canceling keeps completed restores; errors are reported per item. Backups are unencrypted, omit account settings and project files, and do not automatically redact secrets in conversation text. Limits: 32 MiB per file, 256 MiB total original data and 4096 files. Preview blockers prevent all writes. Native-file restore does not establish client indexing or resume support.
+
 Stable release: [v1.1.0](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v1.1.0) (Latest). **Rolling dev build:** [`dev`](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/dev) — rebuilt on every merge to `main`, always exactly one, may be unstable.
 
 Download **`AgentRelay-<version>-universal.zip`** from [GitHub Releases](https://github.com/FriedOnion2/agent-relay-portable/releases), extract it completely and run the launcher for your device. One bundle contains Windows x64, Mac (Apple Silicon / Intel) and Linux x64 runtimes, with Python and `zstandard` built in; you do not need to install Python or Node.js. Do not pick GitHub's automatically generated **Source code** archive; that is the development source.

@@ -255,6 +255,30 @@ assert.notEqual(i.message('en',data.error.error_message),data.error.error);
                 if process.poll() is None:
                     process.terminate(); process.wait(timeout=10)
                 process.stderr.close()
+        # New batch exports must also work inside the frozen runtime, without
+        # a host Python/Node installation or access to real client histories.
+        from relay import backup
+        backup_skill = Path(source.root) / 'skills' / 'backup-fixture'
+        backup_skill.mkdir(parents=True)
+        (backup_skill / 'SKILL.md').write_text('---\nname: backup-fixture\n---\nSynthetic\n', encoding='utf-8')
+        full = json.loads(run('backup', '--agents', 'workbuddy', 'workbuddy_ai'))
+        assert full['ok'] and Path(full['path']).is_file(), full
+        sessions = json.loads(run('backup', '--mode', 'sessions', '--agents', 'workbuddy'))
+        assert sessions['ok'] and not backup.inspect(sessions['path'])['skill_agents']
+        reading = json.loads(run('backup', '--mode', 'markdown', '--agents', 'workbuddy', '--no-thinking'))
+        assert reading['ok'] and Path(reading['path']).is_file()
+        summary = backup.inspect(full['path'])
+        mapping = root / 'backup-mapping.json'
+        mapping.write_text(json.dumps({'projects': {path: str(other) for path in summary['projects']},
+                                       'conflict': 'copy'}), encoding='utf-8')
+        batch_args = ('import-backup', full['path'], '--mapping', str(mapping))
+        plan = json.loads(run(*batch_args, '--dry-run', device_root=other))
+        assert plan['ready'] and not plan['blocked'], plan
+        imported = json.loads(run(*batch_args, '--preview-token', plan['token'], device_root=other))
+        assert imported['ok'] and imported['restored'], imported
+        assert list((Path(other_homes['workbuddy']) / 'skills').glob('backup-fixture-*/SKILL.md'))
+        assert not json.loads(run(*batch_args, '--dry-run', device_root=other))['ready']
+        print('PASS: three backup modes and token-confirmed batch native/Skill import (PATH empty)')
         print('PASS: standalone CLI, Zstd DSH import, shared portable storage, occupied-port HTTP and exit (PATH empty)')
 
 

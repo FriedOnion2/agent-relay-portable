@@ -63,6 +63,7 @@ python3 scripts/release_notes.py --sha "$(git rev-parse HEAD)" --output /tmp/not
 | `app-sessions.js` | 会话列表与详情 |
 | `app-migrate.js` | 环境检查、元宝导入、迁移确认对话框 |
 | `app-storage.js` | Skill 与对话存储、恢复 |
+| `app-backup.js` | 整机/对话/Markdown 三种一键导出、ZIP 选择上传、目录映射和批量导入 |
 | `app-transfer.js` | Windows 导入、迁移、批量迁移 |
 | `app-history.js` | 操作记录与撤销 |
 | `app-search.js` | 全文搜索、索引任务、Skill 草稿 |
