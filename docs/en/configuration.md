@@ -55,7 +55,7 @@ python app/cli.py health --output health-output
 
 ## Specifics
 
-- **WorkBuddy AI (International)** uses `workbuddy_ai`, `RELAY_WORKBUDDY_AI_HOME` / `WORKBUDDY_AI_HOME`, and defaults to `~/.workbuddy-ai`. It never inherits domestic WorkBuddy or CodeBuddy overrides. A single `user-...` child is selected automatically; with multiple accounts, choose the intended account directory in this device's settings, not its `projects` child. Reselect the directory after switching accounts. See the [format contract](../reference/formats/workbuddy_ai.md) (Chinese).
+- **WorkBuddy AI (International)** uses `workbuddy_ai`, `RELAY_WORKBUDDY_AI_HOME` / `WORKBUDDY_AI_HOME`, and defaults to `~/.workbuddy-ai`. It never inherits domestic WorkBuddy or CodeBuddy overrides. The device root wins when it has `projects` or `workbuddy.db`. Only without those markers is a single `user-...` child selected automatically; multiple account roots require explicit selection. In 5.8.4 a `user-*` directory may contain identity files only, so do not confuse it with the transcript root. Never select the `projects` child itself. Reselect the directory after switching accounts. See the [format contract](../reference/formats/workbuddy_ai.md) (Chinese).
 
 - **Claude Agent SDK** honours `CLAUDE_CONFIG_DIR` by default; its own override is `agent_homes.claude_sdk` / `RELAY_CLAUDE_SDK_HOME`. It does not inherit `RELAY_CLAUDE_HOME`, which is for Claude Code only.
 - **Upgrading an old config:** if `agent_homes.dsh` or `RELAY_DSH_HOME` pointed at `.workbuddy`, move that value to `workbuddy` / `RELAY_WORKBUDDY_HOME`. `dsh` now means DeepSeek Harness only and is never silently aliased to WorkBuddy.

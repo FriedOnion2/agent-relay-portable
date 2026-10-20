@@ -20,12 +20,15 @@ class WorkBuddyAIAdapter(WorkBuddyAdapter):
         # The desktop can keep transcripts at the device root while user-*
         # contains only identity/memory files. Never let that hide its store.
         desktop_store = (root / 'projects').is_dir() or (root / 'workbuddy.db').is_file()
-        scopes = sorted(path for path in root.glob('user-*') if path.is_dir())
-        if any(archive.is_link(path) for path in scopes):
-            raise ValueError(message_text('err.only_regular_files_can_be_packaged_symbolic_links_are_excluded'))
-        if not desktop_store and len(scopes) > 1:
-            raise ValueError(message_text('err.workbuddy_ai_select_account_directory'))
-        super().__init__(home=str(root if desktop_store or not scopes else scopes[0]), clean=clean)
+        if not desktop_store:
+            scopes = sorted(path for path in root.glob('user-*') if path.is_dir())
+            if any(archive.is_link(path) for path in scopes):
+                raise ValueError(message_text('err.only_regular_files_can_be_packaged_symbolic_links_are_excluded'))
+            if len(scopes) > 1:
+                raise ValueError(message_text('err.workbuddy_ai_select_account_directory'))
+            if scopes:
+                root = scopes[0]
+        super().__init__(home=str(root), clean=clean)
 
     def project_dir_for(self, cwd):
         # WorkBuddy AI 5.8.4 compressWorkspacePathName: preserve case, Unicode

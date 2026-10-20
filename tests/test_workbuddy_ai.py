@@ -91,7 +91,9 @@ class WorkBuddyAITests(unittest.TestCase):
         # device root; user-* can contain identity files without transcripts.
         desktop = WorkBuddyAdapter(home=str(self.device_root))
         desktop.write(sample(), cwd=str(self.project), session_id='desktop-fixture')
-        detected = WorkBuddyAIAdapter(home=str(self.device_root))
+        # Unused identity-directory links cannot block a valid device store.
+        with patch.object(archive, 'is_link', return_value=True):
+            detected = WorkBuddyAIAdapter(home=str(self.device_root))
         self.assertEqual(Path(detected.root), self.device_root)
         self.assertEqual(content(detected.read('desktop-fixture')), content(sample()))
         detected.write(sample(), cwd=str(self.project), session_id='desktop-copy')

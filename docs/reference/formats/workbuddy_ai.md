@@ -27,7 +27,7 @@ python app/cli.py restore-session <会话包.zip> --cwd <新设备已存在的�
 
 同盘双系统可使用 `windows_workbuddy_ai` / `ubuntu_workbuddy_ai` 只读来源，以及既有 `import-windows`、`export-windows`、`import-ubuntu` 原生搬迁命令，仍需显式选择挂载用户目录和本机项目，见[双系统指南](../../guide/ubuntu-dual-boot.md)。
 
-跨系统有多个账号时，在「环境与兼容」选择 `windows · WorkBuddy AI (International)` / `ubuntu · WorkBuddy AI (International)`，填所选系统用户根下的 `.workbuddy-ai/user-...` 目录。CLI 也可使用：
+仅当会话实际位于账号根、需要明确选择该账号时，在「环境与兼容」选择 `windows · WorkBuddy AI (International)` / `ubuntu · WorkBuddy AI (International)`，填所选系统用户根下的 `.workbuddy-ai/user-...` 目录。CLI 也可使用：
 
 ```sh
 python app/cli.py device-config --agent windows_workbuddy_ai --home "/mnt/windows/Users/alice/.workbuddy-ai/user-example-personal"
@@ -35,7 +35,7 @@ python app/cli.py device-config --agent windows_workbuddy_ai --home "/mnt/window
 python app/cli.py device-config --agent ubuntu_workbuddy_ai --home "D:/ubuntu-backup/alice/.workbuddy-ai/user-example-personal"
 ```
 
-对应配置键和环境变量为 `windows_workbuddy_ai` / `RELAY_WINDOWS_WORKBUDDY_AI_HOME`、`ubuntu_workbuddy_ai` / `RELAY_UBUNTU_WORKBUDDY_AI_HOME`。只允许所选 profile 下真实、已存在的 `user-*` 直接子目录；更换系统用户后需重新选择账号。留空恢复自动选择。
+对应配置键和环境变量为 `windows_workbuddy_ai` / `RELAY_WINDOWS_WORKBUDDY_AI_HOME`、`ubuntu_workbuddy_ai` / `RELAY_UBUNTU_WORKBUDDY_AI_HOME`。只允许所选 profile 下真实、已存在的 `user-*` 直接子目录；更换系统用户后需重新选择账号。留空恢复自动选择；5.8.4 会话位于设备根时应留空使用设备根。
 
 ## 格式与验证证据
 
