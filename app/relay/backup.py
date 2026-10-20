@@ -264,9 +264,11 @@ def _plan(manifest, files, options):
                         row['status'] = 'skip'
                         row['reason'] = message_text('msg.backup_exists')
                     else:
-                        if not Path(row['cwd']).is_absolute() or not Path(row['cwd']).is_dir():
+                        if not Path(row['cwd']).is_absolute():
                             _fail('project_required')
                         package = _materialize(item, files, temporary)
+                        # The shared native preview validates directory existence
+                        # and Windows path rules before any target writes.
                         preview.package(package, row['cwd'], row['session_id'], 'none')
                         existing[agent].add(sid)
                 else:
