@@ -3,12 +3,14 @@ import copy
 import io
 import json
 import os
+import sys
 import tempfile
 import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'app'))
 from relay import archive, backup, registry, session_store
 from relay.adapters.workbuddy import WorkBuddyAdapter
 from relay.adapters.workbuddy_ai import WorkBuddyAIAdapter
