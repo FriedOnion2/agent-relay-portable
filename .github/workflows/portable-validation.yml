@@ -1,7 +1,7 @@
 name: Portable package validation
 on:
   pull_request:
-    paths: ['app/**', 'scripts/build_release.py', 'scripts/smoke_release.py', 'requirements-release.txt', '.github/workflows/portable-validation.yml']
+    paths: ['app/**', 'scripts/build_release.py', 'scripts/assemble_release.py', 'scripts/smoke_release.py', 'scripts/smoke_universal.py', 'tests/test_universal_launcher.py', 'requirements-release.txt', '.github/workflows/portable-validation.yml']
   workflow_dispatch:
 permissions:
   contents: read

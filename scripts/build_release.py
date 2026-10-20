@@ -82,6 +82,10 @@ def _build(tag, output, work):
                 if path.is_file():
                     archive.write(path, name + '/' + path.relative_to(stage).as_posix())
     print('ASSET=' + str(asset))
+    # Validate the generated total-bundle entry for this host on every build;
+    # other platform payloads are temporary inert fixtures, never distributed.
+    subprocess.run([sys.executable, str(ROOT / 'scripts/smoke_universal.py'), str(asset),
+                    '--host-runtime', '--tag', tag], check=True, cwd=ROOT)
     return asset
 
 

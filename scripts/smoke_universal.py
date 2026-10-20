@@ -3,6 +3,7 @@ import json
 import http.client
 import os
 import platform
+import shutil
 import socket
 import subprocess
 import sys
@@ -126,12 +127,21 @@ def smoke(asset):
             config['port'] = native_port
             (root / 'config.json').write_text(json.dumps(config), encoding='utf-8')
             subprocess.run(['/usr/bin/open', '-n', str(root / 'AgentRelay.app')], check=True)
+            ready = False
             try:
                 wait(native_port)
+                ready = True
                 stored = request(native_port, '/api/store-session', {'source':'workbuddy', 'id':'fixture'})
                 assert Path(stored['path']).is_relative_to(root / 'storage')
+            except Exception as exc:
+                # These are isolated fixture logs. Retain diagnostics before
+                # TemporaryDirectory removes them, and keep the original error.
+                diagnostics = '\n'.join(path.name + ':\n' + path.read_text(encoding='utf-8', errors='replace')[-8000:]
+                                        for path in sorted((root / 'logs').glob('server-*.log'))[-3:])
+                raise AssertionError('Finder launcher failed: %s\n%s' % (exc, diagnostics or 'No launcher log created')) from exc
             finally:
-                request(native_port, '/api/shutdown', {})
+                if ready:
+                    request(native_port, '/api/shutdown', {})
             # Confirm no service is left pointing at the temporary root.
             deadline = time.monotonic() + 10
             while time.monotonic() < deadline:
@@ -145,5 +155,40 @@ def smoke(asset):
         print('PASS: universal package on %s/%s; shared storage, bundled DSH and exit' % (platform.system(), platform.machine()))
 
 
+def smoke_host_runtime(asset, tag):
+    """Test the host launcher without downloading other systems' builds.
+
+    Non-host archives are inert fixtures, never executed or published. The
+    full release workflow still validates the real four-platform download.
+    """
+    from assemble_release import assemble, PLATFORMS
+    asset = Path(asset).resolve()
+    with tempfile.TemporaryDirectory(prefix='AgentRelay host launcher ') as temporary:
+        root = Path(temporary)
+        assets = root / 'assets'
+        assets.mkdir()
+        expected = ['AgentRelay-%s-%s%s' % (tag, target, '.tar.gz' if target.startswith('linux') else '.zip')
+                    for target in PLATFORMS]
+        if asset.name not in expected:
+            raise ValueError('Unexpected host runtime asset name: ' + asset.name)
+        for name in expected:
+            if name == asset.name:
+                shutil.copyfile(asset, assets / name)
+            else:
+                (assets / name).write_bytes(b'Unused non-host fixture: never execute or distribute')
+        smoke(assemble(tag, assets, root / 'output'))
+
+
 if __name__ == '__main__':
-    smoke(sys.argv[1])
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('asset')
+    parser.add_argument('--host-runtime', action='store_true')
+    parser.add_argument('--tag')
+    args = parser.parse_args()
+    if args.host_runtime:
+        if not args.tag:
+            parser.error('--host-runtime requires --tag')
+        smoke_host_runtime(args.asset, args.tag)
+    else:
+        smoke(args.asset)

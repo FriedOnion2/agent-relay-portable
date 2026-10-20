@@ -258,5 +258,58 @@ assert.notEqual(i.message('en',data.error.error_message),data.error.error);
         print('PASS: standalone CLI, Zstd DSH import, shared portable storage, occupied-port HTTP and exit (PATH empty)')
 
 
+def smoke_relocation(binary):
+    """Move the complete native distribution, not just its data override."""
+    binary = Path(binary).resolve()
+    distribution = binary.parents[3] if binary.parent.name == 'MacOS' else binary.parent
+    relative_binary = binary.relative_to(distribution)
+    with tempfile.TemporaryDirectory(prefix='AgentRelay move 中文 ') as temporary:
+        parent = Path(temporary).resolve()
+        root = parent / 'before'
+        shutil.copytree(distribution, root, symlinks=True)
+        homes = {name: 'fixtures/' + name for name in
+                 ('workbuddy', 'workbuddy_ai', 'dsh', 'codebuddy', 'claude', 'claude_sdk', 'codex', 'yuanbao')}
+        for home in homes.values():
+            (root / home).mkdir(parents=True, exist_ok=True)
+        (root / 'config.json').write_text(json.dumps({'agent_homes': homes, 'open_browser': False}), encoding='utf-8')
+        conversation = ir.Conversation(title='Moved portable fixture', cwd=str(parent), turns=[
+            ir.Turn(ir.USER, [ir.Block.text_block('portable relocation marker')]),
+            ir.Turn(ir.ASSISTANT, [ir.Block.text_block('ready')])])
+        WorkBuddyAdapter(home=str(root / homes['workbuddy'])).write(conversation, session_id='relocation')
+        env = dict(os.environ)
+        # Exercise native default placement with no developer interpreter,
+        # inherited storage/log override or current-directory dependency.
+        for name in ('RELAY_PORTABLE_ROOT', 'RELAY_STORAGE_HOME', 'RELAY_LOG_HOME'):
+            env.pop(name, None)
+        env['PATH'] = ''
+
+        def run(*args):
+            result = subprocess.run([str(root / relative_binary), *args], cwd=parent, env=env,
+                                    capture_output=True, text=True, encoding='utf-8', timeout=45)
+            assert result.returncode == 0, result.stdout + result.stderr
+            return json.loads(result.stdout)
+
+        assert Path(run('device-config')['data_root']) == root
+        stored = run('store-sessions', 'workbuddy', 'relocation')
+        assert stored['ok'] and len(stored['stored']) == 1
+        assert run('index', '--source', 'workbuddy')['ok']
+        packages = {p.relative_to(root): p.read_bytes() for p in (root / 'storage').rglob('*.zip')}
+        shared_config = (root / 'config.json').read_bytes()
+        shutil.move(str(root), parent / 'after 中文 new mount')
+        root = parent / 'after 中文 new mount'
+        assert not (parent / 'before').exists()
+        assert Path(run('device-config')['data_root']) == root
+        assert run('list', 'workbuddy', '--json')[0]['id'] == 'relocation'
+        assert run('search', 'relocation')['results']
+        listed = run('stored-sessions', '--agent', 'workbuddy')['packages']
+        assert len(listed) == 1 and Path(listed[0]['path']).is_file()
+        assert run('restore-session', listed[0]['path'], '--cwd', str(parent), '--session-id', 'relocated-copy')['ok']
+        assert (root / 'config.json').read_bytes() == shared_config
+        assert all((root / path).read_bytes() == data for path, data in packages.items())
+        assert (root / 'logs' / 'operations.jsonl').is_file()
+        print('PASS: entire native distribution moved; relative config, archives, offline search and restore (PATH empty)')
+
+
 if __name__ == '__main__':
     smoke(sys.argv[1])
+    smoke_relocation(sys.argv[1])

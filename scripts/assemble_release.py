@@ -11,6 +11,13 @@ ROOT = Path(__file__).resolve().parents[1]
 PLATFORMS = ('windows-x64', 'macos-arm64', 'macos-x64', 'linux-x64')
 
 
+def write_utf8(path, content):
+    # Assemblies built on Windows must still contain runnable POSIX scripts;
+    # neither the host's ANSI encoding nor CRLF translation may leak into them.
+    with path.open('w', encoding='utf-8', newline='\n') as stream:
+        stream.write(content)
+
+
 def assemble(tag, assets, output):
     if not tag.startswith('v') or any(c not in '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-' for c in tag):
         raise ValueError('Invalid version tag')
@@ -28,7 +35,7 @@ def assemble(tag, assets, output):
         shutil.copy2(path, stage / 'runtimes' / path.name)
         payloads[target] = {'file': path.name, 'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
     metadata = {'version': tag, 'kind': 'agentrelay-universal', 'runtimes': payloads}
-    (stage / 'version.json').write_text(json.dumps(metadata, indent=2) + '\n')
+    write_utf8(stage / 'version.json', json.dumps(metadata, indent=2) + '\n')
     shutil.copy2(ROOT / 'config.example.json', stage)
     windows = '''param([Parameter(ValueFromRemainingArguments=$true)][string[]]$RelayArguments)
 $ErrorActionPreference = 'Stop'
@@ -41,7 +48,7 @@ $manifest = Get-Content -LiteralPath (Join-Path $portableRoot 'version.json') -R
 $payload = $manifest.runtimes.'windows-x64'
 $archivePath = Join-Path (Join-Path $portableRoot 'runtimes') $payload.file
 if ((Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLower() -ne $payload.sha256) { throw 'Runtime checksum mismatch' }
-$cacheRoot = Join-Path $env:LOCALAPPDATA ('AgentRelay\\' + $manifest.version)
+$cacheRoot = Join-Path (Join-Path $env:LOCALAPPDATA ('AgentRelay\\' + $manifest.version)) $payload.sha256.Substring(0, 16)
 New-Item -ItemType Directory -Force -Path $cacheRoot | Out-Null
 $folderName = 'AgentRelay-' + $manifest.version + '-windows-x64'
 $destination = Join-Path $cacheRoot $folderName
@@ -78,14 +85,15 @@ exit $LASTEXITCODE
         script = '''#!/bin/bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-case "$(uname -m)" in
+@ARCHITECTURE@
+case "$MACHINE" in
 @CASES@
   *) printf 'Unsupported CPU architecture.\\n' >&2; exit 1 ;;
 esac
 ARCHIVE="$ROOT/runtimes/$PAYLOAD"
 @HASH@
 [ "$ACTUAL" = "$EXPECTED" ] || { printf 'Runtime checksum mismatch.\\n' >&2; exit 1; }
-CACHE=@CACHE@
+CACHE=@CACHE@/"${EXPECTED:0:16}"
 mkdir -p "$CACHE"
 DEST="$CACHE/$FOLDER"
 LOCK="$CACHE/$FOLDER.lock"
@@ -109,7 +117,11 @@ export RELAY_PORTABLE_ROOT="$ROOT"
 exec "$DEST/@BINARY@" serve "$@"
 '''
         script = script.replace('@CASES@', '\n'.join(cases))
+        architecture = 'MACHINE="$(uname -m)"'
         if system == 'macos':
+            # LaunchServices can run a script app's bash under Rosetta. Select
+            # the hardware-native runtime, not the translated shell's uname.
+            architecture += '\nif [ "$(/usr/sbin/sysctl -n hw.optional.arm64 2>/dev/null || true)" = 1 ]; then MACHINE=arm64; fi'
             script = script.replace('@HASH@', 'ACTUAL="$(/usr/bin/shasum -a 256 "$ARCHIVE" | cut -d " " -f 1)"')
             script = script.replace('@CACHE@', '"$HOME/Library/Caches/AgentRelay/' + tag + '"')
             script = script.replace('@BINARY@', 'AgentRelay.app/Contents/MacOS/AgentRelay')
@@ -121,7 +133,8 @@ exec "$DEST/@BINARY@" serve "$@"
             script = script.replace('@BINARY@', 'AgentRelay')
             script = script.replace('@EXTRACT@', 'tar -xzf "$ARCHIVE" -C "$TEMP"')
             filename = '启动_AgentRelay.sh'
-        (stage / filename).write_text(script)
+        script = script.replace('@ARCHITECTURE@', architecture)
+        write_utf8(stage / filename, script)
         (stage / filename).chmod(0o755)
     app = stage / 'AgentRelay.app'
     (app / 'Contents/MacOS').mkdir(parents=True)
@@ -138,7 +151,7 @@ mkdir -p "$LOGDIR" || exit 1
 LOG="$LOGDIR/server-$(date +%Y%m%d-%H%M%S)-$$.log"
 nohup /bin/bash "$ROOT/启动_AgentRelay.command" </dev/null >>"$LOG" 2>&1 &
 '''
-    (app / 'Contents/MacOS/AgentRelay').write_text(finder)
+    write_utf8(app / 'Contents/MacOS/AgentRelay', finder)
     (app / 'Contents/MacOS/AgentRelay').chmod(0o755)
     prepare = '''#!/bin/bash
 cd "$(dirname "$0")" || exit 1
@@ -146,9 +159,9 @@ xattr -dr com.apple.quarantine AgentRelay.app 2>/dev/null || true
 chmod +x AgentRelay.app/Contents/MacOS/AgentRelay 启动_AgentRelay.command
 printf '准备完成。可双击 AgentRelay.app 或启动_AgentRelay.command。\\n'
 '''
-    (stage / 'Mac首次运行.command').write_text(prepare)
+    write_utf8(stage / 'Mac首次运行.command', prepare)
     (stage / 'Mac首次运行.command').chmod(0o755)
-    (stage / '开始使用.txt').write_text('''AgentRelay {tag} {kind} — 一个包切换 Windows / Mac / Linux
+    write_utf8(stage / '开始使用.txt', '''AgentRelay {tag} {kind} — 一个包切换 Windows / Mac / Linux
 
 本总包内置四套运行时：Windows x64、Mac Apple Silicon / Intel、Linux x64。
 无需另装 Python、Node.js 或 zstandard，首次启动不下载依赖。
@@ -166,6 +179,7 @@ Mac 缓存：~/Library/Caches/AgentRelay/{tag}/
 Linux 缓存：~/.cache/agentrelay/{tag}/（尊重 XDG_CACHE_HOME）。
 移动盘中共用 config.json、storage/、index/ 和启动器，切换设备无需重新下载其他版本。
 首次运行时解压需要等待；后续复用缓存。若解压中断，删除该版本缓存后重试。
+各版本缓存内按运行时 SHA-256 前16位分目录，同版本重打包不会误用旧代码；每次启动校验完整归档摘要。
 
 浏览器自动打开。默认端口 8745，占用时尝试后续 5 个端口；查看实际网址。
 退出：网页右上角「退出服务」；终端启动也可 Ctrl+C。仅关闭网页不会停止服务。
@@ -194,20 +208,22 @@ Linux 缓存：~/.cache/agentrelay/{tag}/（尊重 XDG_CACHE_HOME）。
 社区插件：API v1 可信单文件 Python 读取插件，CLI 显式启用；换设备需重新批准。
   插件支持导出和迁出，暂不进行原生打包或写入；独立进程不是安全沙箱。
 
-通用写入目标：WorkBuddy、DSH、Claude Code、Codex。CodeBuddy/SDK 支持读取及对应软件原生恢复。
+通用写入目标：WorkBuddy 国内版、WorkBuddy AI 国际版、DSH、Claude Code、Codex。
+国内版 workbuddy/.workbuddy 与国际版 workbuddy_ai/.workbuddy-ai 分开识别和配置，不自动混合。
+CodeBuddy/SDK 支持读取及对应软件原生恢复。国际版恢复尚不登记桌面历史索引，续聊未通过验证。
 DSH 导入写入 v0 历史；图片、加密思考及特有工具协议不能保证完整跨工具转换。
 Codex Desktop 的索引可能需要额外刷新，JSONL 写入不保证自动出现在桌面列表。
 Skill 只复制文件，不执行脚本、不安装依赖或转换目标工具接口。
 本地运行，不上传数据、不调用模型。开发预览版请先用副本验证。
 完整使用说明：https://github.com/FriedOnion2/agent-relay-portable
-'''.format(tag=tag, kind='滚动开发版' if '-dev' in tag else '正式版'), encoding='utf-8')
+'''.format(tag=tag, kind='滚动开发版' if '-dev' in tag else '正式版'))
     asset = output / (name + '.zip')
     with zipfile.ZipFile(asset, 'w', zipfile.ZIP_DEFLATED) as archive:
         for path in sorted(stage.rglob('*')):
             if path.is_file():
                 archive.write(path, name + '/' + path.relative_to(stage).as_posix())
     checksum = hashlib.sha256(asset.read_bytes()).hexdigest()
-    (output / 'SHA256SUMS.txt').write_text(checksum + '  ' + asset.name + '\n')
+    write_utf8(output / 'SHA256SUMS.txt', checksum + '  ' + asset.name + '\n')
     print('UNIVERSAL=' + str(asset))
     return asset
 
