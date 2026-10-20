@@ -32,7 +32,7 @@ The task home links to migration, moving between devices, full-text search, and 
 | Source | Default conversation location | Support |
 |---|---|---|
 | WorkBuddy | `~/.workbuddy/projects` | Read, export, write |
-| WorkBuddy AI (International) | `~/.workbuddy-ai/[user-…/]projects` | Read, export, write, native archives; synthetic file checks, client resume unverified |
+| WorkBuddy AI (International) | `~/.workbuddy-ai/[user-…/]projects` | Read, export, write, native archives; 5.8.4 native reading and file roundtrip checked; desktop history index is not registered, restored-session resume has not passed validation |
 | DeepSeek Harness / DSH | `~/.dsh/sessions` | Read v0–v4, export, write native compressed history |
 | CodeBuddy CLI | `~/.codebuddy/projects` | Read, export, migrate out |
 | CodeBuddy CN IDE / Extension | System `CodeBuddyExtension/Data/**/history` | Read manifests and messages, export, migrate out |

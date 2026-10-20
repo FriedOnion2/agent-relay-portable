@@ -5,8 +5,8 @@
 ## 位置和账号选择
 
 - 默认设备根目录：`~/.workbuddy-ai`，Windows、macOS、Linux 的规则一致。
-- 旧布局：`projects/<project>/<sessionId>.jsonl`；新版账号布局：`user-<uid>-<enterprise-or-personal>/projects/<project>/<sessionId>.jsonl`。
-- 检测到唯一 `user-…` 目录时选择它；多个账号时停止，要求通过「环境与兼容」或下方 CLI 配置明确选择账号。不会把不同账号合并，也不猜当前登录账号。账号目录下的 `sessions` 仅用于补充项目元数据。
+- 实测桌面版 5.8.4 将会话写在设备根的 `projects/<project>/<sessionId>.jsonl`，历史索引在同级 `workbuddy.db`；同时存在的 `user-*` 可以只存身份与记忆文件，不能据此改选会话根。也兼容显式账号根下的 `projects` 布局。
+- 设备根存在 `projects` 或 `workbuddy.db` 时使用设备根，不合并其子账号；否则唯一 `user-…` 目录作为账号根，多个账号时停止并要求明确选择。可通过「环境与兼容」或下方 CLI 指定实际账号根。目录下的 `sessions` 仅用于补充项目元数据。
 - 本机配置键为 `workbuddy_ai`；可独立设置 `RELAY_WORKBUDDY_AI_HOME` / `WORKBUDDY_AI_HOME`，不继承 `WORKBUDDY_HOME` 或 `CODEBUDDY_CONFIG_DIR`。路径填设备根或具体账号根，不填 `projects`。
 - 自动选择在来源适配器初始化时生效。切换客户端账号后，在本机目录配置中重新选择具体账号目录，以刷新来源。
 
@@ -48,3 +48,9 @@ python app/cli.py device-config --agent ubuntu_workbuddy_ai --home "D:/ubuntu-ba
 - 合成文件测试验证正文、思考、工具顺序、账号选择、双向转换、未知字段保留、原生包搬到另一设备后恢复、ID 冲突及凭据排除。
 
 当前为**文件层支持**。桌面侧栏使用的 SQLite `sessions` 索引不修改；恢复后能否在客户端显示和继续对话尚未验证。健康检查的 `native_resume` 保持 `not-tested`。压缩/分支重放、图片与附件的完整恢复不在本次保证范围。
+
+## 2026-10-20 Windows 桌面实测
+
+使用已安装的 WorkBuddy AI 5.8.4，在独立空工作区发起只有合成标记的短对话，客户端完成用户/助手两轮原生记录；未要求读取或修改工作区文件。实测发现身份目录与会话根分离，已用隔离回归测试修复自动选择空 `user-*` 而漏读设备根会话的问题。
+
+AgentRelay 可读取这条原生记录，保存为 ZIP，并以新 ID 和新项目路径恢复副本；正文标记和两轮内容保留，源 JSONL 字节未变。只读核对原生 SQLite：原会话存在历史索引，恢复副本没有历史索引。当前恢复流程不写该索引，因而本次**未通过桌面侧栏发现及恢复副本续聊验证**，不能把文件层成功写成完整客户端迁移成功。账号信息、原生日志、数据库和会话包不提交仓库。

@@ -86,6 +86,23 @@ class WorkBuddyAITests(unittest.TestCase):
         with patch.object(archive, 'is_link', return_value=True), self.assertRaises(ValueError):
             WorkBuddyAIAdapter(home=str(self.device_root))
 
+    def test_desktop_device_store_is_not_hidden_by_account_support_directories(self):
+        # The 5.8.4 desktop keeps transcripts and its session database at the
+        # device root; user-* can contain identity files without transcripts.
+        desktop = WorkBuddyAdapter(home=str(self.device_root))
+        desktop.write(sample(), cwd=str(self.project), session_id='desktop-fixture')
+        detected = WorkBuddyAIAdapter(home=str(self.device_root))
+        self.assertEqual(Path(detected.root), self.device_root)
+        self.assertEqual(content(detected.read('desktop-fixture')), content(sample()))
+        detected.write(sample(), cwd=str(self.project), session_id='desktop-copy')
+        self.assertTrue(any(row.id == 'desktop-copy' for row in desktop.discover()))
+        self.assertFalse((self.account / 'projects').exists())
+
+    def test_empty_desktop_database_selects_device_root_before_first_transcript(self):
+        (self.device_root / 'workbuddy.db').touch()
+        detected = WorkBuddyAIAdapter(home=str(self.device_root))
+        self.assertEqual(Path(detected.root), self.device_root)
+
     def test_transfer_to_and_from_domestic_and_other_writers_preserves_content(self):
         path = self.seed()
         before = path.read_bytes()
