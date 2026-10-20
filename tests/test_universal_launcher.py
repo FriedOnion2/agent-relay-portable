@@ -45,6 +45,12 @@ class UniversalLauncherTests(unittest.TestCase):
                             archive.writestr(folder + '/payload-marker.txt', marker)
                 assemble(tag, assets, root / 'output')
                 portable = root / 'output' / ('AgentRelay-' + tag + '-universal')
+                for script in ('启动_AgentRelay.command', '启动_AgentRelay.sh',
+                               'Mac首次运行.command', 'AgentRelay.app/Contents/MacOS/AgentRelay'):
+                    raw = (portable / script).read_bytes()
+                    self.assertTrue(raw.startswith(b'#!/bin/bash\n'))
+                    self.assertNotIn(b'\r', raw)
+                    raw.decode('utf-8')
                 env = dict(os.environ)
                 if sys.platform == 'win32':
                     env['LOCALAPPDATA'] = str(cache)

@@ -11,6 +11,13 @@ ROOT = Path(__file__).resolve().parents[1]
 PLATFORMS = ('windows-x64', 'macos-arm64', 'macos-x64', 'linux-x64')
 
 
+def write_utf8(path, content):
+    # Assemblies built on Windows must still contain runnable POSIX scripts;
+    # neither the host's ANSI encoding nor CRLF translation may leak into them.
+    with path.open('w', encoding='utf-8', newline='\n') as stream:
+        stream.write(content)
+
+
 def assemble(tag, assets, output):
     if not tag.startswith('v') or any(c not in '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-' for c in tag):
         raise ValueError('Invalid version tag')
@@ -28,7 +35,7 @@ def assemble(tag, assets, output):
         shutil.copy2(path, stage / 'runtimes' / path.name)
         payloads[target] = {'file': path.name, 'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
     metadata = {'version': tag, 'kind': 'agentrelay-universal', 'runtimes': payloads}
-    (stage / 'version.json').write_text(json.dumps(metadata, indent=2) + '\n')
+    write_utf8(stage / 'version.json', json.dumps(metadata, indent=2) + '\n')
     shutil.copy2(ROOT / 'config.example.json', stage)
     windows = '''param([Parameter(ValueFromRemainingArguments=$true)][string[]]$RelayArguments)
 $ErrorActionPreference = 'Stop'
@@ -121,7 +128,7 @@ exec "$DEST/@BINARY@" serve "$@"
             script = script.replace('@BINARY@', 'AgentRelay')
             script = script.replace('@EXTRACT@', 'tar -xzf "$ARCHIVE" -C "$TEMP"')
             filename = '启动_AgentRelay.sh'
-        (stage / filename).write_text(script)
+        write_utf8(stage / filename, script)
         (stage / filename).chmod(0o755)
     app = stage / 'AgentRelay.app'
     (app / 'Contents/MacOS').mkdir(parents=True)
@@ -138,7 +145,7 @@ mkdir -p "$LOGDIR" || exit 1
 LOG="$LOGDIR/server-$(date +%Y%m%d-%H%M%S)-$$.log"
 nohup /bin/bash "$ROOT/启动_AgentRelay.command" </dev/null >>"$LOG" 2>&1 &
 '''
-    (app / 'Contents/MacOS/AgentRelay').write_text(finder)
+    write_utf8(app / 'Contents/MacOS/AgentRelay', finder)
     (app / 'Contents/MacOS/AgentRelay').chmod(0o755)
     prepare = '''#!/bin/bash
 cd "$(dirname "$0")" || exit 1
@@ -146,9 +153,9 @@ xattr -dr com.apple.quarantine AgentRelay.app 2>/dev/null || true
 chmod +x AgentRelay.app/Contents/MacOS/AgentRelay 启动_AgentRelay.command
 printf '准备完成。可双击 AgentRelay.app 或启动_AgentRelay.command。\\n'
 '''
-    (stage / 'Mac首次运行.command').write_text(prepare)
+    write_utf8(stage / 'Mac首次运行.command', prepare)
     (stage / 'Mac首次运行.command').chmod(0o755)
-    (stage / '开始使用.txt').write_text('''AgentRelay {tag} {kind} — 一个包切换 Windows / Mac / Linux
+    write_utf8(stage / '开始使用.txt', '''AgentRelay {tag} {kind} — 一个包切换 Windows / Mac / Linux
 
 本总包内置四套运行时：Windows x64、Mac Apple Silicon / Intel、Linux x64。
 无需另装 Python、Node.js 或 zstandard，首次启动不下载依赖。
@@ -203,14 +210,14 @@ Codex Desktop 的索引可能需要额外刷新，JSONL 写入不保证自动出
 Skill 只复制文件，不执行脚本、不安装依赖或转换目标工具接口。
 本地运行，不上传数据、不调用模型。开发预览版请先用副本验证。
 完整使用说明：https://github.com/FriedOnion2/agent-relay-portable
-'''.format(tag=tag, kind='滚动开发版' if '-dev' in tag else '正式版'), encoding='utf-8')
+'''.format(tag=tag, kind='滚动开发版' if '-dev' in tag else '正式版'))
     asset = output / (name + '.zip')
     with zipfile.ZipFile(asset, 'w', zipfile.ZIP_DEFLATED) as archive:
         for path in sorted(stage.rglob('*')):
             if path.is_file():
                 archive.write(path, name + '/' + path.relative_to(stage).as_posix())
     checksum = hashlib.sha256(asset.read_bytes()).hexdigest()
-    (output / 'SHA256SUMS.txt').write_text(checksum + '  ' + asset.name + '\n')
+    write_utf8(output / 'SHA256SUMS.txt', checksum + '  ' + asset.name + '\n')
     print('UNIVERSAL=' + str(asset))
     return asset
 
