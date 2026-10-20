@@ -49,6 +49,22 @@ class CodexHistoryTests(unittest.TestCase):
             restored = CodexAdapter(home=root).read('history')
             self.assertEqual(restored.stats()['tool_call'], 3)
             self.assertEqual(restored.stats()['tool_result'], 3)
+            self.assertEqual([(block.call_id, block.output, block.is_error)
+                              for turn in restored.turns for block in turn.blocks if block.kind == ir.TOOL_RESULT],
+                             [('c1', '/fixture', False), ('c2', '', True), ('orphan', 'standalone', False)])
+
+    def test_result_error_annotation_is_explicit_and_never_inferred_from_text(self):
+        with tempfile.TemporaryDirectory() as root:
+            adapter = CodexAdapter(home=root)
+            for kind in ('function_call_output', 'custom_tool_call_output'):
+                for value in (None, False, True, 'false', 'true', 1):
+                    with self.subTest(kind=kind, annotation=value):
+                        payload = {'type': kind, 'call_id': 'c', 'output': 'Error: synthetic output'}
+                        if value is not None:
+                            payload['relay_is_error'] = value
+                        _, blocks = adapter._response_blocks(payload)
+                        self.assertEqual(blocks[0].is_error, value is True)
+                        self.assertEqual(blocks[0].output, payload['output'])
 
     def test_thinking_exclusion_removes_client_visible_reasoning_too(self):
         with tempfile.TemporaryDirectory() as root:

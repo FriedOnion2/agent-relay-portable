@@ -189,7 +189,10 @@ class CodexAdapter(BaseAdapter):
             return role, [ir.Block.tool_call(payload.get("call_id") or payload.get("id") or "",
                                              payload.get("name") or "unknown", args)]
         if kind in ("function_call_output", "custom_tool_call_output"):
-            return role, [ir.Block.tool_result(payload.get("call_id") or "", message_text(payload.get("output")) or "", False)]
+            # Relay's lossless error annotation is separate from Codex's native
+            # text output. Do not infer failure from arbitrary output strings.
+            return role, [ir.Block.tool_result(payload.get("call_id") or "", message_text(payload.get("output")) or "",
+                                              payload.get("relay_is_error") is True)]
         if kind == "web_search_call":
             return role, [ir.Block.tool_call(payload.get("call_id") or payload.get("id") or "", "WebSearch",
                                              json.dumps(payload.get("action") or {}, ensure_ascii=False))]
@@ -447,7 +450,8 @@ class CodexAdapter(BaseAdapter):
                         "timestamp": iso(ts_b), "ordinal": ordinal, "type": "response_item",
                         "payload": {"type": "function_call_output",
                                     "id": f"fco_{uuid7(ts_b)}",
-                                    "call_id": b.call_id, "output": b.output or ""},
+                                    "call_id": b.call_id, "output": b.output or "",
+                                    "relay_is_error": b.is_error},
                     }, ensure_ascii=False))
                     ordinal += 1
                     waiting = pending_tools.get(b.call_id)

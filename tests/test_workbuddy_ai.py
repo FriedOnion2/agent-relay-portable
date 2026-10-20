@@ -11,7 +11,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'app'))
 import bootstrap
 import cli
-from relay import archive, health, locations, preview, registry, session_store
+from relay import archive, health, ir, locations, preview, registry, session_store
 from relay.adapters.workbuddy import WorkBuddyAdapter
 from relay.adapters.workbuddy_ai import WorkBuddyAIAdapter
 from test_relay import sample, content
@@ -86,25 +86,135 @@ class WorkBuddyAITests(unittest.TestCase):
         with patch.object(archive, 'is_link', return_value=True), self.assertRaises(ValueError):
             WorkBuddyAIAdapter(home=str(self.device_root))
 
-    def test_transfer_to_and_from_domestic_and_other_writers_preserves_content(self):
-        path = self.seed()
-        before = path.read_bytes()
-        for target in registry.writable_keys():
-            if target == 'workbuddy_ai':
-                continue
-            with self.subTest(target=target):
-                dst = registry.get(target, home=str(self.root / target))
-                registry._CACHE[target] = dst
-                result = registry.transfer('workbuddy_ai', 'fixture', target, cwd=str(self.project),
-                                           session_id='11111111-1111-4111-8111-111111111111')
-                restored = dst.read(next(row.id for row in dst.discover()
-                                         if Path(row.path).resolve() == Path(result['to']['path']).resolve()))
-                self.assertEqual(content(restored), content(self.source.read('fixture')))
-        result = registry.transfer('workbuddy', '11111111-1111-4111-8111-111111111111', 'workbuddy_ai',
-                                   cwd=str(self.project), session_id='return-copy')
-        self.assertTrue(result['ok'])
-        self.assertEqual(content(self.source.read('return-copy')), content(sample()))
-        self.assertEqual(path.read_bytes(), before)
+    def test_desktop_device_store_is_not_hidden_by_account_support_directories(self):
+        # The 5.8.4 desktop keeps transcripts and its session database at the
+        # device root; user-* can contain identity files without transcripts.
+        desktop = WorkBuddyAdapter(home=str(self.device_root))
+        desktop.write(sample(), cwd=str(self.project), session_id='desktop-fixture')
+        # Unused identity-directory links cannot block a valid device store.
+        with patch.object(archive, 'is_link', return_value=True):
+            detected = WorkBuddyAIAdapter(home=str(self.device_root))
+        self.assertEqual(Path(detected.root), self.device_root)
+        self.assertEqual(content(detected.read('desktop-fixture')), content(sample()))
+        detected.write(sample(), cwd=str(self.project), session_id='desktop-copy')
+        self.assertTrue(any(row.id == 'desktop-copy' for row in desktop.discover()))
+        self.assertFalse((self.account / 'projects').exists())
+
+    def test_empty_desktop_database_selects_device_root_before_first_transcript(self):
+        (self.device_root / 'workbuddy.db').touch()
+        detected = WorkBuddyAIAdapter(home=str(self.device_root))
+        self.assertEqual(Path(detected.root), self.device_root)
+
+    def read_output(self, adapter, path):
+        row = next(row for row in adapter.discover()
+                   if Path(row.path).resolve() == Path(path).resolve())
+        self.assertEqual(row.source, adapter.name)
+        return row.id, adapter.read(row.id)
+
+    def assert_transfer_content(self, actual, expected):
+        self.assertEqual(content(actual), content(expected))
+        self.assertEqual([block.is_error for turn in actual.turns for block in turn.blocks
+                          if block.kind == ir.TOOL_RESULT],
+                         [block.is_error for turn in expected.turns for block in turn.blocks
+                          if block.kind == ir.TOOL_RESULT])
+        self.assertEqual(actual.title, expected.title)
+        self.assertEqual(Path(actual.cwd).resolve(), self.project)
+
+    def test_both_editions_transfer_both_ways_with_every_writable_peer(self):
+        # Exercise both inbound and outbound paths. The earlier test only
+        # returned from domestic WorkBuddy, leaving other inbound paths untested.
+        for edition in ('workbuddy', 'workbuddy_ai'):
+            for peer in registry.writable_keys():
+                if peer == edition:
+                    continue
+                with self.subTest(edition=edition, peer=peer):
+                    case = self.root / (edition + '-' + peer)
+                    src = registry.get(edition, home=str(case / 'source'))
+                    dst = registry.get(peer, home=str(case / 'target'))
+                    original = sample()
+                    original.turns[3].blocks[0].is_error = True
+                    path = Path(src.write(original, cwd=str(self.project), session_id='fixture'))
+                    before = path.read_bytes()
+                    expected = src.read('fixture')
+                    with patch.dict(registry._CACHE, {edition: src, peer: dst}, clear=True):
+                        outward = registry.transfer(edition, 'fixture', peer, cwd=str(self.project),
+                                                   session_id='11111111-1111-4111-8111-111111111111')
+                        sid, converted = self.read_output(dst, outward['to']['path'])
+                        self.assert_transfer_content(converted, expected)
+                        self.assertEqual(outward['from']['source'], edition)
+                        self.assertEqual(outward['to']['source'], peer)
+                        converted_bytes = Path(converted.path).read_bytes()
+                        inward = registry.transfer(peer, sid, edition, cwd=str(self.project),
+                                                  session_id='22222222-2222-4222-8222-222222222222')
+                        _, returned = self.read_output(src, inward['to']['path'])
+                        self.assert_transfer_content(returned, expected)
+                        self.assertEqual(returned.source, edition)
+                        self.assertEqual(Path(converted.path).read_bytes(), converted_bytes)
+                    self.assertEqual(path.read_bytes(), before)
+
+    def test_read_only_sources_migrate_into_both_editions_but_reject_reverse(self):
+        from relay.adapters.claude import ClaudeAdapter
+        from relay.adapters.yuanbao import encode
+
+        for source in ('codebuddy', 'claude_sdk', 'yuanbao'):
+            home = self.root / source
+            home.mkdir()
+            if source == 'codebuddy':
+                WorkBuddyAdapter(home=str(home)).write(sample(), cwd=str(self.project), session_id='fixture')
+            elif source == 'claude_sdk':
+                ClaudeAdapter(home=str(home)).write(sample(), cwd=str(self.project), session_id='fixture')
+            else:
+                (home / 'fixture.json').write_bytes(encode({
+                    'id': 'fixture', 'title': '元宝迁出测试', 'cwd': str(self.project),
+                    'messages': [{'role': 'user', 'content': '问题'},
+                                 {'role': 'assistant', 'content': '回答', 'thinking': '思考'}]}))
+            src = registry.get(source, home=str(home))
+            sid = next(src.discover()).id
+            expected = src.read(sid)
+            before = {path: path.read_bytes() for path in home.rglob('*') if path.is_file()}
+            for edition in ('workbuddy', 'workbuddy_ai'):
+                with self.subTest(source=source, edition=edition):
+                    dst = registry.get(edition, home=str(self.root / (source + '-' + edition)))
+                    with patch.dict(registry._CACHE, {source: src, edition: dst}, clear=True):
+                        result = registry.transfer(source, sid, edition, cwd=str(self.project), session_id='imported')
+                        imported_id, imported = self.read_output(dst, result['to']['path'])
+                        self.assert_transfer_content(imported, expected)
+                        self.assertEqual(imported.source, edition)
+                        with self.assertRaises(ValueError) as error:
+                            registry.transfer(edition, imported_id, source, cwd=str(self.project))
+                        self.assertEqual(error.exception.args[0].code,
+                                         'err.label_does_not_support_migration_writes_yet')
+            self.assertEqual({path: path.read_bytes() for path in home.rglob('*') if path.is_file()}, before)
+
+    def test_same_id_in_both_editions_stays_separate_through_archive_restore(self):
+        adapters = {edition: registry.get(edition, home=str(self.root / edition))
+                    for edition in ('workbuddy', 'workbuddy_ai')}
+        originals = {}
+        for edition, adapter in adapters.items():
+            conv = sample()
+            conv.title = edition + ' 独立来源'
+            conv.turns[0].blocks[0].text = edition + ' ONLY'
+            path = Path(adapter.write(conv, cwd=str(self.project), session_id='same-id'))
+            originals[edition] = (path, path.read_bytes())
+        with patch.dict(registry._CACHE, adapters, clear=True):
+            for edition, adapter in adapters.items():
+                with self.subTest(edition=edition):
+                    listed = registry.list_sessions(edition)
+                    self.assertEqual(len(listed), 1)
+                    self.assertEqual(listed[0]['source'], edition)
+                    self.assertEqual(listed[0]['title'], edition + ' 独立来源')
+                    stored = session_store.store_session(edition, 'same-id', self.root / 'storage')
+                    manifest, _ = archive.read_package(stored['path'], session_store.KIND)
+                    self.assertEqual(manifest['agent'], edition)
+                    self.assertEqual(manifest['source'], edition)
+                    result = session_store.restore_session(stored['path'], str(self.project), session_id='restored')
+                    self.assertEqual(result['to']['source'], edition)
+                    self.assertIn(Path(adapter.root), Path(result['to']['path']).parents)
+                    self.assertEqual(adapter.read('restored').first_user_text(), edition + ' ONLY')
+                    other = adapters['workbuddy' if edition == 'workbuddy_ai' else 'workbuddy_ai']
+                    self.assertEqual(other.read('same-id').first_user_text(), other.name + ' ONLY')
+        for path, before in originals.values():
+            self.assertEqual(path.read_bytes(), before)
 
     def test_native_package_travels_without_accounts_and_refuses_id_collisions(self):
         path = self.seed()

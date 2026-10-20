@@ -8,6 +8,8 @@
 
 Browse, export, and migrate AI coding assistant conversations locally, or carry conversation and Skill archives on a portable drive and restore them on another device. AgentRelay provides a **Chinese/English web interface and a command-line interface** for Windows, macOS, and Ubuntu / Linux.
 
+**Domestic and international WorkBuddy are identified separately:** `workbuddy` / `~/.workbuddy` and `workbuddy_ai` / `~/.workbuddy-ai` have separate sources, targets, directory settings, and native archive identities. Sessions are never merged automatically; DSH and CodeBuddy remain separate too. Regression tests cover bidirectional file conversion between the two editions and between each edition and DSH, Claude Code, and Codex. CodeBuddy, Claude Agent SDK, and Yuanbao support migration into either edition only. File conversion does not establish client resume compatibility; see the [transfer matrix](docs/en/compatibility.md#workbuddy-edition-transfer-matrix).
+
 **Interface language:** the web interface is fully available in English and Chinese. It follows the browser language on first load; use the language button at the top right to switch (the choice is remembered), or open `/?lang=en` once. Markdown exports and Skill drafts generated from the page use the language you are viewing. The command line prints Chinese by default; add `--lang en` before the subcommand (for example `python app/cli.py --lang en sources`) or set `RELAY_LANG=en` to get English output, `--help` text and error messages. The default is not taken from your system locale, so existing scripts keep their output.
 
 **The universal release bundles Python 3.12 and `zstandard`. Extract the complete archive and launch it: no Python or Node.js installation and no dependency downloads on first launch.** One archive contains Windows, macOS, and Linux runtimes for switching devices.
@@ -31,8 +33,8 @@ The task home links to migration, moving between devices, full-text search, and 
 
 | Source | Default conversation location | Support |
 |---|---|---|
-| WorkBuddy | `~/.workbuddy/projects` | Read, export, write |
-| WorkBuddy AI (International) | `~/.workbuddy-ai/[user-…/]projects` | Read, export, write, native archives; synthetic file checks, client resume unverified |
+| WorkBuddy (Domestic) | `~/.workbuddy/projects` | Read, export, write |
+| WorkBuddy AI (International) | `~/.workbuddy-ai/[user-…/]projects` | Read, export, write, native archives; 5.8.4 native reading and file roundtrip checked; desktop history index is not registered, restored-session resume has not passed validation |
 | DeepSeek Harness / DSH | `~/.dsh/sessions` | Read v0–v4, export, write native compressed history |
 | CodeBuddy CLI | `~/.codebuddy/projects` | Read, export, migrate out |
 | CodeBuddy CN IDE / Extension | System `CodeBuddyExtension/Data/**/history` | Read manifests and messages, export, migrate out |
