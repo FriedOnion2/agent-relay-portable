@@ -41,7 +41,7 @@ class UniversalLauncherTests(unittest.TestCase):
                             else:
                                 entry = zipfile.ZipInfo(folder + '/AgentRelay.app/Contents/MacOS/AgentRelay')
                                 entry.external_attr = 0o100755 << 16
-                                archive.writestr(entry, '#!/bin/sh\nprintf "%s\\n"\n' % marker)
+                                archive.writestr(entry, '#!/bin/sh\nprintf "%s\\n"\n' % (marker + '-' + target))
                             archive.writestr(folder + '/payload-marker.txt', marker)
                 assemble(tag, assets, root / 'output')
                 portable = root / 'output' / ('AgentRelay-' + tag + '-universal')
@@ -59,9 +59,12 @@ class UniversalLauncherTests(unittest.TestCase):
                                str(portable / 'Start-AgentRelay.ps1')]
                 elif sys.platform == 'darwin':
                     env['HOME'] = str(cache)
+                    native_arm = subprocess.check_output(['/usr/sbin/sysctl', '-n', 'hw.optional.arm64']).strip() == b'1'
+                    expected = marker + ('-macos-arm64' if native_arm else '-macos-x64')
                     command = ['/bin/bash', str(portable / '启动_AgentRelay.command')]
                 else:
                     env['XDG_CACHE_HOME'] = str(cache)
+                    expected = marker
                     command = ['/bin/bash', str(portable / '启动_AgentRelay.sh')]
                 result = subprocess.run(command, cwd=root, env=env, capture_output=True, timeout=30)
                 if sys.platform == 'win32':
@@ -70,7 +73,19 @@ class UniversalLauncherTests(unittest.TestCase):
                     self.assertIn(marker, markers)
                 else:
                     self.assertEqual(result.returncode, 0, result.stderr.decode(errors='replace'))
-                    self.assertEqual(result.stdout.decode().strip(), marker)
+                    self.assertEqual(result.stdout.decode().strip(), expected)
+                if sys.platform == 'darwin' and native_arm:
+                    # Reproduce the translated shell's architecture report
+                    # without requiring Rosetta in a contributor's test setup.
+                    shim = root / 'shell-tools'
+                    shim.mkdir(exist_ok=True)
+                    uname = shim / 'uname'
+                    uname.write_bytes(b'#!/bin/sh\nprintf "x86_64\\n"\n')
+                    uname.chmod(0o755)
+                    translated_env = dict(env, PATH=str(shim) + os.pathsep + env.get('PATH', ''))
+                    translated = subprocess.run(command, cwd=root, env=translated_env, capture_output=True, timeout=30)
+                    self.assertEqual(translated.returncode, 0, translated.stderr.decode(errors='replace'))
+                    self.assertEqual(translated.stdout.decode().strip(), expected)
                 # Move only the media directory: cached binaries must remain
                 # usable and the generated launcher must locate its new root.
                 moved = root / ('moved ' + marker)
