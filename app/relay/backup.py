@@ -3,11 +3,14 @@ import hashlib
 import re
 import tempfile
 import uuid
+from collections import Counter
+from datetime import date
 from pathlib import Path
 
 from . import archive, preview, registry, session_store, skill_store
+from .adapters.markdown import render as render_markdown
 from .messages import text as message_text, error_text
-from .paths import iso
+from .paths import iso, parse_iso
 
 KIND = 'agentrelay-backup'
 READING_KIND = 'agentrelay-reading'
@@ -24,88 +27,144 @@ def _notify(progress, processed, errors):
         progress({'processed': processed, 'errors': list(errors)})
 
 
-def export(mode='all', agents=None, include_thinking=True, progress=None, cancel=None, lang='zh'):
+def _item_fingerprint(manifest, origin=None):
+    session = manifest.get('session')
+    identity = ([manifest['agent'], manifest.get('source'), session.get('selection_id') or session['id']]
+                if session is not None else [manifest['agent'], 'skill', manifest['skill']['name']])
+    stable = {key: manifest[key] for key in ('files', 'session', 'skill', 'entry', 'root_count') if key in manifest}
+    stable['files'] = sorted(stable['files'], key=lambda row: row['path'])
+    return preview.fingerprint([origin, identity] if origin else identity), preview.fingerprint(stable)
+
+
+def _baseline(path):
+    if not path:
+        return {}, None
+    manifest, _ = _read(path)
+    if manifest.get('errors'):
+        _fail('baseline_incomplete')
+    fingerprint = preview.fingerprint(manifest)
+    snapshot = manifest.get('snapshot', {})
+    if (not isinstance(snapshot, dict) or any(
+            not isinstance(value, str) or not re.fullmatch(r'[0-9a-f]{64}', key) or
+            not re.fullmatch(r'[0-9a-f]{64}', value) for key, value in snapshot.items())):
+        _fail('invalid_package')
+    current = dict(_item_fingerprint(item['manifest'], item.get('origin')) for item in manifest['items'])
+    if any(key in snapshot and snapshot[key] != value for key, value in current.items()):
+        _fail('invalid_package')
+    return {**snapshot, **current}, fingerprint
+
+
+def export(mode='all', agents=None, include_thinking=True, progress=None, cancel=None, lang='zh',
+           *, project='', since='', baseline=''):
     if mode not in MODES or type(include_thinking) is not bool:
         _fail('invalid_options')
     agents = list(registry._ADAPTERS) if agents is None else agents
     if (not isinstance(agents, list) or not agents or
             any(not isinstance(a, str) or a not in registry._ADAPTERS for a in agents)):
         _fail('invalid_agents')
+    if any(not isinstance(value, str) for value in (project, since, baseline)) or (baseline and mode == 'markdown'):
+        _fail('invalid_options')
+    try:
+        cutoff = parse_iso(date.fromisoformat(since).isoformat() + 'T00:00:00Z') if since else None
+    except ValueError:
+        _fail('invalid_options')
+    previous, parent = _baseline(baseline)
+    snapshot = dict(previous)
+    scope = project.strip().replace('\\', '/').casefold()
+    unchanged = 0
     files, items, errors, seen = {}, [], [], set()
     total = 0
-    with tempfile.TemporaryDirectory(prefix='relay-backup-') as temporary:
-        def add(agent, kind, source):
-            nonlocal total
-            identity = (kind, str(Path(source.path if kind == 'session' else source).resolve()))
-            if identity in seen:
+    def add(agent, kind, source):
+        nonlocal total, unchanged
+        path = source.path if kind == 'session' else source
+        # Yuanbao can expose several logical sessions from one JSON file.
+        entry = source.id if kind == 'session' and agent == 'yuanbao' else None
+        identity = (kind, str(Path(path).resolve()), entry)
+        if identity in seen:
+            return
+        key = uuid.uuid4().hex
+        if mode == 'markdown':
+            conv = registry.get(agent).read(source.id)
+            if conv.truncated:
+                _fail('incomplete')
+            text = render_markdown(conv, include_thinking=include_thinking, lang=lang)
+            content = {'conversations/%s/%s.md' % (agent, key): (text.encode('utf-8'), False)}
+            item = {'key': key, 'agent': agent, 'title': source.title, 'id': source.id}
+        else:
+            _, manifest, native = (session_store.collect_session(agent, source.id) if kind == 'session'
+                                   else skill_store.collect_skill(agent, source))
+            metadata, _ = archive.prepare_manifest(manifest, native)
+            origin = preview.fingerprint(str(Path(path).resolve()) if kind == 'skill' else str(registry.get(agent).home))
+            entry_key, stamp = _item_fingerprint(metadata, origin)
+            legacy_key, _ = _item_fingerprint(metadata)
+            if previous.get(entry_key, previous.get(legacy_key)) == stamp:
+                unchanged += 1
+                seen.add(identity)
                 return
-            key = uuid.uuid4().hex
-            if mode == 'markdown':
-                if registry.get(agent).read(source.id).truncated:
-                    _fail('incomplete')
-                text = registry.export_markdown(agent, source.id, include_thinking=include_thinking, lang=lang)
-                content = {'conversations/%s/%s.md' % (agent, key): (text.encode('utf-8'), False)}
-                item = {'key': key, 'agent': agent, 'title': source.title, 'id': source.id}
-            else:
-                result = (session_store.store_session(agent, source.id, temporary) if kind == 'session'
-                          else skill_store.store_skill(agent, source, temporary))
-                package = Path(result['path'])
-                metadata, native = archive.read_package(package)
-                package.unlink()
-                content = {'items/%s/%s' % (key, name): data for name, data in native.items()}
-                item = {'key': key, 'manifest': metadata}
-            size = sum(len(data) for data, executable in content.values())
-            if (any(len(data) > archive.MAX_FILE for data, executable in content.values()) or
-                    total + size > archive.MAX_TOTAL or len(files) + len(content) > archive.MAX_FILES):
-                _fail('limit')
-            files.update(content)
-            total += size
-            items.append(item)
-            seen.add(identity)
-            _notify(progress, len(items), errors)
+            if baseline:
+                snapshot[entry_key] = stamp
+            content = {'items/%s/%s' % (key, name): data for name, data in native.items()}
+            item = {'key': key, 'origin': origin, 'manifest': metadata}
+        size = sum(len(data) for data, executable in content.values())
+        if (any(len(data) > archive.MAX_FILE for data, executable in content.values()) or
+                total + size > archive.MAX_TOTAL or len(files) + len(content) > archive.MAX_FILES):
+            _fail('limit')
+        files.update(content)
+        total += size
+        items.append(item)
+        seen.add(identity)
+        _notify(progress, len(items), errors)
 
-        for agent in dict.fromkeys(agents):
-            if cancel and cancel.is_set():
-                return {'ok': False, 'canceled': True, 'processed': len(items), 'errors': errors}
-            try:
-                source = registry.get(agent)
-                for row in source.discover():
+    for agent in dict.fromkeys(agents):
+        if cancel and cancel.is_set():
+            return {'ok': False, 'canceled': True, 'processed': len(items), 'errors': errors}
+        try:
+            source = registry.get(agent)
+            for row in source.discover():
+                if cancel and cancel.is_set():
+                    return {'ok': False, 'canceled': True, 'processed': len(items), 'errors': errors}
+                project_path = (row.cwd or '').replace('\\', '/').casefold()
+                if scope and scope not in project_path:
+                    continue
+                stamp = row.updated_ms or row.created_ms
+                if cutoff is not None and stamp is not None and stamp < cutoff:
+                    continue
+                try:
+                    add(agent, 'session', row)
+                except (OSError, ValueError, KeyError) as exc:
+                    # Capacity errors abort instead of labelling a truncated
+                    # archive as a complete backup.
+                    if exc.args and getattr(exc.args[0], 'code', '') == 'msg.backup_limit':
+                        raise
+                    errors.append({'agent': agent, 'id': row.id, 'error': error_text(exc)})
+            if mode == 'all' and agent != 'yuanbao':
+                discovered = skill_store.discover_skills(agent)
+                errors.extend(dict(row, agent=agent) for row in discovered['errors'])
+                for row in discovered['skills']:
                     if cancel and cancel.is_set():
                         return {'ok': False, 'canceled': True, 'processed': len(items), 'errors': errors}
                     try:
-                        add(agent, 'session', row)
+                        add(agent, 'skill', row['path'])
                     except (OSError, ValueError, KeyError) as exc:
-                        # Capacity errors abort instead of labelling a truncated
-                        # archive as a complete backup.
                         if exc.args and getattr(exc.args[0], 'code', '') == 'msg.backup_limit':
                             raise
-                        errors.append({'agent': agent, 'id': row.id, 'error': error_text(exc)})
-                if mode == 'all' and agent != 'yuanbao':
-                    discovered = skill_store.discover_skills(agent)
-                    errors.extend(dict(row, agent=agent) for row in discovered['errors'])
-                    for row in discovered['skills']:
-                        if cancel and cancel.is_set():
-                            return {'ok': False, 'canceled': True, 'processed': len(items), 'errors': errors}
-                        try:
-                            add(agent, 'skill', row['path'])
-                        except (OSError, ValueError, KeyError) as exc:
-                            if exc.args and getattr(exc.args[0], 'code', '') == 'msg.backup_limit':
-                                raise
-                            errors.append({'agent': agent, 'path': row['path'], 'error': error_text(exc)})
-            except (OSError, ValueError, KeyError) as exc:
-                if exc.args and getattr(exc.args[0], 'code', '') == 'msg.backup_limit':
-                    raise
-                errors.append({'agent': agent, 'error': error_text(exc)})
-        if not items:
-            return {'ok': False, 'processed': 0, 'errors': errors, 'empty': True}
-        if cancel and cancel.is_set():
-            return {'ok': False, 'canceled': True, 'processed': len(items), 'errors': errors}
-        key = uuid.uuid4().hex
-        result = archive.write_package(archive.storage_root() / 'backups' / (key + '.zip'),
-                                       {'kind': READING_KIND if mode == 'markdown' else KIND,
-                                        'mode': mode, 'created_at': iso(), 'items': items, 'errors': errors}, files)
-        return {'ok': not errors, 'id': key, 'path': result['path'], 'processed': len(items), 'errors': errors,
-                'download': '/api/backup-download?id=' + key}
+                        errors.append({'agent': agent, 'path': row['path'], 'error': error_text(exc)})
+        except (OSError, ValueError, KeyError) as exc:
+            if exc.args and getattr(exc.args[0], 'code', '') == 'msg.backup_limit':
+                raise
+            errors.append({'agent': agent, 'error': error_text(exc)})
+    if not items:
+        return {'ok': bool(baseline and not errors), 'processed': 0, 'errors': errors, 'empty': True, 'unchanged': unchanged}
+    if cancel and cancel.is_set():
+        return {'ok': False, 'canceled': True, 'processed': len(items), 'errors': errors}
+    key = uuid.uuid4().hex
+    manifest = {'kind': READING_KIND if mode == 'markdown' else KIND,
+                'mode': mode, 'created_at': iso(), 'items': items, 'errors': errors}
+    if parent:
+        manifest.update(baseline=parent, snapshot=snapshot)
+    result = archive.write_package(archive.storage_root() / 'backups' / (key + '.zip'), manifest, files)
+    return {'ok': not errors, 'id': key, 'path': result['path'], 'processed': len(items), 'errors': errors,
+            'download': '/api/backup-download?id=' + key, 'unchanged': unchanged}
 
 
 def download_path(key):
@@ -160,6 +219,8 @@ def _read(package):
                 inner.get('kind') not in (session_store.KIND, skill_store.KIND) or
                 not isinstance(inner.get('agent'), str) or inner['agent'] not in registry._ADAPTERS):
             _fail('invalid_package')
+        if 'origin' in item and (not isinstance(item['origin'], str) or not re.fullmatch(r'[0-9a-f]{64}', item['origin'])):
+            _fail('invalid_package')
         keys.add(key)
         rows = inner.get('files')
         if not isinstance(rows, list) or not rows:
@@ -195,15 +256,22 @@ def _read(package):
 
 
 def inspect(package):
-    manifest, _ = _read(package)
+    manifest, files = _read(package)
     projects, skills = set(), set()
+    counts = Counter()
     for item in manifest['items']:
         inner = item['manifest']
+        counts[inner['agent']] += 1
         if inner['kind'] == session_store.KIND:
             projects.add(inner['session'].get('cwd') or '')
         else:
             skills.add(inner['agent'])
+    errors = manifest.get('errors', [])
+    sessions = sum(item['manifest']['kind'] == session_store.KIND for item in manifest['items'])
     return {'ok': True, 'count': len(manifest['items']), 'mode': manifest['mode'],
+            'health': {'sessions': sessions, 'skills': len(manifest['items']) - sessions,
+                       'files': len(files), 'bytes': sum(len(data) for data, _ in files.values()),
+                       'missing': len(errors), 'agents': dict(counts), 'incremental': bool(manifest.get('baseline'))},
             'projects': sorted(projects), 'skill_agents': sorted(skills), 'errors': manifest.get('errors', [])}
 
 
@@ -220,12 +288,9 @@ def _options(options):
     return options
 
 
-def _materialize(item, files, root):
+def _members(item, files):
     prefix = 'items/' + item['key'] + '/'
-    native = {name[len(prefix):]: value for name, value in files.items() if name.startswith(prefix)}
-    package = Path(root) / (item['key'] + '.zip')
-    archive.write_package(package, item['manifest'], native)
-    return package
+    return {row['path']: files[prefix + row['path']] for row in item['manifest']['files']}
 
 
 def _plan(manifest, files, options):
@@ -258,7 +323,7 @@ def _plan(manifest, files, options):
                         row.update(native_id=header['id'], parent=header.get('parentSession'), origin=header.get('origin'))
                     if agent not in existing:
                         existing[agent] = ({target.read(r.id).meta['header']['id'] for r in target.discover() if r.readable}
-                                           if agent == 'dsh' else {r.id.split('@', 1)[0] for r in target.discover()})
+                                           if agent == 'dsh' else {r.native_id or r.id for r in target.discover()})
                     sid = row['session_id'] or row.get('native_id') or session.get('native_id') or session['id']
                     if sid in existing[agent] or (session['id'] in existing[agent] and not row['session_id']):
                         row['status'] = 'skip'
@@ -266,10 +331,10 @@ def _plan(manifest, files, options):
                     else:
                         if not Path(row['cwd']).is_absolute():
                             _fail('project_required')
-                        package = _materialize(item, files, temporary)
+                        data = session_store.SessionPackage(inner, _members(item, files))
                         # The shared native preview validates directory existence
                         # and Windows path rules before any target writes.
-                        preview.package(package, row['cwd'], row['session_id'], 'none')
+                        preview.package_report(data, row['cwd'], row['session_id'], 'none')
                         existing[agent].add(sid)
                 else:
                     row['title'] = inner['skill']['name']
@@ -337,21 +402,23 @@ def restore(package, options=None, preview_token=None, progress=None, cancel=Non
     if report['blocked']:
         _fail('blocked')
     results, skipped, errors = [], [], []
-    with tempfile.TemporaryDirectory(prefix='relay-backup-import-') as temporary:
-        items = {item['key']: item for item in manifest['items']}
-        for row in report['rows']:
-            if cancel and cancel.is_set():
-                return {'ok': False, 'canceled': True, 'restored': results, 'skipped': skipped, 'errors': errors}
-            if row['status'] == 'skip':
-                skipped.append(row)
-                continue
-            try:
-                path = _materialize(items[row['key']], files, temporary)
-                result = (session_store.restore_session(path, row['cwd'], row['session_id'], 'none')
-                          if row['kind'] == 'session' else
-                          skill_store.restore_skill(path, row['agent'], row['skills_dir'], row['name']))
-                results.append({'key': row['key'], 'agent': row['agent'], 'title': row['title'], 'result': result})
-            except (OSError, ValueError, KeyError) as exc:
-                errors.append({'key': row['key'], 'agent': row['agent'], 'title': row['title'], 'error': error_text(exc)})
-            _notify(progress, len(results) + len(skipped) + len(errors), errors)
+    items = {item['key']: item for item in manifest['items']}
+    for row in report['rows']:
+        if cancel and cancel.is_set():
+            return {'ok': False, 'canceled': True, 'restored': results, 'skipped': skipped, 'errors': errors}
+        if row['status'] == 'skip':
+            skipped.append(row)
+            continue
+        try:
+            item = items[row['key']]
+            inner, members = item['manifest'], _members(item, files)
+            if row['kind'] == 'session':
+                result = session_store.restore_package(session_store.SessionPackage(inner, members), package,
+                                                       row['cwd'], row['session_id'], 'none')
+            else:
+                result = skill_store.restore_package(inner, members, row['agent'], row['skills_dir'], row['name'])
+            results.append({'key': row['key'], 'agent': row['agent'], 'title': row['title'], 'result': result})
+        except (OSError, ValueError, KeyError) as exc:
+            errors.append({'key': row['key'], 'agent': row['agent'], 'title': row['title'], 'error': error_text(exc)})
+        _notify(progress, len(results) + len(skipped) + len(errors), errors)
     return {'ok': not errors, 'restored': results, 'skipped': skipped, 'errors': errors}

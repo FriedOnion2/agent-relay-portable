@@ -91,6 +91,7 @@
       <p class="mapping-note" id="mappingNote"></p>
     </div>
     <div class="bar session-actions">
+      <button class="btn" id="btnClaudeHandoff" disabled><span data-i18n="ui.claude_handoff">接力到 Claude 桌面</span></button>
       <button class="btn" id="btnMd" disabled><span data-i18n="ui.export_markdown">导出 Markdown</span></button>
       <button class="btn" id="btnStore" disabled><span data-i18n="ui.store_this_session">存储此会话</span></button>
       <button class="btn primary" id="btnImport" style="display:none" disabled><span data-i18n="ui.migrate_to_the_ubuntu_counterpart">迁到 Ubuntu 对应软件</span></button>
@@ -112,6 +113,15 @@
   <h2 data-i18n="msg.backup_title">一键导出与导入</h2>
   <p class="muted" data-i18n="msg.backup_description">选择 Agent 后，一次导出所有对话，可同时携带 Skill。导入时映射本机项目，预览后批量恢复。</p>
   <div id="backupAgents" class="bar"></div>
+  <details>
+    <summary data-i18n="ui.backup_scope">备份范围与增量设置</summary>
+    <div class="bar">
+      <label class="field"><span data-i18n="ui.backup_project_filter">项目路径含有</span><input class="input" id="backupProject"></label>
+      <label class="field"><span data-i18n="ui.backup_since">起始日期（UTC）</span><input class="input" id="backupSince" type="date"></label>
+      <label class="field"><span data-i18n="ui.backup_baseline">上次备份 ZIP 的本机路径</span><input class="input" id="backupBaseline"></label>
+    </div>
+    <p class="muted" data-i18n="ui.backup_scope_help">留空导出完整范围。项目和日期只筛选会话。填写上次完整包或增量包，后续仅保存新增或变化的内容。请保留整条备份链，恢复时按生成顺序使用。</p>
+  </details>
   <div class="bar">
     <button class="btn primary" id="backupAll" data-i18n="msg.backup_all">整机搬家：导出对话＋Skill</button>
     <button class="btn" id="backupSessions" data-i18n="msg.backup_sessions">仅对话：一键导出</button>
@@ -122,7 +132,7 @@
   <div class="bar">
     <label class="field"><span data-i18n="msg.backup_choose_zip">选择搬家 ZIP 包</span><input class="input" type="file" id="backupFile" accept=".zip,application/zip"></label>
     <input class="input" id="backupPath" data-i18n-placeholder="msg.backup_package_path" placeholder="或填写本机搬家包完整路径">
-    <button class="btn" id="inspectBackup" data-i18n="msg.backup_inspect">读取搬家包</button>
+    <button class="btn" id="inspectBackup" data-i18n="ui.backup_health">备份体检</button>
   </div>
   <div id="backupMapping"></div>
   <div class="bar">

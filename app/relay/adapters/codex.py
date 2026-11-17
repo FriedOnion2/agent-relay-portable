@@ -21,7 +21,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 from .. import ir
 from ..clean import strip_scaffolding, looks_like_system_prompt
-from ..paths import iso, read_jsonl, safe_ms, atomic_write, uuid7, now_ms, validate_session_id
+from ..paths import ensure_directory, iso, read_jsonl, safe_ms, atomic_write, uuid7, now_ms, validate_session_id
 from .base import BaseAdapter, SessionInfo, ToolNameMap
 
 MAX_SCAN_BYTES = 32 * 1024 * 1024
@@ -470,7 +470,7 @@ class CodexAdapter(BaseAdapter):
             return
         # Use the native-import publication lock too: Relay imports must not
         # race with one another while updating the shared title index.
-        os.makedirs(self.root, exist_ok=True)
+        ensure_directory(self.root)
         lock = os.path.join(self.root, ".relay-import.publish-lock")
         with open(lock, "x"):
             pass
@@ -493,7 +493,7 @@ class CodexAdapter(BaseAdapter):
                         current = handle.read(MAX_SCAN_BYTES + 1)
                 if current != original:
                     raise ValueError(message_text('err.codex_title_index_is_changing_close_the_app_and_retry'))
-                atomic_write(self.index_path, [original, separator, entry], encoding=None)
+                atomic_write(self.index_path, [original, separator, entry], encoding=None, append_to=original)
             except BaseException:
                 os.unlink(out_path)
                 raise

@@ -9,7 +9,6 @@ import hashlib
 import json
 import re
 import sqlite3
-import tempfile
 import time
 from pathlib import Path
 
@@ -197,9 +196,11 @@ class Corpus:
             raise ValueError(message_text('err.invalid_index_scan_limit'))
         state = dict(ok=True, processed=0, indexed=0, unchanged=0, errors=[], warnings=[], canceled=False, limited=False, source='')
         start, owner = time.monotonic(), self.owner
+        attempts = 0
+
         def stopped():
             state['canceled'] = bool(cancel and cancel.is_set())
-            state['limited'] = state['processed'] >= max_documents or time.monotonic() - start >= max_seconds
+            state['limited'] |= time.monotonic() - start >= max_seconds
             return state['canceled'] or state['limited']
         def report():
             if progress:
@@ -268,6 +269,11 @@ class Corpus:
                                     db.execute('UPDATE docs SET offline=0 WHERE key=?', (key,))
                                 state['unchanged'] += 1
                             else:
+                                if attempts >= max_documents:
+                                    state['limited'] = True
+                                    complete = False
+                                    break
+                                attempts += 1
                                 conv = adapter.read(row.id)
                                 if dependency_stamp != _dependencies(adapter, row):
                                     raise ValueError(message_text('err.source_file_is_changing_update_the_index_again'))
@@ -312,24 +318,15 @@ class Corpus:
                                     db.execute('UPDATE docs SET offline=0 WHERE key=?', (key,))
                                 state['unchanged'] += 1
                                 continue
-                            manifest, files = archive.read_package(path, session_store.KIND)
-                            agent, count, session = manifest.get('agent'), manifest.get('root_count'), manifest.get('session')
-                            if agent not in registry._ADAPTERS or type(count) is not int or count not in (1, 2) or not isinstance(session, dict):
-                                raise ValueError(message_text('err.invalid_storage_package_metadata'))
-                            entry = archive.safe_name(manifest.get('entry'))
-                            if entry not in files:
-                                raise ValueError(message_text('err.storage_package_entry_is_missing'))
-                            with tempfile.TemporaryDirectory(prefix='relay-corpus-') as temporary:
-                                archive.unpack(files, temporary)
-                                roots = [str(Path(temporary) / ('root%d' % i)) for i in range(count)]
-                                adapter = registry.get(agent, home=roots[0])
-                                if agent == 'codebuddy':
-                                    adapter.roots = roots
-                                conv = adapter.read(session['id'])
-                                if Path(conv.path).resolve() != (Path(temporary) / entry).resolve():
-                                    raise ValueError(message_text('err.session_id_does_not_match_the_package_entry'))
-                                conv.cwd = conv.cwd or session.get('cwd') or ''
-                                self._put(db, key, scope, agent, session['id'], 'package', '', locator + '/' + relative,
+                            if attempts >= max_documents:
+                                state['limited'] = True
+                                complete = False
+                                break
+                            attempts += 1
+                            data = session_store.SessionPackage.read(path)
+                            with data.open_source() as source:
+                                conv = source.read(data.session['id'])
+                                self._put(db, key, scope, data.agent, data.session['id'], 'package', '', locator + '/' + relative,
                                           stamp, conv, include_thinking)
                             state['indexed'] += 1
                         except Exception as exc:

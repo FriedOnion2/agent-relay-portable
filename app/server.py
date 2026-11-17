@@ -150,7 +150,7 @@ class Handler(BaseHTTPRequestHandler):
                                   include_thinking=(q.get('include_thinking') or ['false'])[0] == 'true',
                                   limit=int((q.get('limit') or ['50'])[0]), offset=int((q.get('offset') or ['0'])[0])))
             if path == '/api/job':
-                return self._json(self.server.jobs.status())
+                return self._json(self.server.jobs.status((q.get('id') or [None])[0]))
             if path == '/api/operations':
                 from relay import oplog
                 limit = int((q.get('limit') or ['100'])[0])
@@ -261,7 +261,8 @@ class Handler(BaseHTTPRequestHandler):
                 if u.path == '/api/backup-export':
                     return self._json(self.server.jobs.start('backup-export', lambda progress, cancel: backup.export(
                         body.get('mode', 'all'), body.get('agents'), body.get('include_thinking', True),
-                        progress, cancel, normalize_lang(body.get('lang')))))
+                        progress, cancel, normalize_lang(body.get('lang')), project=body.get('project', ''),
+                        since=body.get('since', ''), baseline=body.get('baseline', ''))))
                 if not body.get('package'):
                     return self._error(message_text('msg.backup_invalid_package'))
                 if u.path == '/api/backup-inspect':
@@ -411,6 +412,9 @@ class Handler(BaseHTTPRequestHandler):
                     redact_secrets=bool(body.get('redact_secrets', False)),
                 )
                 return self._json(res)
+            if u.path == "/api/claude-handoff":
+                return self._json({"ok": True, "text": registry.export_claude_handoff(
+                    body.get("source"), body.get("id"), normalize_lang(body.get("lang")))})
             if u.path == "/api/export-md":
                 md = registry.export_markdown(
                     body.get("source"), body.get("id"),

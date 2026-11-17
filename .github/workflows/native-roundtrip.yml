@@ -1,6 +1,13 @@
 name: Native Windows Ubuntu round trip
 on:
   workflow_call:
+    inputs:
+      source_sha:
+        type: string
+        required: false
+      codex_version:
+        type: string
+        required: false
   workflow_dispatch:
 permissions:
   contents: read
@@ -10,13 +17,19 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
-      - run: npm install -g @openai/codex
+      - name: Install Codex
+        shell: bash
+        env:
+          CLIENT_VERSION: ${{ inputs.codex_version || 'latest' }}
+        run: npm install -g "@openai/codex@$CLIENT_VERSION"
       - run: python scripts/smoke_cross_device.py --phase windows-source --output outgoing
       - uses: actions/upload-artifact@v7
         with:
@@ -29,13 +42,19 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
-      - run: npm install -g @openai/codex
+      - name: Install Codex
+        shell: bash
+        env:
+          CLIENT_VERSION: ${{ inputs.codex_version || 'latest' }}
+        run: npm install -g "@openai/codex@$CLIENT_VERSION"
       - uses: actions/download-artifact@v8
         with:
           name: native-windows-source
@@ -52,13 +71,19 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
-      - run: npm install -g @openai/codex
+      - name: Install Codex
+        shell: bash
+        env:
+          CLIENT_VERSION: ${{ inputs.codex_version || 'latest' }}
+        run: npm install -g "@openai/codex@$CLIENT_VERSION"
       - uses: actions/download-artifact@v8
         with:
           name: native-ubuntu-return

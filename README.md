@@ -27,11 +27,16 @@
 - **提炼 Skill 草稿**：从多条相似的历史会话提炼带证据的 Skill 草稿，由你审核后导出，不自动安装或执行。
 - **Windows ↔ Ubuntu**：双系统间搬迁同款软件的原生记录。
 
+- **增量备份**：在「跨设备搬运」选择任意内置 Agent，可按项目路径和起始日期筛选会话。用上一次完整包或增量包作为基线，仅备份新增或变化的内容。保留完整包和各次增量，按顺序恢复。已有 ID 默认跳过；如需保留变化版本，请选择恢复为副本。DSH 子会话的父记录需已存在或在当前包中。
+- **备份体检**：选择 ZIP 或填写路径，点击「备份体检」查看文件校验、会话／Skill 数量和原始导出错误。映射目录后再预览恢复冲突。
+- **Claude 桌面接力**：在会话详情点「接力到 Claude 桌面」，检查下载的 TXT，并将其附到 Claude 桌面的新聊天中发送下一条请求。该流程会新建聊天。 [Claude 的文件上传说明](https://support.claude.com/en/articles/8241126-upload-files-to-claude)
+- **中英切换**：用页面右上角的 `English`／`中文` 切换。CLI 可用 `relay --lang en` 或 `RELAY_LANG=en`。
+
 ## 快速开始
 
-**正式版：[v1.2.0](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v1.2.0)**。各 Agent 的实测范围见下方支持表与 [兼容状态](docs/reference/compatibility.md)。
+**正式版：[v1.2.5](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v1.2.5)**。各 Agent 的实测范围见下方支持表与 [兼容状态](docs/reference/compatibility.md)。
 
-当前正式版本：**1.2.0**。便携启动与迁移验证范围见兼容状态；正式版不表示所有客户端均支持恢复后续聊。
+当前正式版本：**1.2.5**。便携启动与迁移验证范围见兼容状态；正式版不表示所有客户端均支持恢复后续聊。
 
 **普通用户**：到 [Releases](https://github.com/FriedOnion2/agent-relay-portable/releases) 下载 `AgentRelay-<版本>-universal.zip`，完整解压后运行启动器。总包内置 Python 与依赖，**无需另装 Python / Node.js，首次启动不联网下载**。不要选择 GitHub 自动生成的 Source code 压缩包。
 

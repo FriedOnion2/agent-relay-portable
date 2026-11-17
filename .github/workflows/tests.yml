@@ -12,6 +12,11 @@ jobs:
         exclude:
           - os: macos-latest
             python: '3.8'
+          - os: ubuntu-latest
+            python: '3.8'
+        include:
+          - os: ubuntu-22.04
+            python: '3.8'
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7

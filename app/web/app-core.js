@@ -44,6 +44,7 @@ function applyLang(){
   renderDetail();
   updateActions();
   renderHome();renderWorkflow();renderOperationResult();renderYuanbaoResult();renderSelectedPackage();
+  renderBackupReport();
   if(corpusState.indexStatus)renderIndexSummary(corpusState.indexStatus);
   if(corpusState.resultCount!=null)renderSearchSummary(corpusState.resultCount);
 }
@@ -159,6 +160,7 @@ function updateActions(){
   $('#btnImport').disabled = !native || !state.current || state.current.truncated ||
     !$('#cwd').value.trim() || (mode==='export-windows' && !$('#projectPath').value.trim()) || state.transferring;
   $('#btnMd').disabled = !state.current;
+  $('#btnClaudeHandoff').disabled = !state.current;
   $('#btnStore').disabled = !state.current || state.current.truncated || state.transferring ||
     !!state.sources.find(s=>s.name===state.source)?.community;
 }

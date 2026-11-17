@@ -180,3 +180,24 @@ def export_markdown(source: str, sid: str, include_thinking: bool = True,
         conv = sensitive.redact_conversation(conv)
     return render_markdown(conv, include_thinking=include_thinking,
                            include_tools=include_tools, max_text=max_text, lang=lang)
+
+
+
+def export_claude_handoff(source, sid, lang='zh'):
+    """Export user and assistant text for attachment to a new Claude chat."""
+    from dataclasses import replace
+    from . import sensitive
+    from .messages import lang_text
+
+    conv = read_conversation(source, sid)
+    turns = []
+    for turn in conv.turns:
+        if turn.role in (ir.USER, ir.ASSISTANT):
+            blocks = [block for block in turn.blocks if block.kind == ir.TEXT]
+            if blocks:
+                turns.append(replace(turn, blocks=blocks))
+    if not turns:
+        raise ValueError(message_text('err.source_session_has_no_migratable_content_empty_or_unparseable_file_migration_stopped'))
+    context = sensitive.redact_conversation(replace(conv, turns=turns, cwd='', meta={}))
+    history = render_markdown(context, include_thinking=False, include_tools=False, lang=lang)
+    return lang_text(lang, 'msg.claude_handoff_prompt') + "\n\n---\n\n" + history

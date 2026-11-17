@@ -14,7 +14,7 @@ jobs:
         include:
           - {runner: windows-latest, target: windows-x64}
           - {runner: ubuntu-22.04, target: linux-x64}
-          - {runner: macos-14, target: macos-arm64}
+          - {runner: macos-15, target: macos-arm64}
           - {runner: macos-15-intel, target: macos-x64}
     runs-on: ${{ matrix.runner }}
     steps:

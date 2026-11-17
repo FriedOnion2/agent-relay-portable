@@ -58,6 +58,9 @@ jobs:
     needs: meta
     if: needs.meta.outputs.mode == 'stable'
     uses: ./.github/workflows/native-roundtrip.yml
+    with:
+      source_sha: ${{ needs.meta.outputs.sha }}
+      codex_version: "0.163.0"
   build:
     needs: meta
     if: needs.meta.outputs.mode == 'dev' || needs.meta.outputs.mode == 'stable'
@@ -69,7 +72,7 @@ jobs:
             target: windows-x64
           - os: ubuntu-22.04
             target: linux-x64
-          - os: macos-14
+          - os: macos-15
             target: macos-arm64
           - os: macos-15-intel
             target: macos-x64
@@ -100,7 +103,7 @@ jobs:
           retention-days: 7
   assemble:
     needs: [meta, build]
-    runs-on: macos-14
+    runs-on: macos-15
     env:
       RELEASE_TAG: ${{ needs.meta.outputs.label }}
       GH_TOKEN: ${{ github.token }}
@@ -138,7 +141,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-22.04, macos-14, macos-15-intel]
+        os: [windows-latest, ubuntu-22.04, macos-15, macos-15-intel]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7

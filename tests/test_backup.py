@@ -136,6 +136,33 @@ class BackupTests(unittest.TestCase):
         self.assertFalse((restored / '.env').exists())
         self.assertEqual(len(result['restored']), 3)
 
+    def test_yuanbao_multi_session_file_is_backed_up_and_retries_skip_native_ids(self):
+        from relay.adapters.yuanbao import YuanbaoAdapter
+
+        source = YuanbaoAdapter(home=str(self.root / 'yuanbao-source'))
+        Path(source.home).mkdir()
+        entries = [
+            {'id': sid, 'title': sid, 'cwd': str(self.project),
+             'messages': [{'role': 'user', 'content': sid}]}
+            for sid in ('yuanbao-one', 'yuanbao-two')
+        ]
+        (Path(source.home) / 'batch.json').write_text(
+            json.dumps({'exportTime': 'fixture', 'conversations': entries}), encoding='utf-8')
+        registry._CACHE['yuanbao'] = source
+        reading = backup.export('markdown', ['yuanbao'])
+        self.assertEqual(len(archive.read_package(reading['path'])[1]), 2)
+        package = backup.export('sessions', ['yuanbao'])['path']
+        target = YuanbaoAdapter(home=str(self.root / 'yuanbao-target'))
+        registry._CACHE['yuanbao'] = target
+        for policy in ('skip', 'copy'):
+            options = {**self.options, 'conflict': policy}
+            plan = backup.plan(package, options)
+            self.assertEqual((plan['ready'], plan['blocked']), (2, 0))
+            self.assertEqual(len(backup.restore(package, options, plan['token'])['restored']), 2)
+            retry = backup.plan(package, options)
+            self.assertEqual((retry['ready'], retry['skip']), (0, 2))
+            self.assertTrue(backup.restore(package, options, retry['token'])['ok'])
+
     def test_sessions_and_reading_modes_are_distinct_and_reading_cannot_be_imported(self):
         package = self.export('sessions')
         self.assertEqual(backup.inspect(package)['count'], 2)
@@ -186,18 +213,87 @@ class BackupTests(unittest.TestCase):
             backup.restore(package, self.options, report['token'])
         self.assertFalse((self.root / 'other-target').exists())
 
+    def test_incremental_backups_cover_all_builtin_sources_and_chain(self):
+        writers = {}
+        for agent in registry._ADAPTERS:
+            home = str(self.root / 'incremental' / agent)
+            registry._CACHE[agent] = registry.get(agent, home=home)
+            if agent != 'yuanbao':
+                writable = {'claude_sdk': 'claude', 'codebuddy': 'workbuddy'}.get(agent, agent)
+                writers[agent] = registry.get(writable, home=home)
+
+        def seed(n):
+            for writer in writers.values():
+                writer.write(sample(), cwd=str(self.project),
+                             session_id='11111111-1111-4111-8111-11111111111%d' % n)
+            adapter = registry._CACHE['yuanbao']
+            folder = Path(adapter.home)
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / ('sample-%d.json' % n)).write_text(json.dumps({
+                'source': 'yuanbao', 'id': 'yuanbao-%d' % n, 'cwd': str(self.project),
+                'messages': [{'role': 'user', 'content': 'fixture-%d' % n}],
+            }), encoding='utf-8')
+
+        agents = list(registry._ADAPTERS)
+        seed(1)
+        full = backup.export('sessions', agents, project='old project', since='2000-01-01')
+        self.assertTrue(full['ok'], full)
+        expected = set(agents)
+        self.assertEqual(set(backup.inspect(full['path'])['health']['agents']), expected)
+        self.assertEqual(backup.export('sessions', agents, baseline=full['path'])['unchanged'], len(agents))
+        self.assertTrue(backup.export('sessions', agents, project='no-match')['empty'])
+        seed(2)
+        delta = backup.export('sessions', agents, baseline=full['path'])
+        self.assertTrue(delta['ok'], delta)
+        self.assertEqual((delta['processed'], delta['unchanged']), (len(agents), len(agents)))
+        check = backup.inspect(delta['path'])['health']
+        self.assertTrue(check['incremental'])
+        self.assertEqual(set(check['agents']), expected)
+        self.assertEqual(backup.export('sessions', agents, baseline=delta['path'])['unchanged'], 2 * len(agents))
+
+        changed = Path(registry._CACHE['yuanbao'].home) / 'sample-1.json'
+        changed.write_text(changed.read_text().replace('fixture-1', 'edited content'), encoding='utf-8')
+        newer = backup.export('sessions', agents, baseline=delta['path'])
+        self.assertEqual((newer['processed'], newer['unchanged']), (1, 2 * len(agents) - 1))
+        self.assertEqual(backup.inspect(newer['path'])['health']['agents'], {'yuanbao': 1})
+
+        registry._CACHE.update({
+            agent: registry.get(agent, home=str(self.root / 'restored' / agent)) for agent in agents
+        })
+        for package in (full, delta):
+            plan = backup.plan(package['path'])
+            self.assertEqual((plan['ready'], plan['blocked']), (len(agents), 0), plan)
+            result = backup.restore(package['path'], preview_token=plan['token'])
+            self.assertTrue(result['ok'], result)
+            self.assertEqual(len(result['restored']), len(agents))
+        self.assertTrue(all(len(list(registry.get(agent).discover())) == 2 for agent in agents))
+
+    def test_batch_archive_uses_one_zip_and_skill_restore_has_an_undo_receipt(self):
+        from relay import oplog
+
+        with patch.object(archive, 'write_package', wraps=archive.write_package) as write:
+            package = self.export()
+        self.assertEqual(write.call_count, 1)
+        self.targets()
+        with patch.object(archive, 'write_package', side_effect=AssertionError('unexpected inner ZIP')):
+            report = backup.plan(package, self.options)
+            self.assertTrue(backup.restore(package, self.options, report['token'])['ok'])
+        skill = next(row for row in oplog.list_operations() if row['kind'] == 'skill-package-import')
+        self.assertTrue(oplog.undo(skill['id'])['complete'])
+        self.assertFalse(Path(skill['path']).exists())
+
     def test_partial_restore_reports_errors_and_retries_skip_completed_items(self):
         package = self.export()
         self.targets()
         plan = backup.plan(package, self.options)
-        original = session_store.restore_session
+        original = session_store.restore_package
         calls = []
         def restore(*args, **kwargs):
             calls.append(args)
             if len(calls) == 1:
                 raise OSError('isolated fixture failure')
             return original(*args, **kwargs)
-        with patch.object(session_store, 'restore_session', side_effect=restore):
+        with patch.object(session_store, 'restore_package', side_effect=restore):
             result = backup.restore(package, self.options, plan['token'])
         self.assertFalse(result['ok'])
         self.assertEqual((len(result['restored']), len(result['errors'])), (2, 1))

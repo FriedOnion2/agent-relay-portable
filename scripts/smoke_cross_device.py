@@ -162,7 +162,9 @@ def run(phase, incoming, output):
         registry._CACHE['codex'] = CodexAdapter(home=str(home))
         markers = []
         if phase == 'windows-source':
-            registry.get('codex').write(synthetic(), session_id=SESSION_ID, cwd=str(cwd))
+            conversation = synthetic()
+            conversation.meta['model_provider'] = 'relay-smoke'
+            registry.get('codex').write(conversation, session_id=SESSION_ID, cwd=str(cwd))
         else:
             receipt = json.loads((incoming / 'receipt.json').read_text(encoding='utf-8'))
             assert receipt['platform'] == ('Windows' if phase == 'ubuntu' else 'Linux'), receipt

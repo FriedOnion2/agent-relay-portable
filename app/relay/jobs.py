@@ -4,6 +4,7 @@ from .messages import text as message_text, error_text
 import copy
 import threading
 import uuid
+from collections import OrderedDict
 
 
 class Jobs:
@@ -13,15 +14,24 @@ class Jobs:
         self.thread = None
         self.value = dict(ok=True, status='idle')
         self.closing = False
+        self.recent = OrderedDict()
 
-    def status(self):
+    def status(self, key=None):
         with self.lock:
-            return copy.deepcopy(self.value)
+            if key is None or key == self.value.get('id'):
+                return copy.deepcopy(self.value)
+            if key not in self.recent:
+                raise KeyError(message_text('msg.the_job_changed_refresh_its_status'))
+            return copy.deepcopy(self.recent[key])
 
     def start(self, kind, function):
         with self.lock:
             if self.closing or (self.thread and self.thread.is_alive()):
                 raise ValueError(message_text('msg.a_job_is_already_running_or_the_service_is_exiting'))
+            if 'id' in self.value:
+                self.recent[self.value['id']] = self.value
+                if len(self.recent) > 8:
+                    self.recent.popitem(last=False)
             self.event = threading.Event()
             key = uuid.uuid4().hex
             self.value = dict(ok=True, id=key, kind=kind, status='running', progress={})
@@ -42,7 +52,7 @@ class Jobs:
 
     def cancel(self, key):
         with self.lock:
-            if key != self.value.get('id'):
+            if key != self.value.get('id') or self.value['status'] != 'running':
                 raise ValueError(message_text('msg.the_job_changed_refresh_its_status'))
             self.event.set()
             return dict(ok=True)

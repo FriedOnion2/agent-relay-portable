@@ -153,7 +153,8 @@ def _print_json(obj):
 def cmd_backup(args):
     from relay import archive, backup
     if args.cmd == 'backup':
-        result = backup.export(args.mode, args.agents, not args.no_thinking, lang=LANG)
+        result = backup.export(args.mode, args.agents, not args.no_thinking, lang=LANG,
+                               project=args.project, since=args.since, baseline=args.baseline)
     else:
         options = json.loads(archive.read_file(args.mapping).decode('utf-8-sig')) if args.mapping else None
         result = (backup.plan(args.package, options) if args.dry_run else
@@ -528,6 +529,9 @@ def build_parser():
     backup_command.add_argument('--mode', choices=('all', 'sessions', 'markdown'), default='all')
     backup_command.add_argument('--agents', nargs='+', choices=list(registry._ADAPTERS))
     backup_command.add_argument('--no-thinking', action='store_true')
+    backup_command.add_argument('--project', default='')
+    backup_command.add_argument('--since', default='', metavar='YYYY-MM-DD')
+    backup_command.add_argument('--baseline', default='', metavar='ZIP')
     backup_command.set_defaults(func=cmd_backup)
     import_backup = sub.add_parser('import-backup', help=lang_text(LANG, 'msg.backup_cli_import'))
     import_backup.add_argument('package')
