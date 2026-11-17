@@ -8,8 +8,8 @@ import tempfile
 import uuid
 from pathlib import Path
 
-from . import archive, registry
-from .paths import iso
+from . import archive, oplog, registry
+from .paths import ensure_directory, iso
 from .native_import import _exclusive_lock, _inside
 
 KIND = "agentrelay-skill"
@@ -71,6 +71,11 @@ def discover_skills(agent, skills_dir=None):
 
 
 def store_skill(agent, path, root=None):
+    package, manifest, files = collect_skill(agent, path, root)
+    return archive.write_package(package, manifest, files)
+
+
+def collect_skill(agent, path, root=None):
     native = _agent(agent)
     directory = Path(path).expanduser()
     if not directory.is_absolute() or not directory.is_dir() or archive.is_link(directory):
@@ -113,7 +118,7 @@ def store_skill(agent, path, root=None):
             files["skill/" + relative] = (data, executable)
     manifest = {"kind":KIND, "agent":native, "created_at":iso(), "skill":{"name":name},
                 "excluded":excluded, "notes":[message_text('msg.skill_content_is_stored_only_as_data_scripts_are_not_executed_and_account_configuration_is')]}
-    return archive.write_package(package, manifest, files)
+    return package, manifest, files
 
 
 def store_skills(agent, paths=None, all_skills=False, skills_dir=None, root=None):
@@ -136,6 +141,10 @@ def store_skills(agent, paths=None, all_skills=False, skills_dir=None, root=None
 
 def restore_skill(package, agent=None, skills_dir=None, name=None):
     manifest, files = archive.read_package(package, KIND)
+    return restore_package(manifest, files, agent, skills_dir, name)
+
+
+def restore_package(manifest, files, agent=None, skills_dir=None, name=None):
     _agent(manifest.get("agent"))
     selected = agent or manifest.get("agent")
     native = _agent(selected)
@@ -151,24 +160,31 @@ def restore_skill(package, agent=None, skills_dir=None, name=None):
     destination = root / name
     if destination.exists() or destination.is_symlink():
         raise FileExistsError(message_text('err.target_skill_already_exists_and_will_not_be_overwritten_choose_another_name'))
-    root.mkdir(parents=True, exist_ok=True)
-    stage = None
-    published = False
-    with _exclusive_lock(root / (".relay-" + name + ".publish-lock")):
-        try:
-            stage = Path(tempfile.mkdtemp(prefix=".relay-", suffix=".partial", dir=str(root)))
-            archive.unpack(files, stage)
-            destination.mkdir()  # exclusive ownership, also refuses empty dirs
-            published = True
-            for child in (stage / "skill").iterdir():
-                os.rename(str(child), str(destination / child.name))
-        except BaseException:
-            if published:
-                shutil.rmtree(destination)
-            raise
-        finally:
-            if stage is not None:
-                shutil.rmtree(stage)
+    with oplog.track("skill-package-import", [str(root)], source=manifest["agent"],
+                     target=native, title=name, path=str(destination)):
+        ensure_directory(root)
+        with _exclusive_lock(root / (".relay-" + name + ".publish-lock")):
+            with tempfile.TemporaryDirectory(prefix=".relay-", suffix=".partial", dir=str(root)) as temporary:
+                stage = Path(temporary)
+                archive.unpack(files, stage)
+                evidence = {Path(key).relative_to("skill"): oplog.file_evidence(stage / key) for key in files}
+                destination.mkdir()  # exclusive ownership, also refuses empty dirs
+                try:
+                    for child in (stage / "skill").iterdir():
+                        os.rename(str(child), str(destination / child.name))
+                except BaseException:
+                    shutil.rmtree(destination)
+                    raise
+                directories = {destination}
+                for relative, receipt in evidence.items():
+                    final_path = destination / relative
+                    oplog.published(final_path, receipt)
+                    for parent in final_path.parents:
+                        if parent == destination:
+                            break
+                        directories.add(parent)
+                for directory in directories:
+                    oplog.created_directory(directory)
     return {"ok":True, "agent":native, "name":name, "path":str(destination),
             "excluded":manifest.get("excluded", []),
             "notes":[message_text('msg.skill_files_verified_and_copied_no_instructions_or_scripts_were_executed'),

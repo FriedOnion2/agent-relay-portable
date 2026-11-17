@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from relay import ir, oplog, registry
+from relay import ir, oplog, paths, registry
 from relay.adapters.codex import CodexAdapter
 
 
@@ -80,7 +80,7 @@ class OperationLogTests(unittest.TestCase):
     def test_failed_write_with_partial_files_is_recorded_and_undoable(self):
         with self.assertRaises(RuntimeError):
             with oplog.track('transfer', [str(self.home)]):
-                (self.home / 'half.jsonl').write_text('partial', encoding='utf-8')
+                paths.atomic_write(str(self.home / 'half.jsonl'), ['partial'], overwrite=False)
                 raise RuntimeError('boom')
         row = oplog.list_operations()[0]
         self.assertEqual(row['status'], 'failed')
@@ -92,78 +92,42 @@ class OperationLogTests(unittest.TestCase):
         target = self.home / 'index.json'
         target.write_text('long original content', encoding='utf-8')
         with oplog.track('transfer', [str(self.home)]):
-            target.write_text('short', encoding='utf-8')
+            paths.atomic_write(str(target), ['short'])
         row = oplog.list_operations()[0]
         self.assertFalse(row['undoable'])
         self.assertIn('改写', row['undo_blocked'])
         with self.assertRaises(ValueError):
             oplog.undo(row['id'])
 
-    def test_incomplete_before_scan_never_allows_deleting_existing_files(self):
-        protected = self.home / 'existing'
-        protected.mkdir()
-        original = protected / 'original.jsonl'
-        original.write_text('existing conversation', encoding='utf-8')
-        scandir = os.scandir
-        denied = False
+    def test_unrelated_writes_are_not_claimed_by_receipt(self):
+        foreign = self.home / 'other-client.jsonl'
+        owned = self.home / 'relay.jsonl'
+        with mock.patch.object(oplog.os, 'scandir', side_effect=AssertionError('must not scan target')):
+            with oplog.track('transfer', [str(self.home)]) as record:
+                foreign.write_text('created by another client', encoding='utf-8')
+                paths.atomic_write(str(owned), ['created by Relay'], overwrite=False)
+        self.assertEqual(oplog.list_operations()[0]['created'], [str(owned)])
+        self.assertTrue(oplog.undo(record['id'])['complete'])
+        self.assertFalse(owned.exists())
+        self.assertEqual(foreign.read_text(encoding='utf-8'), 'created by another client')
 
-        def deny_once(path):
-            nonlocal denied
-            if Path(path) == protected and not denied:
-                denied = True
-                raise PermissionError('temporary permission failure')
-            return scandir(path)
+    def test_undo_keeps_a_replacement_even_with_force(self):
+        _, record = self.write()
+        rollout = next(Path(p) for p in oplog.list_operations()[0]['created'] if 'rollout' in p)
+        replacement = self.home / 'replacement.jsonl'
+        replacement.write_bytes(rollout.read_bytes())
+        os.replace(replacement, rollout)
+        self.assertFalse(oplog.undo(record['id'], force=True)['complete'])
+        self.assertTrue(rollout.exists())
 
-        with mock.patch.object(oplog.os, 'scandir', side_effect=deny_once):
-            with oplog.track('transfer', [str(self.home)]):
-                (self.home / 'new.jsonl').write_text('new conversation', encoding='utf-8')
-        row = oplog.list_operations()[0]
-        self.assertFalse(row['undoable'])
-        with self.assertRaises(ValueError):
-            oplog.undo(row['id'], force=True)
-        self.assertEqual(original.read_text(encoding='utf-8'), 'existing conversation')
-
-    def test_incomplete_after_scan_blocks_undo_even_when_new_files_are_visible(self):
-        scandir = os.scandir
-        calls = 0
-
-        def deny_after(path):
-            nonlocal calls
-            if Path(path) == self.home:
-                calls += 1
-                if calls == 2:
-                    raise PermissionError('cannot inspect completed write')
-            return scandir(path)
-
-        with mock.patch.object(oplog.os, 'scandir', side_effect=deny_after):
-            with oplog.track('transfer', [str(self.home)]):
-                (self.home / 'new.jsonl').write_text('new conversation', encoding='utf-8')
-        row = oplog.list_operations()[0]
-        self.assertFalse(row['undoable'])
-        self.assertIn('扫描不完整', row['undo_blocked'])
-        with self.assertRaises(ValueError):
-            oplog.undo(row['id'])
-        self.assertTrue((self.home / 'new.jsonl').exists())
-
-    def test_unreadable_file_metadata_makes_the_snapshot_incomplete(self):
-        target = self.home / 'existing.jsonl'
-        target.write_text('existing conversation', encoding='utf-8')
-        with os.scandir(self.home) as entries:
-            real = next(iter(entries))
-        entry = mock.Mock(wraps=real)
-        entry.stat.side_effect = PermissionError('cannot stat existing file')
-        listing = mock.MagicMock()
-        listing.__enter__.return_value = [entry]
-        with mock.patch.object(oplog.os, 'scandir', return_value=listing):
-            _, _, complete = oplog._scan([str(self.home)])
-        self.assertFalse(complete)
-
-    def test_root_permission_error_is_not_treated_as_a_missing_destination(self):
-        with mock.patch.object(oplog.os, 'stat', side_effect=PermissionError('cannot access root')):
-            _, _, complete = oplog._scan([str(self.home)])
-        self.assertFalse(complete)
-        _, _, complete = oplog._scan([str(self.home / 'not-created-yet')])
-        self.assertTrue(complete)
+    def test_legacy_receipt_is_still_undoable(self):
+        target = self.home / 'old-format.jsonl'
+        target.write_bytes(b'old')
+        oplog._append({'id': 'legacy', 'roots': [str(self.home)], 'undoable': True,
+                       'created': [{'path': str(target), 'size': 3, 'sha256': None,
+                                    'mtime_ns': target.stat().st_mtime_ns}]})
+        self.assertTrue(oplog.undo('legacy')['complete'])
+        self.assertFalse(target.exists())
 
     def test_undo_never_touches_paths_outside_the_recorded_roots(self):
         outside = Path(self.tmp.name) / 'outside.txt'

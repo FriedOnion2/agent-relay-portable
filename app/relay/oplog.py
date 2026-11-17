@@ -1,10 +1,6 @@
-"""操作记录与撤销。
+"""Record owned file publications and undo them when their contents still match.
 
-每次写入目标软件的迁移 / 恢复都在写入前后对目标目录做文件快照（只看路径、大小、修改时间），记下新建的文件、
-新建的目录和被追加内容的文件（例如 Codex 的 session_index.jsonl）。撤销只删除「仍和写入时一模一样」的新建文件，
-并把追加过的文件截回原长度；写入之后被用户续聊、改动过的文件不会被删除，而是原样保留并说明原因。
-
-记录保存在 logs/operations.jsonl（可用 RELAY_LOG_HOME 改目录），每行一个 JSON。撤销也追加一行，不改写旧记录。
+Receipts use the existing JSONL log and preserve undo support for old entries.
 """
 
 from __future__ import annotations
@@ -12,6 +8,7 @@ from __future__ import annotations
 from .messages import text as message_text, join_text, error_text, annotate, restore_text
 
 import contextlib
+from contextvars import ContextVar
 import hashlib
 import json
 import os
@@ -24,7 +21,6 @@ from . import paths
 from .runtime import project_root
 
 LOG_NAME = "operations.jsonl"
-MAX_FILES_SCANNED = 300_000     # 目标目录文件数超过这个值就不跟踪（避免每次写入都扫描巨大目录）
 MAX_RECORDED = 500              # 单次操作最多记录的新建文件数；超过则标记为不可撤销
 HASH_LIMIT = 64 * 1024 * 1024   # 超过这个大小的新建文件只比对大小与修改时间
 READ_LINES = 5000
@@ -37,48 +33,7 @@ def log_path() -> Path:
     return (Path(base).expanduser() if base else project_root() / "logs") / LOG_NAME
 
 
-# ---------------- 快照 ----------------
-
-def _scan(roots: Iterable[str]):
-    """返回 (files, dirs, complete)。files: 路径 -> (大小, mtime_ns)；不跟随符号链接。"""
-    files: Dict[str, tuple] = {}
-    dirs = set()
-    complete = True
-    for root in roots:
-        if not root:
-            continue
-        try:
-            if not stat.S_ISDIR(os.stat(root).st_mode):
-                continue
-        except FileNotFoundError:
-            continue  # A missing destination can legitimately be created by the write.
-        except OSError:
-            complete = False
-            continue
-        stack = [os.path.abspath(root)]
-        while stack:
-            current = stack.pop()
-            dirs.add(current)
-            try:
-                with os.scandir(current) as entries:
-                    for entry in entries:
-                        try:
-                            if entry.is_symlink():
-                                continue
-                            if entry.is_dir(follow_symlinks=False):
-                                stack.append(entry.path)
-                            elif entry.is_file(follow_symlinks=False):
-                                info = entry.stat(follow_symlinks=False)
-                                files[entry.path] = (info.st_size, info.st_mtime_ns)
-                        except OSError:
-                            complete = False
-                            continue
-            except OSError:
-                complete = False
-                continue
-            if len(files) > MAX_FILES_SCANNED:
-                return files, dirs, False
-    return files, dirs, complete
+_active: ContextVar = ContextVar("relay_operation", default=None)
 
 
 def _sha256(path: str) -> str | None:
@@ -123,53 +78,81 @@ def _read_entries() -> List[Dict[str, Any]]:
     return entries
 
 
+def file_evidence(path):
+    """Capture the staged file's identity and data before publication."""
+    if _active.get() is None:
+        return None
+    info = os.stat(path, follow_symlinks=False)
+    if not stat.S_ISREG(info.st_mode):
+        raise ValueError("Expected a staged regular file")
+    return {"size": info.st_size, "mtime_ns": info.st_mtime_ns, "sha256": _sha256(path),
+            "device": info.st_dev, "inode": info.st_ino}
+
+
+def published(path, evidence, *, previous_size=None, replacement=False):
+    record = _active.get()
+    if record is None:
+        return
+    path = os.path.abspath(path)
+    if not _inside(path, record["roots"]):
+        return
+    if replacement or evidence is None:
+        record["modified_other"].append(path)
+    elif previous_size is None:
+        record["created"].append(dict(evidence, path=path))
+    else:
+        record["appended"].append(dict(evidence, path=path, size_before=previous_size, size_after=evidence["size"]))
+
+
+def created_directory(path):
+    record = _active.get()
+    path = os.path.abspath(path)
+    if record is not None and (path in record["roots"] or _inside(path, record["roots"])):
+        try:
+            info = os.stat(path, follow_symlinks=False)
+        except OSError:
+            return  # A missing directory never needs cleanup.
+        if stat.S_ISDIR(info.st_mode):
+            record["created_dirs"].append(path)
+            record["directory_ids"][path] = [info.st_dev, info.st_ino]
+
+
 @contextlib.contextmanager
 def track(kind: str, roots: Iterable[str | None], **meta: Any):
-    """包住一次写入：结束时把新建 / 追加的文件记入日志。yield 的字典可补充 path 等信息。"""
     roots = [os.path.abspath(str(root)) for root in roots if root]
     record: Dict[str, Any] = {"id": paths.short_id("op-", 12), "time": paths.iso(), "kind": kind,
-                              "roots": roots, **meta}
-    before_files, before_dirs, complete = _scan(roots)
+                              "roots": roots, "created": [], "appended": [], "created_dirs": [],
+                              "modified_other": [], "directory_ids": {}, "receipt_version": 1, **meta}
+    token = _active.set(record)
     try:
         yield record
     except BaseException as error:
-        _finish(record, before_files, before_dirs, complete, roots, "failed", error_text(error))
+        _finish(record, "failed", error_text(error))
         raise
-    _finish(record, before_files, before_dirs, complete, roots, "ok", "")
+    else:
+        _finish(record, "ok", "")
+    finally:
+        _active.reset(token)
 
 
-def _finish(record, before_files, before_dirs, complete, roots, status, error):
+def _finish(record, status, error):
     try:
-        after_files, after_dirs, after_complete = _scan(roots)
-        created, appended, other = [], [], []
-        for path, (size, mtime) in after_files.items():
-            old = before_files.get(path)
-            if old is None:
-                created.append({"path": path, "size": size, "mtime_ns": mtime, "sha256": _sha256(path)})
-            elif old != (size, mtime):
-                if size > old[0]:
-                    appended.append({"path": path, "size_before": old[0], "size_after": size, "mtime_ns": mtime})
-                else:
-                    other.append(path)
-        record.update(status=status, error=error,
-                      created=created[:MAX_RECORDED], appended=appended[:MAX_RECORDED],
-                      created_dirs=sorted(after_dirs - before_dirs, key=len, reverse=True)[:MAX_RECORDED],
-                      modified_other=other[:50])
-        record["undoable"] = bool(complete and after_complete and len(created) <= MAX_RECORDED
-                                  and len(appended) <= MAX_RECORDED and not other)
-        if not record["undoable"]:
-            reasons = []
-            if not (complete and after_complete):
-                reasons.append(message_text('msg.undo_scan_incomplete'))
-            if len(created) > MAX_RECORDED or len(appended) > MAX_RECORDED:
-                reasons.append(message_text('msg.undo_too_many_changes'))
-            if other:
-                reasons.append(message_text('msg.undo_existing_files_rewritten'))
-            record["undo_blocked"] = join_text(reasons, "；")
-        if status == "failed" and not (created or appended or other):
-            return                      # 校验失败、什么都没写：不留记录
+        # Rollback can remove a published file before the operation finishes.
+        record["created"] = [row for row in record["created"] if os.path.lexists(row["path"])]
+        reasons = []
+        if record["modified_other"]:
+            reasons.append(message_text('msg.undo_existing_files_rewritten'))
+        if any(len(record[key]) > MAX_RECORDED for key in ("created", "appended", "created_dirs")):
+            reasons.append(message_text('msg.undo_too_many_changes'))
+        if status == "failed" and not any(record[key] for key in ("created", "appended", "modified_other")):
+            return
+        for key in ("created", "appended", "created_dirs", "modified_other"):
+            record[key] = record[key][:MAX_RECORDED]
+        record["directory_ids"] = {path: record["directory_ids"][path] for path in record["created_dirs"]}
+        record.update(status=status, error=error, undoable=not reasons,
+                      undo_blocked=join_text(reasons, "；"))
         _append(record)
-    except Exception:                    # 记录失败不能影响迁移本身
+    except Exception:  # Logging must not turn a completed migration into a failure.
         return
 
 
@@ -202,9 +185,9 @@ def list_operations(limit: int = 100) -> List[Dict[str, Any]]:
 # ---------------- 撤销 ----------------
 
 def _inside(path: str, roots: List[str]) -> bool:
-    real = os.path.realpath(path)
+    real = os.path.normcase(os.path.realpath(path))
     for root in roots:
-        base = os.path.realpath(root)
+        base = os.path.normcase(os.path.realpath(root))
         if real != base and real.startswith(base + os.sep):
             return True
     return False
@@ -236,7 +219,9 @@ def undo(op_id: str, force: bool = False) -> Dict[str, Any]:
         info = os.stat(path)
         same = info.st_size == row["size"] and (row.get("sha256") is None and info.st_mtime_ns == row["mtime_ns"]
                                                 or row.get("sha256") is not None and _sha256(path) == row["sha256"])
-        if not same and not force:
+        identity = ("inode" not in row or
+                    (info.st_dev, info.st_ino) == (row["device"], row["inode"]))
+        if not identity or (not same and not force):
             kept.append({"path": path, "reason": message_text('msg.modified_after_writing_possibly_resumed_in_the_target_app_kept_to_avoid_losing_new_content')})
             continue
         os.remove(path)
@@ -247,18 +232,33 @@ def undo(op_id: str, force: bool = False) -> Dict[str, Any]:
         if not _inside(path, roots) or not os.path.isfile(path) or os.path.islink(path):
             kept.append({"path": path, "reason": message_text('msg.file_is_missing_or_outside_the_target_directory_skipped')})
             continue
-        info = os.stat(path)
-        if info.st_size != row["size_after"] or info.st_mtime_ns != row["mtime_ns"]:
-            kept.append({"path": path, "reason": message_text('msg.modified_after_writing_not_truncated_to_the_original_length')})
-            continue
         with open(path, "r+b") as handle:
+            info = os.fstat(handle.fileno())
+            same_file = os.path.samestat(info, os.stat(path, follow_symlinks=False))
+            if row.get("sha256") is not None:
+                digest = hashlib.sha256()
+                for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                    digest.update(chunk)
+                unchanged = digest.hexdigest() == row["sha256"]
+            else:
+                unchanged = info.st_mtime_ns == row["mtime_ns"]
+            current = os.fstat(handle.fileno())
+            after = os.stat(path, follow_symlinks=False)
+            if (not same_file or not os.path.samestat(current, after) or info.st_size != row["size_after"] or
+                    current.st_size != info.st_size or current.st_mtime_ns != info.st_mtime_ns or not unchanged):
+                kept.append({"path": path, "reason": message_text('msg.modified_after_writing_not_truncated_to_the_original_length')})
+                continue
             handle.truncate(row["size_before"])
         truncated.append(path)
 
-    for directory in entry.get("created_dirs", []):       # 已按路径长度从深到浅排序
+    for directory in sorted(set(entry.get("created_dirs", [])), key=len, reverse=True):
         if _inside(directory, roots) or directory in roots:
             with contextlib.suppress(OSError):
-                if not os.listdir(directory):
+                info = os.stat(directory, follow_symlinks=False)
+                expected = entry.get("directory_ids", {}).get(directory)
+                if (stat.S_ISDIR(info.st_mode) and
+                        (expected is None or expected == [info.st_dev, info.st_ino]) and
+                        not os.listdir(directory)):
                     os.rmdir(directory)
 
     outcome = {"undo_of": op_id, "time": paths.iso(), "removed": removed, "truncated": truncated, "kept": kept}
