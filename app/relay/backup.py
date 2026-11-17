@@ -6,6 +6,7 @@ import uuid
 from pathlib import Path
 
 from . import archive, preview, registry, session_store, skill_store
+from .adapters.markdown import render as render_markdown
 from .messages import text as message_text, error_text
 from .paths import iso
 
@@ -36,14 +37,18 @@ def export(mode='all', agents=None, include_thinking=True, progress=None, cancel
     with tempfile.TemporaryDirectory(prefix='relay-backup-') as temporary:
         def add(agent, kind, source):
             nonlocal total
-            identity = (kind, str(Path(source.path if kind == 'session' else source).resolve()))
+            path = source.path if kind == 'session' else source
+            # Yuanbao can expose several logical sessions from one JSON file.
+            entry = source.id if kind == 'session' and agent == 'yuanbao' else None
+            identity = (kind, str(Path(path).resolve()), entry)
             if identity in seen:
                 return
             key = uuid.uuid4().hex
             if mode == 'markdown':
-                if registry.get(agent).read(source.id).truncated:
+                conv = registry.get(agent).read(source.id)
+                if conv.truncated:
                     _fail('incomplete')
-                text = registry.export_markdown(agent, source.id, include_thinking=include_thinking, lang=lang)
+                text = render_markdown(conv, include_thinking=include_thinking, lang=lang)
                 content = {'conversations/%s/%s.md' % (agent, key): (text.encode('utf-8'), False)}
                 item = {'key': key, 'agent': agent, 'title': source.title, 'id': source.id}
             else:
@@ -258,7 +263,7 @@ def _plan(manifest, files, options):
                         row.update(native_id=header['id'], parent=header.get('parentSession'), origin=header.get('origin'))
                     if agent not in existing:
                         existing[agent] = ({target.read(r.id).meta['header']['id'] for r in target.discover() if r.readable}
-                                           if agent == 'dsh' else {r.id.split('@', 1)[0] for r in target.discover()})
+                                           if agent == 'dsh' else {r.native_id or r.id for r in target.discover()})
                     sid = row['session_id'] or row.get('native_id') or session.get('native_id') or session['id']
                     if sid in existing[agent] or (session['id'] in existing[agent] and not row['session_id']):
                         row['status'] = 'skip'

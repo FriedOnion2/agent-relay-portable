@@ -45,8 +45,13 @@ async function startCorpusJob(kind){
 }
 async function pollCorpusJob(){
   clearTimeout(corpusState.timer);
-  const r=await api('/api/job');
-  if(r.status==='idle')return;
+  const endpoint=corpusState.job ? '/api/job?id='+encodeURIComponent(corpusState.job) : '/api/job';
+  const r=await api(endpoint);
+  if(!['index','extract'].includes(r.kind)){
+    corpusState.job=null;
+    corpusBusy(false);
+    return;
+  }
   corpusState.job=r.id;
   corpusBusy(r.status==='running');
   const p=r.result||r.progress||{};
@@ -71,7 +76,7 @@ async function pollCorpusJob(){
   if(r.status==='running')corpusState.timer=setTimeout(()=>pollCorpusJob().catch(e=>{corpusBusy(false);toast(e.message,true);}),650);
 }
 async function cancelCorpusJob(){
-  if(!corpusState.job)return;
+  if(!corpusState.job||!corpusState.busy)return;
   try{
     await api('/api/job-cancel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:corpusState.job})});
     $('#cancelCorpus').disabled=true;$('#corpusStatus').textContent+=tr('ui.canceling_completed_index_transactions_are_kept');

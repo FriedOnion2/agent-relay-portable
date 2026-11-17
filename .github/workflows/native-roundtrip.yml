@@ -1,6 +1,10 @@
 name: Native Windows Ubuntu round trip
 on:
   workflow_call:
+    inputs:
+      source_sha:
+        type: string
+        required: false
   workflow_dispatch:
 permissions:
   contents: read
@@ -10,6 +14,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -29,6 +35,8 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -52,6 +60,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'

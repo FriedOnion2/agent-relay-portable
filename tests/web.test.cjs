@@ -22,7 +22,7 @@ test('three independent export buttons capture modes and agents and expose a dur
     assert.equal(payload.mode,mode);assert.deepEqual(payload.agents,['workbuddy']);
     t.response(0,{ok:true,id:'job',status:'running'});
     await new Promise(resolve=>setImmediate(resolve));
-    assert.equal(t.requests[1].url,'/api/job');
+    assert.equal(t.requests[1].url,'/api/job?id=job');
     t.response(1,{ok:true,id:'job',status:'completed',result:{ok:true,processed:2,path:'/storage/backups/p.zip',download:'/api/backup-download?id=fixture'}});
     await exporting;
     assert.equal(t.el('#backupDownload').children[0].href,'/api/backup-download?id=fixture');
@@ -138,6 +138,17 @@ test('index jobs capture disabled thought option and cancellation targets the ac
   t.response(2,{ok:true});await canceled;
   const poll=t.app.pollCorpusJob();t.response(3,{ok:true,id:'job-a',kind:'index',status:'canceled',result:{canceled:true}});await poll;
   assert.equal(t.app.corpusState.busy,false);assert.equal(t.el('#cancelCorpus').disabled,true);
+});
+
+test('the search page does not adopt or cancel a backup job',async()=>{
+  const t=setup();
+  const poll=t.app.pollCorpusJob();
+  t.response(0,{ok:true,id:'backup',kind:'backup-export',status:'running'});
+  await poll;
+  assert.equal(t.app.corpusState.job,null);
+  assert.equal(t.el('#cancelCorpus').disabled,true);
+  await t.app.cancelCorpusJob();
+  assert.equal(t.requests.length,1);
 });
 
 test('progress uses Chinese counts and reviewed evidence links follow the actual server port',async()=>{

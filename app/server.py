@@ -150,7 +150,7 @@ class Handler(BaseHTTPRequestHandler):
                                   include_thinking=(q.get('include_thinking') or ['false'])[0] == 'true',
                                   limit=int((q.get('limit') or ['50'])[0]), offset=int((q.get('offset') or ['0'])[0])))
             if path == '/api/job':
-                return self._json(self.server.jobs.status())
+                return self._json(self.server.jobs.status((q.get('id') or [None])[0]))
             if path == '/api/operations':
                 from relay import oplog
                 limit = int((q.get('limit') or ['100'])[0])
