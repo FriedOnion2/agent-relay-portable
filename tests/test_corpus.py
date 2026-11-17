@@ -115,7 +115,16 @@ class CorpusTests(unittest.TestCase):
         self.update()
         result=self.update();self.assertEqual(result['unchanged'],1)
         self.source.write(workflow(),session_id='two')
-        result=self.update(max_documents=1);self.assertTrue(result['limited'])
+        self.source.write(workflow(), session_id='three')
+        result = self.update(max_documents=1)
+        self.assertTrue(result['limited'])
+        self.assertEqual(result['indexed'], 1)
+        resumed = self.update(max_documents=1)
+        self.assertEqual(resumed['indexed'], 1)
+        self.assertEqual(resumed['unchanged'], 2)
+        self.assertFalse(resumed['limited'])
+        self.assertEqual(self.store.status()['documents'], 3)
+        Path(next(r.path for r in self.source.discover() if r.id == 'three')).unlink()
         self.update()
         self.assertEqual(self.store.status()['documents'],2)
         shutil.move(self.source.root,self.root/'offline')
@@ -280,6 +289,17 @@ class CorpusTests(unittest.TestCase):
         path=extraction.export_draft('---\nname: null\ndescription: true\n---\nbody',str(self.root),True)['path']
         self.assertIn('name: "null"',Path(path).read_text(encoding='utf-8'))
         self.assertIn('description: "true"',Path(path).read_text(encoding='utf-8'))
+
+    def test_job_results_remain_available_by_id_after_another_job_starts(self):
+        manager = Jobs()
+        self.addCleanup(manager.close)
+        previous = manager.start('backup-export', lambda *_: {'processed': 3})
+        manager.thread.join(2)
+        current = manager.start('index', lambda *_: {'indexed': 1})
+        self.assertEqual(manager.status()['id'], current['id'])
+        self.assertEqual(manager.status(previous['id'])['result'], {'processed': 3})
+        with self.assertRaises(ValueError):
+            manager.cancel(previous['id'])
 
     def test_job_cancel_and_close_leave_no_writer(self):
         manager=Jobs();entered=threading.Event()

@@ -65,9 +65,9 @@ jobs:
           python-version: '3.12'
       - run: python scripts/smoke_table.py results >> "$GITHUB_STEP_SUMMARY"
   alert:
-    needs: smoke
+    needs: [smoke, roundtrip]
     # Only scheduled runs open issues; manual and push runs are watched by whoever started them.
-    if: always() && github.event_name == 'schedule' && needs.smoke.result == 'failure'
+    if: always() && github.event_name == 'schedule' && (needs.smoke.result == 'failure' || needs.roundtrip.result == 'failure')
     runs-on: ubuntu-22.04
     permissions:
       contents: read

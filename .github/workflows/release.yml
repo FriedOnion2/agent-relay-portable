@@ -58,6 +58,8 @@ jobs:
     needs: meta
     if: needs.meta.outputs.mode == 'stable'
     uses: ./.github/workflows/native-roundtrip.yml
+    with:
+      source_sha: ${{ needs.meta.outputs.sha }}
   build:
     needs: meta
     if: needs.meta.outputs.mode == 'dev' || needs.meta.outputs.mode == 'stable'

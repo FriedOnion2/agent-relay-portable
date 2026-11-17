@@ -28,7 +28,7 @@ function backupErrors(errors){return (errors||[]).map(row=>[row.agent,row.id||ro
 async function watchBackupJob(job){
   backupState.job=job.id;$('#cancelBackup').disabled=false;
   for(;;){
-    const current=await api('/api/job');
+    const current=await api('/api/job?id='+encodeURIComponent(job.id));
     if(current.id!==job.id)throw new Error(tr('msg.backup_job_changed'));
     if(current.status!=='running'){
       if(current.status==='failed')throw new Error(tm(current,'error'));

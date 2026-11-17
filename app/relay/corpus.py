@@ -197,9 +197,11 @@ class Corpus:
             raise ValueError(message_text('err.invalid_index_scan_limit'))
         state = dict(ok=True, processed=0, indexed=0, unchanged=0, errors=[], warnings=[], canceled=False, limited=False, source='')
         start, owner = time.monotonic(), self.owner
+        attempts = 0
+
         def stopped():
             state['canceled'] = bool(cancel and cancel.is_set())
-            state['limited'] = state['processed'] >= max_documents or time.monotonic() - start >= max_seconds
+            state['limited'] |= time.monotonic() - start >= max_seconds
             return state['canceled'] or state['limited']
         def report():
             if progress:
@@ -268,6 +270,11 @@ class Corpus:
                                     db.execute('UPDATE docs SET offline=0 WHERE key=?', (key,))
                                 state['unchanged'] += 1
                             else:
+                                if attempts >= max_documents:
+                                    state['limited'] = True
+                                    complete = False
+                                    break
+                                attempts += 1
                                 conv = adapter.read(row.id)
                                 if dependency_stamp != _dependencies(adapter, row):
                                     raise ValueError(message_text('err.source_file_is_changing_update_the_index_again'))
@@ -312,6 +319,11 @@ class Corpus:
                                     db.execute('UPDATE docs SET offline=0 WHERE key=?', (key,))
                                 state['unchanged'] += 1
                                 continue
+                            if attempts >= max_documents:
+                                state['limited'] = True
+                                complete = False
+                                break
+                            attempts += 1
                             manifest, files = archive.read_package(path, session_store.KIND)
                             agent, count, session = manifest.get('agent'), manifest.get('root_count'), manifest.get('session')
                             if agent not in registry._ADAPTERS or type(count) is not int or count not in (1, 2) or not isinstance(session, dict):

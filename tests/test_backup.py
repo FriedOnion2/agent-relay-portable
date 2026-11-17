@@ -136,6 +136,33 @@ class BackupTests(unittest.TestCase):
         self.assertFalse((restored / '.env').exists())
         self.assertEqual(len(result['restored']), 3)
 
+    def test_yuanbao_multi_session_file_is_backed_up_and_retries_skip_native_ids(self):
+        from relay.adapters.yuanbao import YuanbaoAdapter
+
+        source = YuanbaoAdapter(home=str(self.root / 'yuanbao-source'))
+        Path(source.home).mkdir()
+        entries = [
+            {'id': sid, 'title': sid, 'cwd': str(self.project),
+             'messages': [{'role': 'user', 'content': sid}]}
+            for sid in ('yuanbao-one', 'yuanbao-two')
+        ]
+        (Path(source.home) / 'batch.json').write_text(
+            json.dumps({'exportTime': 'fixture', 'conversations': entries}), encoding='utf-8')
+        registry._CACHE['yuanbao'] = source
+        reading = backup.export('markdown', ['yuanbao'])
+        self.assertEqual(len(archive.read_package(reading['path'])[1]), 2)
+        package = backup.export('sessions', ['yuanbao'])['path']
+        target = YuanbaoAdapter(home=str(self.root / 'yuanbao-target'))
+        registry._CACHE['yuanbao'] = target
+        for policy in ('skip', 'copy'):
+            options = {**self.options, 'conflict': policy}
+            plan = backup.plan(package, options)
+            self.assertEqual((plan['ready'], plan['blocked']), (2, 0))
+            self.assertEqual(len(backup.restore(package, options, plan['token'])['restored']), 2)
+            retry = backup.plan(package, options)
+            self.assertEqual((retry['ready'], retry['skip']), (0, 2))
+            self.assertTrue(backup.restore(package, options, retry['token'])['ok'])
+
     def test_sessions_and_reading_modes_are_distinct_and_reading_cannot_be_imported(self):
         package = self.export('sessions')
         self.assertEqual(backup.inspect(package)['count'], 2)
