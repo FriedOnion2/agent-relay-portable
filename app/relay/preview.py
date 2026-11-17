@@ -166,26 +166,19 @@ def native(agent, sid, mode, cwd, session_id=None, project_path=None, dsh_compre
 
 
 def package(package_path, cwd, session_id=None, dsh_compression='zstd'):
-    from . import archive, session_store, registry
-    manifest, files = archive.read_package(package_path, session_store.KIND)
-    if manifest.get('agent') == 'yuanbao':
+    from .session_store import SessionPackage
+    return package_report(SessionPackage.read(package_path), cwd, session_id, dsh_compression)
+
+
+def package_report(data, cwd, session_id=None, dsh_compression='zstd'):
+    from . import session_store, registry
+    if data.yuanbao_row is not None:
         from . import yuanbao
-        return yuanbao.package_preview(package_path, cwd, session_id, dsh_compression)
-    agent = manifest.get('agent')
-    if agent not in registry._ADAPTERS:
-        raise ValueError(message_text('msg.unknown_native_package_source'))
-    count, session = manifest.get('root_count'), manifest.get('session')
-    if type(count) is not int or count not in (1, 2) or not isinstance(session, dict) or not isinstance(session.get('id'), str):
-        raise ValueError(message_text('msg.invalid_session_package_metadata'))
-    entry = archive.safe_name(manifest.get('entry'))
-    if entry not in files or any(not any(name.startswith('root%d/' % i) for i in range(count)) for name in files):
-        raise ValueError(message_text('msg.invalid_session_package_entry_or_agent_root_declaration'))
-    import platform
-    if platform.system() == 'Windows':
-        from . import native_import
-        native_import._windows_cwd(cwd)
-    elif not cwd or not Path(cwd).is_absolute() or not Path(cwd).is_dir():
-        raise ValueError(message_text('msg.restoring_needs_an_absolute_project_directory_that_exists_on_this_device'))
+        return yuanbao.package_report(data.manifest, data.yuanbao_row, cwd, session_id, dsh_compression)
+    session_store.project_directory(cwd)
+    if dsh_compression not in ('zstd', 'none'):
+        raise ValueError(message_text('err.dsh_compression_must_be_zstd_or_none'))
+    manifest, agent = data.manifest, data.agent
     options = dict(cwd=cwd, session_id=session_id, dsh_compression=dsh_compression)
     token = fingerprint({'manifest':manifest, 'options':options, 'destination':registry.get(agent).home})
     return {'ok':True, 'mode':'native-package', 'target':agent, 'target_cwd':cwd, 'token':token, 'blockers':[],

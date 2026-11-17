@@ -213,18 +213,32 @@ class BackupTests(unittest.TestCase):
             backup.restore(package, self.options, report['token'])
         self.assertFalse((self.root / 'other-target').exists())
 
+    def test_batch_archive_uses_one_zip_and_skill_restore_has_an_undo_receipt(self):
+        from relay import oplog
+
+        with patch.object(archive, 'write_package', wraps=archive.write_package) as write:
+            package = self.export()
+        self.assertEqual(write.call_count, 1)
+        self.targets()
+        with patch.object(archive, 'write_package', side_effect=AssertionError('unexpected inner ZIP')):
+            report = backup.plan(package, self.options)
+            self.assertTrue(backup.restore(package, self.options, report['token'])['ok'])
+        skill = next(row for row in oplog.list_operations() if row['kind'] == 'skill-package-import')
+        self.assertTrue(oplog.undo(skill['id'])['complete'])
+        self.assertFalse(Path(skill['path']).exists())
+
     def test_partial_restore_reports_errors_and_retries_skip_completed_items(self):
         package = self.export()
         self.targets()
         plan = backup.plan(package, self.options)
-        original = session_store.restore_session
+        original = session_store.restore_package
         calls = []
         def restore(*args, **kwargs):
             calls.append(args)
             if len(calls) == 1:
                 raise OSError('isolated fixture failure')
             return original(*args, **kwargs)
-        with patch.object(session_store, 'restore_session', side_effect=restore):
+        with patch.object(session_store, 'restore_package', side_effect=restore):
             result = backup.restore(package, self.options, plan['token'])
         self.assertFalse(result['ok'])
         self.assertEqual((len(result['restored']), len(result['errors'])), (2, 1))

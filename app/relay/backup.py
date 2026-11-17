@@ -34,83 +34,80 @@ def export(mode='all', agents=None, include_thinking=True, progress=None, cancel
         _fail('invalid_agents')
     files, items, errors, seen = {}, [], [], set()
     total = 0
-    with tempfile.TemporaryDirectory(prefix='relay-backup-') as temporary:
-        def add(agent, kind, source):
-            nonlocal total
-            path = source.path if kind == 'session' else source
-            # Yuanbao can expose several logical sessions from one JSON file.
-            entry = source.id if kind == 'session' and agent == 'yuanbao' else None
-            identity = (kind, str(Path(path).resolve()), entry)
-            if identity in seen:
-                return
-            key = uuid.uuid4().hex
-            if mode == 'markdown':
-                conv = registry.get(agent).read(source.id)
-                if conv.truncated:
-                    _fail('incomplete')
-                text = render_markdown(conv, include_thinking=include_thinking, lang=lang)
-                content = {'conversations/%s/%s.md' % (agent, key): (text.encode('utf-8'), False)}
-                item = {'key': key, 'agent': agent, 'title': source.title, 'id': source.id}
-            else:
-                result = (session_store.store_session(agent, source.id, temporary) if kind == 'session'
-                          else skill_store.store_skill(agent, source, temporary))
-                package = Path(result['path'])
-                metadata, native = archive.read_package(package)
-                package.unlink()
-                content = {'items/%s/%s' % (key, name): data for name, data in native.items()}
-                item = {'key': key, 'manifest': metadata}
-            size = sum(len(data) for data, executable in content.values())
-            if (any(len(data) > archive.MAX_FILE for data, executable in content.values()) or
-                    total + size > archive.MAX_TOTAL or len(files) + len(content) > archive.MAX_FILES):
-                _fail('limit')
-            files.update(content)
-            total += size
-            items.append(item)
-            seen.add(identity)
-            _notify(progress, len(items), errors)
+    def add(agent, kind, source):
+        nonlocal total
+        path = source.path if kind == 'session' else source
+        # Yuanbao can expose several logical sessions from one JSON file.
+        entry = source.id if kind == 'session' and agent == 'yuanbao' else None
+        identity = (kind, str(Path(path).resolve()), entry)
+        if identity in seen:
+            return
+        key = uuid.uuid4().hex
+        if mode == 'markdown':
+            conv = registry.get(agent).read(source.id)
+            if conv.truncated:
+                _fail('incomplete')
+            text = render_markdown(conv, include_thinking=include_thinking, lang=lang)
+            content = {'conversations/%s/%s.md' % (agent, key): (text.encode('utf-8'), False)}
+            item = {'key': key, 'agent': agent, 'title': source.title, 'id': source.id}
+        else:
+            _, manifest, native = (session_store.collect_session(agent, source.id) if kind == 'session'
+                                   else skill_store.collect_skill(agent, source))
+            metadata, _ = archive.prepare_manifest(manifest, native)
+            content = {'items/%s/%s' % (key, name): data for name, data in native.items()}
+            item = {'key': key, 'manifest': metadata}
+        size = sum(len(data) for data, executable in content.values())
+        if (any(len(data) > archive.MAX_FILE for data, executable in content.values()) or
+                total + size > archive.MAX_TOTAL or len(files) + len(content) > archive.MAX_FILES):
+            _fail('limit')
+        files.update(content)
+        total += size
+        items.append(item)
+        seen.add(identity)
+        _notify(progress, len(items), errors)
 
-        for agent in dict.fromkeys(agents):
-            if cancel and cancel.is_set():
-                return {'ok': False, 'canceled': True, 'processed': len(items), 'errors': errors}
-            try:
-                source = registry.get(agent)
-                for row in source.discover():
+    for agent in dict.fromkeys(agents):
+        if cancel and cancel.is_set():
+            return {'ok': False, 'canceled': True, 'processed': len(items), 'errors': errors}
+        try:
+            source = registry.get(agent)
+            for row in source.discover():
+                if cancel and cancel.is_set():
+                    return {'ok': False, 'canceled': True, 'processed': len(items), 'errors': errors}
+                try:
+                    add(agent, 'session', row)
+                except (OSError, ValueError, KeyError) as exc:
+                    # Capacity errors abort instead of labelling a truncated
+                    # archive as a complete backup.
+                    if exc.args and getattr(exc.args[0], 'code', '') == 'msg.backup_limit':
+                        raise
+                    errors.append({'agent': agent, 'id': row.id, 'error': error_text(exc)})
+            if mode == 'all' and agent != 'yuanbao':
+                discovered = skill_store.discover_skills(agent)
+                errors.extend(dict(row, agent=agent) for row in discovered['errors'])
+                for row in discovered['skills']:
                     if cancel and cancel.is_set():
                         return {'ok': False, 'canceled': True, 'processed': len(items), 'errors': errors}
                     try:
-                        add(agent, 'session', row)
+                        add(agent, 'skill', row['path'])
                     except (OSError, ValueError, KeyError) as exc:
-                        # Capacity errors abort instead of labelling a truncated
-                        # archive as a complete backup.
                         if exc.args and getattr(exc.args[0], 'code', '') == 'msg.backup_limit':
                             raise
-                        errors.append({'agent': agent, 'id': row.id, 'error': error_text(exc)})
-                if mode == 'all' and agent != 'yuanbao':
-                    discovered = skill_store.discover_skills(agent)
-                    errors.extend(dict(row, agent=agent) for row in discovered['errors'])
-                    for row in discovered['skills']:
-                        if cancel and cancel.is_set():
-                            return {'ok': False, 'canceled': True, 'processed': len(items), 'errors': errors}
-                        try:
-                            add(agent, 'skill', row['path'])
-                        except (OSError, ValueError, KeyError) as exc:
-                            if exc.args and getattr(exc.args[0], 'code', '') == 'msg.backup_limit':
-                                raise
-                            errors.append({'agent': agent, 'path': row['path'], 'error': error_text(exc)})
-            except (OSError, ValueError, KeyError) as exc:
-                if exc.args and getattr(exc.args[0], 'code', '') == 'msg.backup_limit':
-                    raise
-                errors.append({'agent': agent, 'error': error_text(exc)})
-        if not items:
-            return {'ok': False, 'processed': 0, 'errors': errors, 'empty': True}
-        if cancel and cancel.is_set():
-            return {'ok': False, 'canceled': True, 'processed': len(items), 'errors': errors}
-        key = uuid.uuid4().hex
-        result = archive.write_package(archive.storage_root() / 'backups' / (key + '.zip'),
-                                       {'kind': READING_KIND if mode == 'markdown' else KIND,
-                                        'mode': mode, 'created_at': iso(), 'items': items, 'errors': errors}, files)
-        return {'ok': not errors, 'id': key, 'path': result['path'], 'processed': len(items), 'errors': errors,
-                'download': '/api/backup-download?id=' + key}
+                        errors.append({'agent': agent, 'path': row['path'], 'error': error_text(exc)})
+        except (OSError, ValueError, KeyError) as exc:
+            if exc.args and getattr(exc.args[0], 'code', '') == 'msg.backup_limit':
+                raise
+            errors.append({'agent': agent, 'error': error_text(exc)})
+    if not items:
+        return {'ok': False, 'processed': 0, 'errors': errors, 'empty': True}
+    if cancel and cancel.is_set():
+        return {'ok': False, 'canceled': True, 'processed': len(items), 'errors': errors}
+    key = uuid.uuid4().hex
+    result = archive.write_package(archive.storage_root() / 'backups' / (key + '.zip'),
+                                   {'kind': READING_KIND if mode == 'markdown' else KIND,
+                                    'mode': mode, 'created_at': iso(), 'items': items, 'errors': errors}, files)
+    return {'ok': not errors, 'id': key, 'path': result['path'], 'processed': len(items), 'errors': errors,
+            'download': '/api/backup-download?id=' + key}
 
 
 def download_path(key):
@@ -225,12 +222,9 @@ def _options(options):
     return options
 
 
-def _materialize(item, files, root):
+def _members(item, files):
     prefix = 'items/' + item['key'] + '/'
-    native = {name[len(prefix):]: value for name, value in files.items() if name.startswith(prefix)}
-    package = Path(root) / (item['key'] + '.zip')
-    archive.write_package(package, item['manifest'], native)
-    return package
+    return {row['path']: files[prefix + row['path']] for row in item['manifest']['files']}
 
 
 def _plan(manifest, files, options):
@@ -271,10 +265,10 @@ def _plan(manifest, files, options):
                     else:
                         if not Path(row['cwd']).is_absolute():
                             _fail('project_required')
-                        package = _materialize(item, files, temporary)
+                        data = session_store.SessionPackage(inner, _members(item, files))
                         # The shared native preview validates directory existence
                         # and Windows path rules before any target writes.
-                        preview.package(package, row['cwd'], row['session_id'], 'none')
+                        preview.package_report(data, row['cwd'], row['session_id'], 'none')
                         existing[agent].add(sid)
                 else:
                     row['title'] = inner['skill']['name']
@@ -342,21 +336,23 @@ def restore(package, options=None, preview_token=None, progress=None, cancel=Non
     if report['blocked']:
         _fail('blocked')
     results, skipped, errors = [], [], []
-    with tempfile.TemporaryDirectory(prefix='relay-backup-import-') as temporary:
-        items = {item['key']: item for item in manifest['items']}
-        for row in report['rows']:
-            if cancel and cancel.is_set():
-                return {'ok': False, 'canceled': True, 'restored': results, 'skipped': skipped, 'errors': errors}
-            if row['status'] == 'skip':
-                skipped.append(row)
-                continue
-            try:
-                path = _materialize(items[row['key']], files, temporary)
-                result = (session_store.restore_session(path, row['cwd'], row['session_id'], 'none')
-                          if row['kind'] == 'session' else
-                          skill_store.restore_skill(path, row['agent'], row['skills_dir'], row['name']))
-                results.append({'key': row['key'], 'agent': row['agent'], 'title': row['title'], 'result': result})
-            except (OSError, ValueError, KeyError) as exc:
-                errors.append({'key': row['key'], 'agent': row['agent'], 'title': row['title'], 'error': error_text(exc)})
-            _notify(progress, len(results) + len(skipped) + len(errors), errors)
+    items = {item['key']: item for item in manifest['items']}
+    for row in report['rows']:
+        if cancel and cancel.is_set():
+            return {'ok': False, 'canceled': True, 'restored': results, 'skipped': skipped, 'errors': errors}
+        if row['status'] == 'skip':
+            skipped.append(row)
+            continue
+        try:
+            item = items[row['key']]
+            inner, members = item['manifest'], _members(item, files)
+            if row['kind'] == 'session':
+                result = session_store.restore_package(session_store.SessionPackage(inner, members), package,
+                                                       row['cwd'], row['session_id'], 'none')
+            else:
+                result = skill_store.restore_package(inner, members, row['agent'], row['skills_dir'], row['name'])
+            results.append({'key': row['key'], 'agent': row['agent'], 'title': row['title'], 'result': result})
+        except (OSError, ValueError, KeyError) as exc:
+            errors.append({'key': row['key'], 'agent': row['agent'], 'title': row['title'], 'error': error_text(exc)})
+        _notify(progress, len(results) + len(skipped) + len(errors), errors)
     return {'ok': not errors, 'restored': results, 'skipped': skipped, 'errors': errors}

@@ -2,6 +2,7 @@
 
 from .messages import text as message_text, error_text
 import copy
+from contextlib import contextmanager
 import json
 import platform
 import tempfile
@@ -17,10 +18,15 @@ KIND = "agentrelay-session"
 
 
 def store_session(agent, sid, root=None):
+    path, manifest, files = collect_session(agent, sid, root)
+    return archive.write_package(path, manifest, files)
+
+
+def collect_session(agent, sid, root=None):
     source = registry.get(agent)
     if source.name == 'yuanbao':
         from . import yuanbao
-        return yuanbao.store(source, sid, root)
+        return yuanbao.collect(source, sid, root)
     if source.info().get('community'):
         raise ValueError(message_text('err.community_plugins_only_support_reading_and_conversion_native_session_packaging_is_not_avai'))
     native = getattr(source, "source", source.name)
@@ -78,7 +84,7 @@ def store_session(agent, sid, root=None):
     path = archive.storage_root(root) / "conversations" / native / (uuid.uuid4().hex + ".zip")
     if any(native_import._inside(path, base) for base in roots):
         raise ValueError(message_text('err.storage_directory_cannot_be_inside_the_source_agent_data_directory'))
-    return archive.write_package(path, manifest, files)
+    return path, manifest, files
 
 
 def store_sessions(agent, ids=None, all_sessions=False, root=None):
@@ -98,47 +104,78 @@ def store_sessions(agent, ids=None, all_sessions=False, root=None):
     return {"ok":not errors, "stored":results, "errors":errors}
 
 
+class SessionPackage:
+    """A session manifest and its already verified member bytes."""
+
+    @classmethod
+    def read(cls, path):
+        return cls(*archive.read_package(path, KIND))
+
+    def __init__(self, manifest, files):
+        self.manifest = manifest
+        self.files = files
+        self.agent = manifest.get("agent")
+        if not isinstance(self.agent, str) or self.agent not in registry._ADAPTERS:
+            raise ValueError(message_text('msg.unknown_native_package_source'))
+        self.count = manifest.get("root_count")
+        self.session = manifest.get("session")
+        if (type(self.count) is not int or self.count not in (1, 2) or
+                not isinstance(self.session, dict) or not isinstance(self.session.get("id"), str)):
+            raise ValueError(message_text('msg.invalid_session_package_metadata'))
+        self.entry = archive.safe_name(manifest.get("entry"))
+        prefixes = tuple("root%d/" % index for index in range(self.count))
+        if self.entry not in files or any(not name.startswith(prefixes) for name in files):
+            raise ValueError(message_text('msg.invalid_session_package_entry_or_agent_root_declaration'))
+        self.yuanbao_row = None
+        if self.agent == "yuanbao":
+            from . import yuanbao
+            self.yuanbao_row = yuanbao.decode_package(manifest, files)
+
+    @contextmanager
+    def open_source(self):
+        if self.yuanbao_row is not None:
+            from . import yuanbao
+            yield SimpleNamespace(read=lambda sid: yuanbao.conversation(self.yuanbao_row))
+            return
+        with tempfile.TemporaryDirectory(prefix="agentrelay-session-") as temporary:
+            archive.unpack(self.files, temporary)
+            roots = [str(Path(temporary) / ("root%d" % i)) for i in range(self.count)]
+            adapter = registry.get(self.agent, home=roots[0])
+            if self.agent == "codebuddy":
+                adapter.roots = roots
+            conv = adapter.read(self.session["id"])
+            if Path(conv.path).resolve() != (Path(temporary) / self.entry).resolve():
+                raise ValueError(message_text('err.session_package_id_does_not_match_the_declared_entry'))
+            if not conv.cwd and isinstance(self.session.get("cwd"), str):
+                conv = replace(conv, cwd=self.session["cwd"])
+            yield SimpleNamespace(source=self.agent, name=self.manifest.get("source") or self.agent,
+                                  adapter=adapter, roots=roots, read=lambda sid: conv)
+
+
 def restore_session(package, cwd, session_id=None, dsh_compression="zstd", preview_token=None):
-    metadata, _ = archive.read_package(package, KIND, full=False)
-    if metadata.get('agent') == 'yuanbao':
+    return restore_package(SessionPackage.read(package), package, cwd, session_id, dsh_compression, preview_token)
+
+
+def restore_package(data, package_path, cwd, session_id=None, dsh_compression="zstd", preview_token=None):
+    from . import preview
+    if data.yuanbao_row is not None:
         from . import yuanbao
-        return yuanbao.restore(package, cwd, session_id, dsh_compression, preview_token)
+        return yuanbao.restore_package(data, package_path, cwd, session_id, dsh_compression, preview_token)
     if preview_token:
-        from . import preview
-        preview.check_token(preview_token, preview.package(package, cwd, session_id, dsh_compression)['token'])
-    manifest, files = archive.read_package(package, KIND)
-    agent = manifest.get("agent")
-    if agent not in registry._ADAPTERS:
-        raise ValueError(message_text('err.agent_in_this_package_does_not_support_native_restore'))
-    count = manifest.get("root_count")
-    session = manifest.get("session")
-    if type(count) is not int or count not in (1, 2) or not isinstance(session, dict) or not isinstance(session.get("id"), str):
-        raise ValueError(message_text('msg.invalid_session_package_metadata'))
-    entry = archive.safe_name(manifest.get("entry"))
-    if entry not in files or any(not any(name.startswith("root%d/" % i) for i in range(count)) for name in files):
-        raise ValueError(message_text('msg.invalid_session_package_entry_or_agent_root_declaration'))
+        preview.check_token(preview_token, preview.package_report(data, cwd, session_id, dsh_compression)['token'])
     system = platform.system()
-    if system == "Windows":
-        cwd = native_import._windows_cwd(cwd)
-    else:
-        if not cwd or not Path(cwd).is_absolute() or not Path(cwd).is_dir():
-            raise ValueError(message_text('msg.restoring_needs_an_absolute_project_directory_that_exists_on_this_device'))
-        cwd = str(Path(cwd).resolve())
-    with tempfile.TemporaryDirectory(prefix="agentrelay-session-") as temporary:
-        archive.unpack(files, temporary)
-        roots = [str(Path(temporary) / ("root%d" % i)) for i in range(count)]
-        adapter = registry.get(agent, home=roots[0])
-        if agent == "codebuddy":
-            adapter.roots = roots
-        conv = adapter.read(session["id"])
-        if Path(conv.path).resolve() != (Path(temporary) / entry).resolve():
-            raise ValueError(message_text('err.session_package_id_does_not_match_the_declared_entry'))
-        if not conv.cwd and isinstance(session.get("cwd"), str):
-            conv = replace(conv, cwd=session["cwd"])
-        source = SimpleNamespace(source=agent, name=manifest.get("source") or agent, adapter=adapter,
-                                 roots=roots, read=lambda sid:conv)
-        result = native_import._migrate(source, registry.get(agent), session["id"], cwd, session_id,
-                        dsh_compression, "native-package-import", agent, system)
-    result["from"]["path"] = str(Path(package).resolve())
+    cwd = project_directory(cwd)
+    with data.open_source() as source:
+        result = native_import._migrate(source, registry.get(data.agent), data.session["id"], cwd, session_id,
+                        dsh_compression, "native-package-import", data.agent, system)
+    result["from"]["path"] = str(Path(package_path).resolve())
     result["notes"].append(message_text('msg.session_package_verified'))
     return result
+
+
+def project_directory(cwd):
+    if platform.system() == "Windows":
+        return native_import._windows_cwd(cwd)
+    if not isinstance(cwd, str) or not cwd or not Path(cwd).is_absolute() or not Path(cwd).is_dir():
+        raise ValueError(message_text('msg.restoring_needs_an_absolute_project_directory_that_exists_on_this_device'))
+    return str(Path(cwd).resolve())

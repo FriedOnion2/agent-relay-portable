@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from .messages import text as message_text
 
 import os
@@ -133,10 +135,35 @@ def human_size(n: int) -> str:
     return f"{n:.1f} GB"
 
 
-def atomic_write(path: str, lines, encoding: str | None = "utf-8", overwrite: bool = True) -> None:
+def ensure_directory(directory):
+    """Create missing directories and register only mkdir calls we own."""
+    from . import oplog
+
+    directory = Path(directory)
+    missing = []
+    current = directory
+    while not current.is_dir() and current.parent != current:
+        missing.append(current)
+        current = current.parent
+    for path in reversed(missing):
+        try:
+            path.mkdir()
+        except FileExistsError:
+            if not path.is_dir():
+                raise
+        else:
+            oplog.created_directory(path)
+
+
+def atomic_write(path: str, lines, encoding: str | None = "utf-8", overwrite: bool = True, *, append_to: bytes | None = None, journal: bool = True) -> None:
     """原子发布文本行；encoding=None 时原样发布字节块（用于压缩日志）。"""
+    from . import oplog
+
     directory = os.path.dirname(os.path.abspath(path))
-    os.makedirs(directory, exist_ok=True)
+    if journal:
+        ensure_directory(directory)
+    else:
+        os.makedirs(directory, exist_ok=True)
     fd, tmp = tempfile.mkstemp(prefix=".relay-", suffix=".partial", dir=directory)
     try:
         options = {"encoding":encoding, "newline":"\n"} if encoding is not None else {}
@@ -145,7 +172,19 @@ def atomic_write(path: str, lines, encoding: str | None = "utf-8", overwrite: bo
                 f.write(line if encoding is None or line.endswith("\n") else line + "\n")
             f.flush()
             os.fsync(f.fileno())
-        if overwrite:
+        evidence = oplog.file_evidence(tmp) if journal else None
+        existed = os.path.lexists(path)
+        previous_size = None
+        replacement = overwrite and existed
+        if append_to is not None and existed:
+            with open(path, "rb") as original, open(tmp, "rb") as staged:
+                if original.read(len(append_to) + 1) != append_to:
+                    raise ValueError(message_text('err.codex_title_index_is_changing_close_the_app_and_retry'))
+                if staged.read(len(append_to)) == append_to and staged.read(1):
+                    previous_size, replacement = len(append_to), False
+        if append_to and not existed:
+            raise ValueError(message_text('err.codex_title_index_is_changing_close_the_app_and_retry'))
+        if overwrite and existed:
             os.replace(tmp, path)
         elif os.name == "nt":
             # Windows rename never replaces an existing target (including exFAT).
@@ -167,6 +206,8 @@ def atomic_write(path: str, lines, encoding: str | None = "utf-8", overwrite: bo
                         os.rename(tmp, path)
                     finally:
                         os.unlink(lock)
+        if journal:
+            oplog.published(path, evidence, previous_size=previous_size, replacement=replacement)
     finally:
         if os.path.exists(tmp):
             os.unlink(tmp)

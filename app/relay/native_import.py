@@ -9,6 +9,7 @@ from __future__ import annotations
 from .messages import text as message_text
 
 import copy
+import contextlib
 import datetime as dt
 import json
 import os
@@ -26,7 +27,8 @@ from types import SimpleNamespace
 from .adapters.base import _norm_cwd
 from .adapters.workbuddy import WorkBuddyAdapter
 from .adapters.dsh import read_records
-from .paths import atomic_write, validate_session_id
+from .paths import atomic_write, ensure_directory, validate_session_id
+from . import oplog
 from .windows import WindowsSource
 
 MAX_BYTES = 32 * 1024 * 1024
@@ -145,8 +147,8 @@ def _metadata(row, old_cwd, cwd, sid, old_id):
             row[key] = sid
 
 
-def _publish_jsonl(path, rows):
-    atomic_write(str(path), [json.dumps(row, ensure_ascii=False) for row in rows], overwrite=False)
+def _publish_jsonl(path, rows, *, journal=True):
+    atomic_write(str(path), [json.dumps(row, ensure_ascii=False) for row in rows], overwrite=False, journal=journal)
 
 
 def _find_native_id(rows, fallback):
@@ -214,7 +216,7 @@ def _native_jsonl(source, target, conv, cwd, requested_id):
                             entry[key] = sid
         if entry:
             root = Path(target.root)
-            root.mkdir(parents=True, exist_ok=True)
+            ensure_directory(root)
             with _exclusive_lock(root / ".relay-import.publish-lock"):
                 index = Path(target.index_path)
                 original = index.read_bytes() if index.exists() else b""
@@ -227,7 +229,9 @@ def _native_jsonl(source, target, conv, cwd, requested_id):
                 try:
                     if (index.read_bytes() if index.exists() else b"") != original:
                         raise ValueError(message_text('err.codex_title_index_is_changing_close_the_app_and_retry'))
-                    atomic_write(str(index), [json.dumps(row, ensure_ascii=False) for row in [*current, entry]])
+                    separator = b"\n" if original and not original.endswith(b"\n") else b""
+                    encoded = (json.dumps(entry, ensure_ascii=False) + "\n").encode("utf-8")
+                    atomic_write(str(index), [original, separator, encoded], encoding=None, append_to=original)
                 except BaseException:
                     path.unlink()
                     raise
@@ -289,31 +293,14 @@ def _native_dsh(source, target, conv, cwd, requested_id, compression):
             data += compressor.compress(("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows[1:])).encode("utf-8"))
     else:
         data = ("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows)).encode("utf-8")
-    directory.parent.mkdir(parents=True, exist_ok=True)
-    directory.mkdir()  # exclusive ownership; never merge into a native session
-    temporary = directory / ".session.partial"
+    ensure_directory(directory.parent)
+    directory.mkdir()  # exclusive ownership
+    oplog.created_directory(directory)
     try:
-        with temporary.open("xb") as output:
-            output.write(data)
-            output.flush()
-            os.fsync(output.fileno())
-        try:
-            os.link(str(temporary), str(path))
-            temporary.unlink()
-        except FileExistsError:
-            raise
-        except OSError:
-            # The exclusively created session directory is owned by this
-            # import. FAT/exFAT can publish by rename when links are unavailable.
-            if path.exists():
-                raise FileExistsError(str(path)) from None
-            os.rename(str(temporary), str(path))
+        atomic_write(str(path), [data], encoding=None, overwrite=False)
     except BaseException:
-        if temporary.exists():
-            temporary.unlink()
-        if path.exists():
-            path.unlink()
-        directory.rmdir()
+        with contextlib.suppress(OSError):
+            directory.rmdir()
         raise
     return path, sid
 
@@ -387,9 +374,10 @@ def _native_ide(source, target, conv, cwd, requested_id):
                 raise FileExistsError(message_text('err.target_codebuddy_ide_session_already_exists_choose_a_new_session_id'))
             stage = Path(tempfile.mkdtemp(prefix=".relay-", suffix=".partial", dir=str(workspace)))
             for relative, doc in documents.items():
-                _publish_jsonl(stage / relative, [doc])
+                _publish_jsonl(stage / relative, [doc], journal=False)
             if index.read_bytes() != original:
                 raise ValueError(message_text('err.codebuddy_index_is_changing_close_the_app_and_retry'))
+            evidence = {relative: oplog.file_evidence(stage / relative) for relative in documents}
             destination.mkdir()  # refuses even an existing empty session
             published = True
             if (stage / "messages").exists():
@@ -397,6 +385,11 @@ def _native_ide(source, target, conv, cwd, requested_id):
             os.rename(str(stage / "index.json"), str(destination / "index.json"))
             conversations.append(entry)
             atomic_write(str(index), [json.dumps(current, ensure_ascii=False)])
+            oplog.created_directory(destination)
+            if (destination / "messages").is_dir():
+                oplog.created_directory(destination / "messages")
+            for relative, receipt in evidence.items():
+                oplog.published(destination / relative, receipt)
             return destination / "index.json", sid
         except BaseException:
             if published:
@@ -491,7 +484,7 @@ def _migrate(source, target, sid, cwd, session_id, dsh_compression, mode, target
     preview.check_token(preview_token, plan['token'])
     notes = [message_text('msg.native_records_mapped'),
              message_text('msg.native_resume_check')]
-    from . import oplog, registry
+    from . import registry
     with oplog.track(mode, registry._write_roots(target), source=source.name, target=target_name,
                      session=sid, title=conv.title) as record:
         if source.source == "dsh":

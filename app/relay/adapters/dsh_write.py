@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 
 from .. import ir
-from ..paths import atomic_write, now_ms, safe_ms, uuid7, validate_session_id
+from ..paths import ensure_directory, atomic_write, now_ms, safe_ms, uuid7, validate_session_id
 from .base import ToolNameMap
 
 MAX_LOG_BYTES = 32 * 1024 * 1024
@@ -162,7 +162,7 @@ def write_native(home, conv, cwd, session_id, remap_tools, include_thinking):
             if total > MAX_LOG_BYTES or encoded > MAX_LOG_BYTES:
                 raise ValueError(message_text('err.generated_dsh_log_exceeds_32_mib_reduce_the_session_before_importing'))
             yield frame
-    os.makedirs(home, exist_ok=True)
+    ensure_directory(home)
     lock = os.path.join(home, ".relay-" + sid + ".publish-lock")
     path = os.path.join(home, project_key(target_cwd), sid, "session.jsonl.zstd")
     open(lock, "x").close()

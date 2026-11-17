@@ -54,11 +54,8 @@ def read_file(path):
     return data
 
 
-def write_package(path, manifest, files):
-    """Publish an exclusive package after a complete ZIP has been flushed."""
-    path = Path(path)
-    if path.exists():
-        raise FileExistsError(message_text('err.storage_package_already_exists_and_will_not_be_overwritten_value', value=str(path)))
+def prepare_manifest(manifest, files):
+    """Describe bounded archive members without serializing a ZIP."""
     if not files or len(files) > MAX_FILES or sum(len(data) for data, mode in files.values()) > MAX_TOTAL:
         raise ValueError(message_text('err.storage_package_is_empty_or_exceeds_the_file_count_256_mib_limit'))
     manifest = dict(manifest, version=1, files=[])
@@ -72,6 +69,15 @@ def write_package(path, manifest, files):
     raw_manifest = json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8")
     if len(raw_manifest) > MAX_MANIFEST:
         raise ValueError(message_text('err.package_manifest_is_too_large'))
+    return manifest, raw_manifest
+
+
+def write_package(path, manifest, files):
+    """Publish an exclusive package after a complete ZIP has been flushed."""
+    path = Path(path)
+    if path.exists():
+        raise FileExistsError(message_text('err.storage_package_already_exists_and_will_not_be_overwritten_value', value=str(path)))
+    manifest, raw_manifest = prepare_manifest(manifest, files)
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary = tempfile.mkstemp(prefix=".relay-", suffix=".partial", dir=str(path.parent))
     os.close(descriptor)
