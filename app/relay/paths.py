@@ -177,6 +177,8 @@ def atomic_write(path: str, lines, encoding: str | None = "utf-8", overwrite: bo
         previous_size = None
         replacement = overwrite and existed
         if append_to is not None and existed:
+            if os.path.islink(path) or not os.path.isfile(path):
+                raise ValueError(message_text('err.codex_title_index_is_changing_close_the_app_and_retry'))
             with open(path, "rb") as original, open(tmp, "rb") as staged:
                 if original.read(len(append_to) + 1) != append_to:
                     raise ValueError(message_text('err.codex_title_index_is_changing_close_the_app_and_retry'))
