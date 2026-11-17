@@ -1,5 +1,22 @@
 // Three export modes share a verified native-backup import workflow.
-const backupState={job:null,plan:null,projects:[],skills:[]};
+const backupState={job:null,plan:null,projects:[],skills:[],renderReport:null};
+
+function showBackupReport(render){
+  backupState.renderReport=render;
+  renderBackupReport();
+}
+
+function renderBackupReport(){
+  if(backupState.renderReport) $('#backupReport').textContent=backupState.renderReport();
+  for(const [kind,rows] of [['projects',backupState.projects],['skills',backupState.skills]]){
+    for(const row of rows){
+      row.label.textContent=kind==='projects'
+        ? tr('msg.backup_project',{path:row.key||tr('ui.unknown')})
+        : tr('msg.backup_skills_root',{agent:AGENTS[row.key]||row.key});
+      row.input.placeholder=tr(kind==='projects'?'msg.backup_project_hint':'msg.backup_skills_hint');
+    }
+  }
+}
 function buildBackupAgents(){
   const box=$('#backupAgents'), previous=new Map();
   for(const input of box.querySelectorAll('input'))previous.set(input.value,input.checked);
@@ -18,7 +35,7 @@ function backupOptions(){
 }
 function backupBusy(busy){
   state.transferring=busy;updateActions();
-  for(const id of ['backupAll','backupSessions','backupMarkdown','backupFile','backupPath','inspectBackup','previewBackup','backupConflict'])$('#'+id).disabled=busy;
+  for(const id of ['backupAll','backupSessions','backupMarkdown','backupProject','backupSince','backupBaseline','backupFile','backupPath','inspectBackup','previewBackup','backupConflict'])$('#'+id).disabled=busy;
   for(const input of $('#backupAgents').querySelectorAll('input'))input.disabled=busy;
   for(const row of [...backupState.projects,...backupState.skills])row.input.disabled=busy;
   $('#cancelBackup').disabled=!busy||!backupState.job;
@@ -34,7 +51,7 @@ async function watchBackupJob(job){
       if(current.status==='failed')throw new Error(tm(current,'error'));
       return {...current.result,canceled:current.status==='canceled'};
     }
-    $('#backupReport').textContent=tr('msg.backup_progress',{n:current.progress?.processed||0});
+    showBackupReport(()=>tr('msg.backup_progress',{n:current.progress?.processed||0}));
     await new Promise(resolve=>setTimeout(resolve,650));
   }
 }
@@ -45,17 +62,22 @@ async function exportBackup(mode){
   invalidateBackupPlan();backupBusy(true);$('#backupDownload').innerHTML='';
   try{
     const job=await api('/api/backup-export',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({mode,agents,include_thinking:$('#backupThinking').checked,lang})});
+      body:JSON.stringify({mode,agents,include_thinking:$('#backupThinking').checked,lang,
+        project:$('#backupProject').value.trim(),since:$('#backupSince').value,baseline:mode==='markdown'?'':$('#backupBaseline').value.trim()})});
     const result=await watchBackupJob(job);
-    const status=result.canceled?tr('msg.backup_canceled'):result.ok?tr('msg.backup_complete'):tr('msg.backup_partial');
-    $('#backupReport').textContent=[status,tr('msg.backup_exported',{n:result.processed||0}),result.path||'',...backupErrors(result.errors)].join('\n');
+    showBackupReport(()=>{
+      const status=result.canceled?tr('msg.backup_canceled'):result.ok?tr('msg.backup_complete'):tr('msg.backup_partial');
+      return [status,tr('msg.backup_exported',{n:result.processed||0}),
+        result.unchanged?tr('ui.backup_unchanged',{count:result.unchanged}):'',
+        result.path||'',...backupErrors(result.errors)].filter(Boolean).join('\n');
+    });
     if(result.download){
       const link=document.createElement('a');link.className='btn primary';link.href=result.download;
       link.textContent=tr('msg.backup_download');link.setAttribute('download','');$('#backupDownload').appendChild(link);
       // The durable copy remains in storage/backups even if a browser blocks a download.
       link.click();
     }
-  }catch(e){$('#backupReport').textContent=e.message;toast(e.message,true);}
+  }catch(e){showBackupReport(()=>e.error_message?ts(e.error_message):e.message);toast(e.message,true);}
   finally{backupState.job=null;backupBusy(false);}
 }
 function renderBackupMapping(summary){
@@ -68,10 +90,16 @@ function renderBackupMapping(summary){
       const input=document.createElement('input');input.className='input';input.value=kind==='projects'?key:'';
       input.placeholder=tr(kind==='projects'?'msg.backup_project_hint':'msg.backup_skills_hint');
       input.oninput=invalidateBackupPlan;label.appendChild(text);label.appendChild(input);box.appendChild(label);
-      backupState[kind].push({key,input});
+      backupState[kind].push({key,input,label:text});
     }
   }
-  $('#backupReport').textContent=[tr('msg.backup_loaded',{n:summary.count}),...backupErrors(summary.errors)].join('\n');
+  showBackupReport(()=>{
+    const health=summary.health;
+    return [tr('msg.backup_loaded',{n:summary.count}),
+      health?tr('ui.backup_health_summary',health):'',
+      health?.incremental?tr('ui.backup_delta_restore'):'',
+      ...backupErrors(summary.errors)].filter(Boolean).join('\n');
+  });
 }
 async function inspectBackup(upload=false){
   if(state.transferring)return;
@@ -85,7 +113,7 @@ async function inspectBackup(upload=false){
       $('#backupPath').value=summary.path;
     }else summary=await api('/api/backup-inspect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({package:$('#backupPath').value.trim()})});
     renderBackupMapping(summary);
-  }catch(e){$('#backupReport').textContent=e.message;toast(e.message,true);}
+  }catch(e){showBackupReport(()=>e.error_message?ts(e.error_message):e.message);toast(e.message,true);}
   finally{backupBusy(false);}
 }
 async function previewBackup(){
@@ -95,11 +123,13 @@ async function previewBackup(){
     const payload={package:$('#backupPath').value.trim(),options:backupOptions()};
     const report=await api('/api/backup-preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     backupState.plan={...report,payload};
+    showBackupReport(()=>{
     const statuses={ready:tr('msg.backup_status_ready'),skip:tr('msg.backup_status_skip'),blocked:tr('msg.backup_status_blocked')};
-    $('#backupReport').textContent=[tr('msg.backup_plan',{ready:report.ready,skip:report.skip,blocked:report.blocked}),
+    return [tr('msg.backup_plan',{ready:report.ready,skip:report.skip,blocked:report.blocked}),
       ...report.rows.map(row=>[AGENTS[row.agent]||row.agent,row.title||row.key,statuses[row.status],row.cwd||row.destination,tm(row,'reason')].filter(Boolean).join(' · ')),
       ...backupErrors(report.errors)].join('\n');
-  }catch(e){$('#backupReport').textContent=e.message;toast(e.message,true);}
+    });
+  }catch(e){showBackupReport(()=>e.error_message?ts(e.error_message):e.message);toast(e.message,true);}
   finally{backupBusy(false);}
 }
 async function importBackup(){
@@ -112,12 +142,12 @@ async function importBackup(){
   try{
     const job=await api('/api/backup-import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...plan.payload,preview_token:plan.token})});
     const result=await watchBackupJob(job);
-    $('#backupReport').textContent=[result.canceled?tr('msg.backup_canceled'):result.ok?tr('msg.backup_complete'):tr('msg.backup_partial'),
+    showBackupReport(()=>[result.canceled?tr('msg.backup_canceled'):result.ok?tr('msg.backup_complete'):tr('msg.backup_partial'),
       tr('msg.backup_imported',{restored:result.restored?.length||0,skipped:result.skipped?.length||0,errors:result.errors?.length||0}),
       ...(result.restored||[]).map(row=>[AGENTS[row.agent]||row.agent,row.title,row.result.to?.path||row.result.path].filter(Boolean).join(' · ')),
-      ...backupErrors(result.errors)].join('\n');
+      ...backupErrors(result.errors)].join('\n'));
     await loadSources();
-  }catch(e){$('#backupReport').textContent=e.message;toast(e.message,true);}
+  }catch(e){showBackupReport(()=>e.error_message?ts(e.error_message):e.message);toast(e.message,true);}
   finally{backupState.job=null;backupBusy(false);}
 }
 function bindBackup(){

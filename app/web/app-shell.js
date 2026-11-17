@@ -160,6 +160,18 @@ function bind(){
     if(id) $('#importId').value = id;
     else toast(tr('ui.this_browser_cannot_generate_a_uuid_enter_a_new_session_id_manually'),true);
   };
+  $('#btnClaudeHandoff').onclick = async ()=>{
+    const selected = state.current;
+    if(!selected) return;
+    try{
+      const result = await api('/api/claude-handoff', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({source:selected.source,id:selected.id,lang})
+      });
+      download('Claude-handoff.txt', result.text);
+      toast(tr('ui.claude_handoff_downloaded'));
+    }catch(error){toast(tr('ui.export_failed_error',{error:error.message}),true);}
+  };
   $('#btnMd').onclick = async ()=>{
     if(!state.current) return;
     const selected = state.current;

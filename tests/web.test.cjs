@@ -50,6 +50,29 @@ test('backup upload uses the selected file and changed mappings invalidate impor
   assert.equal(t.el('#importBackup').disabled,true);
 });
 
+test('backup health changes language without losing the project mapping',async()=>{
+  const t=setup();t.app.bind();
+  const action=t.el('#inspectBackup').onclick();
+  t.response(0,{ok:true,count:2,projects:['/source'],skills:[],health:{sessions:2,skills:0,files:2,bytes:10,missing:0}});
+  await action;
+  const project=t.app.backupState.projects[0].input;
+  project.value='/mapped';
+  assert.match(t.el('#backupReport').textContent,/文件校验通过/);
+  t.app.setLang('en');
+  assert.match(t.el('#backupReport').textContent,/File checks passed/);
+  assert.equal(project.value,'/mapped');
+});
+
+test('Claude Desktop handoff requests the selected conversation in the chosen language',async()=>{
+  const t=setup();t.app.bind();t.app.setLang('en');
+  t.app.state.current={source:'codex',id:'fixture'};
+  const action=t.el('#btnClaudeHandoff').onclick();
+  assert.equal(t.requests[0].url,'/api/claude-handoff');
+  assert.deepEqual(JSON.parse(t.requests[0].options.body),{source:'codex',id:'fixture',lang:'en'});
+  t.response(0,{ok:true,text:'synthetic handoff'});
+  await action;
+});
+
 test('batch import sends the preview token and reports partial results without claiming success',async()=>{
   const t=setup();t.app.bind();t.el('#backupPath').value='/backup.zip';t.el('#backupConflict').value='skip';
   const checking=t.app.previewBackup();

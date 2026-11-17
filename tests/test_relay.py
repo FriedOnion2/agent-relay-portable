@@ -304,6 +304,24 @@ class PathsTests(unittest.TestCase):
 
 
 class MarkdownLanguageTests(unittest.TestCase):
+    def test_claude_handoff_exports_only_dialogue_with_localized_prompt(self):
+        from unittest.mock import patch
+        conversation = ir.Conversation(cwd='/private/project', turns=[
+            ir.Turn(ir.SYSTEM, [ir.Block.text_block('system-instruction')]),
+            ir.Turn(ir.USER, [ir.Block.text_block('用户原文')]),
+            ir.Turn(ir.ASSISTANT, [ir.Block.thinking_block('private-thinking'),
+                                  ir.Block.tool_result('a', 'private-tool-output'),
+                                  ir.Block.text_block('assistant reply')]),
+        ])
+        with patch.object(registry, 'read_conversation', return_value=conversation):
+            for lang, heading in [('zh', '以下文字'), ('en', 'The text below')]:
+                output = registry.export_claude_handoff('codex', 'fixture', lang)
+                self.assertTrue(output.startswith(heading))
+                self.assertIn('用户原文', output)
+                self.assertIn('assistant reply', output)
+                for value in ('private-thinking', 'private-tool-output', '/private/project', 'system-instruction'):
+                    self.assertNotIn(value, output)
+
     def test_markdown_export_follows_the_requested_language(self):
         from relay.adapters.markdown import render
         conv = ir.Conversation(source="synthetic", title="", cwd="/tmp/p", model="m", truncated=True, turns=[

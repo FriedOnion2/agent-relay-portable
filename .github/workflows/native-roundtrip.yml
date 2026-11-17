@@ -5,6 +5,9 @@ on:
       source_sha:
         type: string
         required: false
+      codex_version:
+        type: string
+        required: false
   workflow_dispatch:
 permissions:
   contents: read
@@ -22,7 +25,11 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
-      - run: npm install -g @openai/codex
+      - name: Install Codex
+        shell: bash
+        env:
+          CLIENT_VERSION: ${{ inputs.codex_version || 'latest' }}
+        run: npm install -g "@openai/codex@$CLIENT_VERSION"
       - run: python scripts/smoke_cross_device.py --phase windows-source --output outgoing
       - uses: actions/upload-artifact@v7
         with:
@@ -43,7 +50,11 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
-      - run: npm install -g @openai/codex
+      - name: Install Codex
+        shell: bash
+        env:
+          CLIENT_VERSION: ${{ inputs.codex_version || 'latest' }}
+        run: npm install -g "@openai/codex@$CLIENT_VERSION"
       - uses: actions/download-artifact@v8
         with:
           name: native-windows-source
@@ -68,7 +79,11 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
-      - run: npm install -g @openai/codex
+      - name: Install Codex
+        shell: bash
+        env:
+          CLIENT_VERSION: ${{ inputs.codex_version || 'latest' }}
+        run: npm install -g "@openai/codex@$CLIENT_VERSION"
       - uses: actions/download-artifact@v8
         with:
           name: native-ubuntu-return

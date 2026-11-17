@@ -213,6 +213,61 @@ class BackupTests(unittest.TestCase):
             backup.restore(package, self.options, report['token'])
         self.assertFalse((self.root / 'other-target').exists())
 
+    def test_incremental_backups_cover_all_builtin_sources_and_chain(self):
+        writers = {}
+        for agent in registry._ADAPTERS:
+            home = str(self.root / 'incremental' / agent)
+            registry._CACHE[agent] = registry.get(agent, home=home)
+            if agent != 'yuanbao':
+                writable = {'claude_sdk': 'claude', 'codebuddy': 'workbuddy'}.get(agent, agent)
+                writers[agent] = registry.get(writable, home=home)
+
+        def seed(n):
+            for writer in writers.values():
+                writer.write(sample(), cwd=str(self.project),
+                             session_id='11111111-1111-4111-8111-11111111111%d' % n)
+            adapter = registry._CACHE['yuanbao']
+            folder = Path(adapter.home)
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / ('sample-%d.json' % n)).write_text(json.dumps({
+                'source': 'yuanbao', 'id': 'yuanbao-%d' % n, 'cwd': str(self.project),
+                'messages': [{'role': 'user', 'content': 'fixture-%d' % n}],
+            }), encoding='utf-8')
+
+        agents = list(registry._ADAPTERS)
+        seed(1)
+        full = backup.export('sessions', agents, project='old project', since='2000-01-01')
+        self.assertTrue(full['ok'], full)
+        expected = set(agents)
+        self.assertEqual(set(backup.inspect(full['path'])['health']['agents']), expected)
+        self.assertEqual(backup.export('sessions', agents, baseline=full['path'])['unchanged'], len(agents))
+        self.assertTrue(backup.export('sessions', agents, project='no-match')['empty'])
+        seed(2)
+        delta = backup.export('sessions', agents, baseline=full['path'])
+        self.assertTrue(delta['ok'], delta)
+        self.assertEqual((delta['processed'], delta['unchanged']), (len(agents), len(agents)))
+        check = backup.inspect(delta['path'])['health']
+        self.assertTrue(check['incremental'])
+        self.assertEqual(set(check['agents']), expected)
+        self.assertEqual(backup.export('sessions', agents, baseline=delta['path'])['unchanged'], 2 * len(agents))
+
+        changed = Path(registry._CACHE['yuanbao'].home) / 'sample-1.json'
+        changed.write_text(changed.read_text().replace('fixture-1', 'edited content'), encoding='utf-8')
+        newer = backup.export('sessions', agents, baseline=delta['path'])
+        self.assertEqual((newer['processed'], newer['unchanged']), (1, 2 * len(agents) - 1))
+        self.assertEqual(backup.inspect(newer['path'])['health']['agents'], {'yuanbao': 1})
+
+        registry._CACHE.update({
+            agent: registry.get(agent, home=str(self.root / 'restored' / agent)) for agent in agents
+        })
+        for package in (full, delta):
+            plan = backup.plan(package['path'])
+            self.assertEqual((plan['ready'], plan['blocked']), (len(agents), 0), plan)
+            result = backup.restore(package['path'], preview_token=plan['token'])
+            self.assertTrue(result['ok'], result)
+            self.assertEqual(len(result['restored']), len(agents))
+        self.assertTrue(all(len(list(registry.get(agent).discover())) == 2 for agent in agents))
+
     def test_batch_archive_uses_one_zip_and_skill_restore_has_an_undo_receipt(self):
         from relay import oplog
 

@@ -60,6 +60,7 @@ jobs:
     uses: ./.github/workflows/native-roundtrip.yml
     with:
       source_sha: ${{ needs.meta.outputs.sha }}
+      codex_version: "0.163.0"
   build:
     needs: meta
     if: needs.meta.outputs.mode == 'dev' || needs.meta.outputs.mode == 'stable'
