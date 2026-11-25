@@ -10,7 +10,7 @@
 
 **在本机浏览、导出和迁移 AI 编程助手的对话与 Skill，并可打包到移动盘，在另一台设备恢复。**
 
-支持 **WorkBuddy、WorkBuddy AI 国际版、DeepSeek Harness（DSH）、CodeBuddy、Claude Code、Claude Agent SDK、OpenAI Codex、腾讯元宝 JSON 导出**，提供中英文网页和命令行，适用于 Windows、macOS、Ubuntu / Linux。
+支持 **WorkBuddy、WorkBuddy AI 国际版、DeepSeek Harness（DSH）、CodeBuddy、Claude Code、Claude Agent SDK、OpenAI Codex、腾讯元宝 JSON 导出、Gemini CLI、Gemini Apps 与 Google Antigravity**，提供中英文网页和命令行，适用于 Windows、macOS、Ubuntu / Linux。
 
 **WorkBuddy 国内版与国际版已分开识别**：国内版使用 `workbuddy` / `~/.workbuddy`，国际版使用 `workbuddy_ai` / `~/.workbuddy-ai`。两版拥有独立的来源、目标、目录配置和原生包标识，不自动混合会话；DSH、CodeBuddy 也保持独立。两版之间及各自与 DSH、Claude Code、Codex 的双向文件转换已加入回归验证；CodeBuddy、Claude Agent SDK、元宝仅支持迁出到两版。文件转换通过不代表客户端续聊通过，详见[互传验证矩阵](docs/reference/compatibility.md#workbuddy-国内版与国际版互传)。
 
@@ -34,9 +34,9 @@
 
 ## 快速开始
 
-**正式版：[v1.2.5](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v1.2.5)**。各 Agent 的实测范围见下方支持表与 [兼容状态](docs/reference/compatibility.md)。
+**正式版：[v1.5.0](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v1.5.0)**。各 Agent 的实测范围见下方支持表与 [兼容状态](docs/reference/compatibility.md)。
 
-当前正式版本：**1.2.5**。便携启动与迁移验证范围见兼容状态；正式版不表示所有客户端均支持恢复后续聊。
+当前正式版本：**1.5.0**。便携启动与迁移验证范围见兼容状态；正式版不表示所有客户端均支持恢复后续聊。
 
 **普通用户**：到 [Releases](https://github.com/FriedOnion2/agent-relay-portable/releases) 下载 `AgentRelay-<版本>-universal.zip`，完整解压后运行启动器。总包内置 Python 与依赖，**无需另装 Python / Node.js，首次启动不联网下载**。不要选择 GitHub 自动生成的 Source code 压缩包。
 
@@ -84,7 +84,7 @@ Ubuntu / macOS 可用 `Ubuntu首次准备.sh` / `Mac首次准备.command` 自动
 | OpenAI Codex | `~/.codex/sessions` | ✅ | ✅ | 真实客户端已验证 |
 | 腾讯元宝 JSON 导出 | 便携目录 `imports/yuanbao` | ✅ | 仅导出文件存包恢复 | 合成 JSON 回归，未验证原生客户端 |
 
-### 开发版新增来源
+### Gemini 与 Antigravity
 
 | 来源 | 默认位置 | 支持范围 |
 | --- | --- | --- |
