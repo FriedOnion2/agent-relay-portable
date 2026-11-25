@@ -308,8 +308,8 @@ class Handler(BaseHTTPRequestHandler):
                 from relay import preview
                 mode = body.get('mode') or 'convert'
                 if mode == 'restore-session':
-                    if not body.get('package') or not body.get('cwd'):
-                        return self._error(message_text('msg.missing_package_path_local_project_directory'))
+                    if not body.get('package'):
+                        return self._error(message_text('msg.missing_session_package_path'))
                     return self._json(preview.package(body.get('package'), body.get('cwd'),
                                body.get('session_id') or None, body.get('dsh_compression') or 'zstd'))
                 if mode in ('import-windows', 'import-ubuntu', 'export-windows'):
@@ -348,9 +348,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(store_session(body["source"], body["id"], body.get("storage")))
             if u.path == "/api/restore-session":
                 from relay.session_store import restore_session
-                if not body.get("package") or not body.get("cwd"):
-                    return self._error(message_text('msg.missing_package_path_local_target_project_directory'))
-                return self._json(restore_session(body["package"], body["cwd"], body.get("session_id") or None,
+                if not body.get("package"):
+                    return self._error(message_text('msg.missing_session_package_path'))
+                return self._json(restore_session(body["package"], body.get("cwd"), body.get("session_id") or None,
                                                   body.get("dsh_compression") or "zstd", body.get('preview_token')))
             if u.path in ("/api/import-ubuntu", "/api/export-windows"):
                 from relay.native_import import import_ubuntu, export_windows

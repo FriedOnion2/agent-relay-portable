@@ -25,6 +25,8 @@ def _agent(key):
         raise ValueError(message_text('err.unknown_agent'))
     if native == 'yuanbao':
         raise ValueError(message_text('err.yuanbao_no_skill_store'))
+    if getattr(registry._ADAPTERS[native], 'portable_context', False):
+        raise ValueError(message_text('err.google_context_skill_unsupported'))
     return native
 
 

@@ -184,6 +184,8 @@ DEFAULT_CONFIG = {
         "workbuddy_ai": "",
         "codebuddy": "",
         "yuanbao": "",
+        "gemini": "",
+        "antigravity": "",
     },
     "port": 8745,
     "open_browser": True,

@@ -86,7 +86,8 @@ class ReverseMigrationTests(unittest.TestCase):
             if os.name != "nt":
                 stack.enter_context(patch.object(native_import, "_windows_cwd", return_value=cwd))
             registry._CACHE.update(self.targets)
-            self.assertEqual(len(registry.all_keys()), 15)
+            self.assertEqual(set(registry.all_keys()), set(registry._ADAPTERS) |
+                             {'ubuntu_' + key for key in registry.cross_system_keys()})
             self.assertFalse(any(k.startswith("windows_") for k in registry.all_keys()))
             for key in registry.cross_system_keys():
                 for row in registry.list_sessions("ubuntu_" + key):

@@ -1121,5 +1121,12 @@
   "ui.backup_health_summary": "File checks passed. {sessions} conversations, {skills} Skills, {files} files, {bytes} original bytes, {missing} export errors.",
   "ui.backup_delta_restore": "This is an incremental backup. Restore earlier packages first, then preview conflicts for this package.",
   "ui.backup_unchanged": "Skipped {count} unchanged items.",
-  "msg.backup_baseline_incomplete": "The baseline has export errors. Use a successfully exported archive."
+  "msg.backup_baseline_incomplete": "The baseline has export errors. Use a successfully exported archive.",
+  "err.google_context_format": "Could not read this Google source record. Check its format, size, and location.",
+  "err.google_context_skill_unsupported": "This source supports session and artifact archives only.",
+  "msg.gemini_read_note": "Reads Gemini CLI sessions saved as JSON or JSONL.",
+  "msg.antigravity_read_note": "Reads Antigravity Markdown artifacts and manually saved text.",
+  "msg.google_context_restore_note": "Restores to the AgentRelay imports folder for browsing, search, and migration out. The project folder is optional.",
+  "msg.google_context_preserved": "Archived conversation or artifact content",
+  "msg.missing_session_package_path": "Enter the session package path."
 }

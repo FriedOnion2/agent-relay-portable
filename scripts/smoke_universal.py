@@ -33,7 +33,7 @@ def smoke(asset):
             with zipfile.ZipFile(asset) as archive:
                 archive.extractall(destination)
         root = next(path for path in destination.iterdir() if path.is_dir()).resolve()
-        homes = {name: str(destination / 'fixtures' / name) for name in ('workbuddy', 'workbuddy_ai', 'dsh', 'codebuddy', 'claude', 'claude_sdk', 'codex', 'yuanbao')}
+        homes = {name: str(destination / 'fixtures' / name) for name in ('workbuddy', 'workbuddy_ai', 'dsh', 'codebuddy', 'claude', 'claude_sdk', 'codex', 'yuanbao', 'gemini', 'antigravity')}
         for home in homes.values():
             Path(home).mkdir(parents=True)
         config = {'agent_homes': homes, 'open_browser': False}

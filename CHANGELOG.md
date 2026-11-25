@@ -5,7 +5,8 @@
 
 ## [Unreleased]
 
-（暂无未发布条目）
+### Added
+- 支持浏览、搜索和迁出 Gemini CLI 的 JSON／JSONL 会话、Google Antigravity 的 Markdown 产物及手工保存的文本。两者均可完整或增量备份，在另一台设备的 AgentRelay 中恢复。
 
 ## [1.2.5] - 2026-11-18
 

@@ -137,7 +137,7 @@ def export(mode='all', agents=None, include_thinking=True, progress=None, cancel
                     if exc.args and getattr(exc.args[0], 'code', '') == 'msg.backup_limit':
                         raise
                     errors.append({'agent': agent, 'id': row.id, 'error': error_text(exc)})
-            if mode == 'all' and agent != 'yuanbao':
+            if mode == 'all' and 'skill_store' in source.info().get('capabilities', []):
                 discovered = skill_store.discover_skills(agent)
                 errors.extend(dict(row, agent=agent) for row in discovered['errors'])
                 for row in discovered['skills']:
@@ -304,7 +304,7 @@ def _plan(manifest, files, options):
             row = {'key': key, 'agent': agent, 'kind': 'session' if is_session else 'skill', 'status': 'ready'}
             try:
                 target = registry.get(agent)
-                targets[agent] = target.home
+                targets[agent] = str(target.restored_home) if getattr(target, "portable_context", False) else target.home
                 if is_session:
                     session = inner['session']
                     row.update(title=session.get('title') or session['id'], original_cwd=session.get('cwd') or '')
@@ -329,9 +329,9 @@ def _plan(manifest, files, options):
                         row['status'] = 'skip'
                         row['reason'] = message_text('msg.backup_exists')
                     else:
-                        if not Path(row['cwd']).is_absolute():
-                            _fail('project_required')
                         data = session_store.SessionPackage(inner, _members(item, files))
+                        if data.google_conversation is None and not Path(row['cwd']).is_absolute():
+                            _fail('project_required')
                         # The shared native preview validates directory existence
                         # and Windows path rules before any target writes.
                         preview.package_report(data, row['cwd'], row['session_id'], 'none')

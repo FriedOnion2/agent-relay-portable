@@ -12,7 +12,9 @@
     "workbuddy_ai": "",
     "codebuddy": "",
     "claude_sdk": "",
-    "yuanbao": ""
+    "yuanbao": "",
+    "gemini": "",
+    "antigravity": ""
   },
   "port": 8745,
   "_双系统说明": "Ubuntu 先挂载 Windows 分区，再填写 /media/用户名/分区/Users/Windows用户名；新增 Windows 只读来源，保留本机来源。Windows/macOS 忽略此项。",

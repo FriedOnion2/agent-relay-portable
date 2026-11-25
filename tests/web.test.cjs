@@ -324,11 +324,11 @@ test('export failure is shown to the user and does not reject the event handler'
   assert.match(t.el('#toast').children[0].textContent,/offline/);
 });
 
-test('eight source tabs and only supported writable targets are offered',()=>{
+test('ten source tabs and only supported writable targets are offered',()=>{
   const t=setup();
   t.app.buildTabs();
   assert.deepEqual(t.el('#tabs').children.map(x=>x.textContent),
-    ['WorkBuddy','WorkBuddy AI (International)','DeepSeek Harness','CodeBuddy','Claude Code','Claude Agent SDK','OpenAI Codex','Tencent Yuanbao']);
+    ['WorkBuddy','WorkBuddy AI (International)','DeepSeek Harness','CodeBuddy','Claude Code','Claude Agent SDK','OpenAI Codex','Tencent Yuanbao','Gemini CLI','Google Antigravity']);
   t.app.state.source='dsh';
   t.app.buildTarget();
   assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','workbuddy_ai','claude','codex']);
@@ -377,7 +377,7 @@ test('Windows sources appear separately with paths and never become writable tar
   t.app.state.source='windows_codex';
   t.app.buildTabs();
   t.app.buildTarget();
-  assert.equal(t.el('#tabs').children.length,9);
+  assert.equal(t.el('#tabs').children.length,11);
   assert.equal(t.el('#tabs').children.at(-1).textContent,'Windows · OpenAI Codex');
   assert.match(t.el('#sourceNote').textContent,/\/media\/Win/);
   assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','workbuddy_ai','dsh','claude','codex']);

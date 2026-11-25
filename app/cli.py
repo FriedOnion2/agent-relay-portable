@@ -62,7 +62,9 @@ from relay import plugins  # noqa: E402
 plugins.configure(_CFG.get('plugins', []))
 
 AGENTS = list(bootstrap.SOURCES)
-READ_AGENTS = AGENTS + [prefix + k for prefix in ("windows_", "ubuntu_") for k in registry.cross_system_keys()]
+NATIVE_AGENTS = registry.cross_system_keys()
+READ_AGENTS = AGENTS + [prefix + k for prefix in ("windows_", "ubuntu_") for k in NATIVE_AGENTS]
+NATIVE_READ_AGENTS = NATIVE_AGENTS + [key for key in READ_AGENTS if key.startswith(("windows_", "ubuntu_"))]
 
 
 def cmd_import_yuanbao(args):
@@ -673,7 +675,7 @@ def build_parser():
     p9.add_argument("--clear", action="store_true")
     p9.set_defaults(func=cmd_windows_use)
     p10 = sub.add_parser("import-windows", help=T('h_import_windows'))
-    p10.add_argument("agent", choices=[key for key in READ_AGENTS if key != 'yuanbao'])
+    p10.add_argument("agent", choices=NATIVE_READ_AGENTS)
     p10.add_argument("id", help=T('h_iw_id'))
     p10.add_argument("--cwd", required=True, help=T('h_iw_cwd'))
     p10.add_argument("--session-id", help=T('h_iw_session_id'))
@@ -691,7 +693,7 @@ def build_parser():
                             ("import-ubuntu", T('h_import_ubuntu'))):
         command = sub.add_parser(name, help=help_text)
         command.add_argument("agent", choices=registry.cross_system_keys() if name == "export-windows" else
-                             [key for key in READ_AGENTS if key != 'yuanbao'])
+                             NATIVE_READ_AGENTS)
         command.add_argument("id")
         command.add_argument("--cwd", required=True, help=T('h_ew_cwd'))
         if name == "export-windows":
@@ -715,30 +717,30 @@ def build_parser():
     stored.set_defaults(func=cmd_storage)
     restore = sub.add_parser("restore-session", help=T('h_restore_session'))
     restore.add_argument("package")
-    restore.add_argument("--cwd", required=True)
+    restore.add_argument("--cwd", default="")
     restore.add_argument("--session-id")
     restore.add_argument("--dsh-compression", choices=["zstd", "none"], default="zstd")
     restore.add_argument('--dry-run', action='store_true')
     restore.add_argument('--preview-token')
     restore.set_defaults(func=cmd_storage)
     skills = sub.add_parser("skills", help=T('h_skills'))
-    skills.add_argument("agent", choices=[key for key in READ_AGENTS if key != 'yuanbao'])
+    skills.add_argument("agent", choices=NATIVE_READ_AGENTS)
     skills.add_argument("--skills-dir")
     skills.set_defaults(func=cmd_skill_storage)
     skill_store = sub.add_parser("store-skills", help=T('h_store_skills'))
-    skill_store.add_argument("agent", choices=[key for key in READ_AGENTS if key != 'yuanbao'])
+    skill_store.add_argument("agent", choices=NATIVE_READ_AGENTS)
     skill_store.add_argument("paths", nargs="*")
     skill_store.add_argument("--all", action="store_true")
     skill_store.add_argument("--skills-dir", help=T('h_store_skills_dir'))
     skill_store.add_argument("--storage")
     skill_store.set_defaults(func=cmd_skill_storage)
     stored_skills = sub.add_parser("stored-skills", help=T('h_stored_skills'))
-    stored_skills.add_argument("--agent", choices=[key for key in AGENTS if key != 'yuanbao'])
+    stored_skills.add_argument("--agent", choices=NATIVE_AGENTS)
     stored_skills.add_argument("--storage")
     stored_skills.set_defaults(func=cmd_skill_storage)
     skill_restore = sub.add_parser("restore-skill", help=T('h_restore_skill'))
     skill_restore.add_argument("package")
-    skill_restore.add_argument("--agent", choices=[key for key in READ_AGENTS if key != 'yuanbao'], help=T('h_restore_skill_agent'))
+    skill_restore.add_argument("--agent", choices=NATIVE_READ_AGENTS, help=T('h_restore_skill_agent'))
     skill_restore.add_argument("--skills-dir", help=T('h_restore_skill_dir'))
     skill_restore.add_argument("--name", help=T('h_restore_skill_name'))
     skill_restore.set_defaults(func=cmd_skill_storage)

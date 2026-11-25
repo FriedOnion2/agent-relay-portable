@@ -24,6 +24,9 @@ def store_session(agent, sid, root=None):
 
 def collect_session(agent, sid, root=None):
     source = registry.get(agent)
+    if getattr(source, 'portable_context', False):
+        from . import google_context
+        return google_context.collect(source, sid, root)
     if source.name == 'yuanbao':
         from . import yuanbao
         return yuanbao.collect(source, sid, root)
@@ -126,6 +129,10 @@ class SessionPackage:
         prefixes = tuple("root%d/" % index for index in range(self.count))
         if self.entry not in files or any(not name.startswith(prefixes) for name in files):
             raise ValueError(message_text('msg.invalid_session_package_entry_or_agent_root_declaration'))
+        self.google_conversation = None
+        if getattr(registry._ADAPTERS[self.agent], 'portable_context', False):
+            from . import google_context
+            self.google_conversation = google_context.load(self)
         self.yuanbao_row = None
         if self.agent == "yuanbao":
             from . import yuanbao
@@ -133,6 +140,9 @@ class SessionPackage:
 
     @contextmanager
     def open_source(self):
+        if self.google_conversation is not None:
+            yield SimpleNamespace(read=lambda sid: replace(self.google_conversation))
+            return
         if self.yuanbao_row is not None:
             from . import yuanbao
             yield SimpleNamespace(read=lambda sid: yuanbao.conversation(self.yuanbao_row))
@@ -158,6 +168,9 @@ def restore_session(package, cwd, session_id=None, dsh_compression="zstd", previ
 
 def restore_package(data, package_path, cwd, session_id=None, dsh_compression="zstd", preview_token=None):
     from . import preview
+    if data.google_conversation is not None:
+        from . import google_context
+        return google_context.restore(data, package_path, cwd, session_id, preview_token)
     if data.yuanbao_row is not None:
         from . import yuanbao
         return yuanbao.restore_package(data, package_path, cwd, session_id, dsh_compression, preview_token)

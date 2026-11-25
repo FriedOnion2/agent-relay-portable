@@ -62,7 +62,7 @@ class LinuxLauncherTests(unittest.TestCase):
                     else:
                         self.fail("Linux launcher did not become ready")
                     self.assertEqual({row['name'] for row in rows}, {
-                        'workbuddy', 'workbuddy_ai', 'dsh', 'codebuddy', 'claude', 'claude_sdk', 'codex', 'yuanbao',
+                        'workbuddy', 'workbuddy_ai', 'dsh', 'codebuddy', 'claude', 'claude_sdk', 'codex', 'yuanbao', 'gemini', 'antigravity',
                         'windows_workbuddy', 'windows_workbuddy_ai', 'windows_dsh', 'windows_codebuddy',
                         'windows_claude', 'windows_claude_sdk', 'windows_codex'})
                     source = next(row for row in rows if row["name"] == "windows_codex")
