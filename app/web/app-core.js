@@ -1,8 +1,8 @@
 // 全局状态、界面语言、API 调用、勾选与按钮状态、toast
 // 经典脚本，由 index.html 按顺序加载并共享全局作用域。
-const AGENTS = {workbuddy:'WorkBuddy', workbuddy_ai:'WorkBuddy AI (International)', dsh:'DeepSeek Harness', codebuddy:'CodeBuddy', claude:'Claude Code', claude_sdk:'Claude Agent SDK', codex:'OpenAI Codex', yuanbao:'Tencent Yuanbao', gemini:'Gemini CLI', antigravity:'Google Antigravity'};
+const AGENTS = {workbuddy:'WorkBuddy', workbuddy_ai:'WorkBuddy AI (International)', dsh:'DeepSeek Harness', codebuddy:'CodeBuddy', claude:'Claude Code', claude_sdk:'Claude Agent SDK', codex:'OpenAI Codex', yuanbao:'Tencent Yuanbao', gemini:'Gemini CLI', antigravity:'Google Antigravity', gemini_apps:'Gemini Apps'};
 const state = {source:'workbuddy', target:'claude', sources:[], sessions:[], current:null, turnLimit:40,
-  listRequest:0, sessionRequest:0, transferring:false, detail:null, yuanbaoResult:null};
+  listRequest:0, sessionRequest:0, transferring:false, detail:null, clientImportResults:{}};
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -43,7 +43,7 @@ function applyLang(){
   renderList();
   renderDetail();
   updateActions();
-  renderHome();renderWorkflow();renderOperationResult();renderYuanbaoResult();renderSelectedPackage();
+  renderHome();renderWorkflow();renderOperationResult();renderClientImportResults();renderSelectedPackage();
   renderBackupReport();
   if(corpusState.indexStatus)renderIndexSummary(corpusState.indexStatus);
   if(corpusState.resultCount!=null)renderSearchSummary(corpusState.resultCount);
@@ -144,7 +144,7 @@ function nativeMode(source=state.source){
 function updateActions(){
   updateSelections();
   $('#btnExit').disabled = state.transferring;
-  $('#importYuanbao').disabled = state.transferring;
+  for(const id of ['#importYuanbao','#importGeminiApps']) $(id).disabled = state.transferring;
   $('#btnGo').disabled = !state.current || state.current.truncated || !state.target || state.transferring;
   const mode = nativeMode();
   const native = !!mode;
@@ -160,7 +160,7 @@ function updateActions(){
   $('#btnImport').disabled = !native || !state.current || state.current.truncated ||
     !$('#cwd').value.trim() || (mode==='export-windows' && !$('#projectPath').value.trim()) || state.transferring;
   $('#btnMd').disabled = !state.current;
-  $('#btnClaudeHandoff').disabled = !state.current;
+  for(const id of ['#btnClaudeHandoff','#btnGeminiHandoff']) $(id).disabled = !state.current;
   $('#btnStore').disabled = !state.current || state.current.truncated || state.transferring ||
     !!state.sources.find(s=>s.name===state.source)?.community;
 }

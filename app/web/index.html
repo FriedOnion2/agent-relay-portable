@@ -64,6 +64,11 @@
       <button class="btn" id="importYuanbao"><span data-i18n="ui.yuanbao_import">导入元宝 JSON</span></button>
       <p id="yuanbaoImportResult" class="meta" aria-live="polite"></p>
     </div>
+    <div id="geminiAppsImport" class="side-tools" style="display:none">
+      <label class="field"><span data-i18n="ui.gemini_apps_export_path">Takeout 解压后的 Gemini Apps 活动 JSON 绝对路径</span><input class="input" id="geminiAppsPath" autocomplete="off"></label>
+      <button class="btn" id="importGeminiApps"><span data-i18n="ui.gemini_apps_import">导入 Gemini 活动</span></button>
+      <p id="geminiAppsImportResult" class="meta" aria-live="polite"></p>
+    </div>
     <div class="side-tools">
       <input class="input" id="q" placeholder="搜索标题 / 目录 / id…" autocomplete="off" data-i18n-placeholder="ui.search_title_directory_id">
       <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
@@ -91,6 +96,7 @@
       <p class="mapping-note" id="mappingNote"></p>
     </div>
     <div class="bar session-actions">
+      <button class="btn" id="btnGeminiHandoff" disabled><span data-i18n="ui.gemini_handoff">接力到 Gemini</span></button>
       <button class="btn" id="btnClaudeHandoff" disabled><span data-i18n="ui.claude_handoff">接力到 Claude 桌面</span></button>
       <button class="btn" id="btnMd" disabled><span data-i18n="ui.export_markdown">导出 Markdown</span></button>
       <button class="btn" id="btnStore" disabled><span data-i18n="ui.store_this_session">存储此会话</span></button>

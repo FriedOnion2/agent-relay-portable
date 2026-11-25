@@ -116,3 +116,33 @@ class GoogleTests(unittest.TestCase):
         doc['id'] = '../outside'
         with self.assertRaises(ValueError):
             session_store.SessionPackage(manifest, {data.entry: (json.dumps(doc).encode(), False)})
+
+    def test_gemini_apps_takeout_is_idempotent_and_handoff_is_text(self):
+        from relay import gemini_apps
+        from relay.adapters.google import GeminiAppsAdapter
+        store = self.root / 'imports/gemini_apps'
+        adapter = GeminiAppsAdapter(str(store))
+        registry._CACHE['gemini_apps'] = adapter
+        first = {'products': ['Gemini'], 'header': 'Gemini Apps', 'title': 'Prompted Exported question',
+                 'time': '2026-03-04T10:00:00Z',
+                 'safeHtmlItem': [{'html': '<p>Reply &amp; content</p><script>ignore me</script>'
+                                           '<p>Second line</p>'}]}
+        unrelated = {'header': 'Maps', 'time': '2026-03-04T10:00:00Z', 'title': 'Prompted Wrong product'}
+        second = dict(first, title='Prompted Another question', time='2026-03-04T10:01:00Z')
+        path = self.file('takeout/MyActivity.json', json.dumps([first, first, unrelated, second]))
+        result = gemini_apps.import_file(str(path))
+        self.assertEqual(result, {'ok': True, 'imported': 2, 'skipped': 1, 'ignored': 1})
+        self.assertEqual(gemini_apps.import_file(str(path))['skipped'], 3)
+        rows = list(adapter.discover())
+        self.assertEqual(len(rows), 2)
+        first_id = next(row.id for row in rows if row.title == 'Exported question')
+        conv = adapter.read(first_id)
+        self.assertEqual(conv.turns[0].text(), 'Exported question')
+        self.assertIn('Reply & content', conv.turns[1].text())
+        self.assertNotIn('ignore me', conv.turns[1].text())
+        handoff = registry.export_chat_handoff('gemini_apps', first_id, 'en', 'msg.gemini_handoff_prompt')
+        self.assertIn('next Gemini request', handoff)
+        self.assertIn('Reply & content', handoff)
+        self.assertNotIn('Wrong product', handoff)
+        with self.assertRaises(ValueError):
+            gemini_apps.import_file(str(self.file('takeout/wrong.json', json.dumps([unrelated]))))

@@ -227,6 +227,13 @@ class BackupTests(unittest.TestCase):
                 writers[agent] = registry.get(writable, home=home)
 
         def seed(n):
+            from relay.gemini_apps import import_file
+            takeout = self.root / 'MyActivity.json'
+            takeout.write_text(json.dumps([{
+                'header': 'Gemini Apps', 'title': 'Prompted Gemini activity %d' % n,
+                'time': '2026-01-0%dT10:00:00Z' % n,
+            }]), encoding='utf-8')
+            self.assertEqual(import_file(str(takeout))['imported'], 1)
             for writer in writers.values():
                 writer.write(sample(), cwd=str(self.project),
                              session_id='11111111-1111-4111-8111-11111111111%d' % n)
@@ -250,7 +257,7 @@ class BackupTests(unittest.TestCase):
         agents = list(registry._ADAPTERS)
         seed(1)
         matches = backup.export('sessions', agents, project='old project', since='2000-01-01')
-        self.assertEqual(set(backup.inspect(matches['path'])['health']['agents']), set(agents) - {'antigravity'})
+        self.assertEqual(set(backup.inspect(matches['path'])['health']['agents']), set(agents) - {'antigravity', 'gemini_apps'})
         with patch('relay.skill_store.Path.home', return_value=self.root):
             full = backup.export('all', agents, since='2000-01-01')
         self.assertTrue(full['ok'], full)

@@ -47,7 +47,9 @@ function buildTabs(){
   const fullNote = [note, location ? tr('ui.read_from') + location : '', tm(sourceInfo,'error')].filter(Boolean).join('\n');
   $('#sourceNote').textContent = fullNote;
   $('#sourceNote').style.display = fullNote ? '' : 'none';
-  $('#yuanbaoImport').style.display = state.source === 'yuanbao' ? '' : 'none';
+  for(const [source,{field}] of Object.entries(clientExports)){
+    $(`#${field}Import`).style.display = state.source===source ? '' : 'none';
+  }
   const labels = {...AGENTS};
   state.sources.forEach(s=>{ labels[s.name] = tm(s,'label') || s.name; });
   Object.keys(labels).forEach(k=>{
@@ -121,6 +123,7 @@ function bind(){
   $('#closeEnvironment').onclick=()=>{showPage('sessions');};
   $('#saveDeviceHome').onclick=saveDeviceHome;
   $('#importYuanbao').onclick=importYuanbao;
+  $('#importGeminiApps').onclick=()=>importClientExport('gemini_apps');
   $('#runHealth').onclick=runHealth;
   $('#selectAllSessions').onchange=e=>selectAll('sessions',e.target.checked);
   $('#selectAllSkills').onchange=e=>selectAll('skills',e.target.checked);
@@ -160,18 +163,21 @@ function bind(){
     if(id) $('#importId').value = id;
     else toast(tr('ui.this_browser_cannot_generate_a_uuid_enter_a_new_session_id_manually'),true);
   };
-  $('#btnClaudeHandoff').onclick = async ()=>{
-    const selected = state.current;
-    if(!selected) return;
-    try{
-      const result = await api('/api/claude-handoff', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({source:selected.source,id:selected.id,lang})
-      });
-      download('Claude-handoff.txt', result.text);
-      toast(tr('ui.claude_handoff_downloaded'));
-    }catch(error){toast(tr('ui.export_failed_error',{error:error.message}),true);}
-  };
+  for(const client of ['Claude','Gemini']){
+    const key=client.toLowerCase();
+    $(`#btn${client}Handoff`).onclick = async ()=>{
+      const selected=state.current;
+      if(!selected) return;
+      try{
+        const result=await api(`/api/${key}-handoff`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({source:selected.source,id:selected.id,lang})
+        });
+        download(`${client}-handoff.txt`, result.text);
+        toast(tr(`ui.${key}_handoff_downloaded`));
+      }catch(error){toast(tr('ui.export_failed_error',{error:error.message}),true);}
+    };
+  }
   $('#btnMd').onclick = async ()=>{
     if(!state.current) return;
     const selected = state.current;

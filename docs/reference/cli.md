@@ -91,6 +91,7 @@ python3 app/cli.py import-backup <搬家包.zip> --mapping mapping.json --previe
 |---|---|
 | `export <来源> <id> [-o 文件]` | 导出成 Markdown 交接文档；`--no-thinking`、`--no-tools`、`--max-chars N`、`--redact-secrets` 可裁剪内容 |
 | `import-yuanbao <JSON 文件>` | 导入元宝导出的 JSON（不读取也不修改元宝客户端的数据库） |
+| `import-gemini-apps <JSON 文件>` | 导入已解压的「我的活动 → Gemini Apps」Takeout JSON。每条活动单独保存，重复记录会跳过。 |
 
 ## Windows ↔ Ubuntu 原生搬迁
 

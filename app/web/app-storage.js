@@ -1,4 +1,4 @@
-const sourcesWithoutSkills = new Set(['yuanbao','gemini','antigravity']);
+const sourcesWithoutSkills = new Set(['yuanbao','gemini','antigravity','gemini_apps']);
 // Skill 与对话存储、恢复
 // 经典脚本，由 index.html 按顺序加载并共享全局作用域。
 function buildSkillAgents(){

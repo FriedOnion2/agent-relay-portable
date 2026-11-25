@@ -67,6 +67,12 @@ READ_AGENTS = AGENTS + [prefix + k for prefix in ("windows_", "ubuntu_") for k i
 NATIVE_READ_AGENTS = NATIVE_AGENTS + [key for key in READ_AGENTS if key.startswith(("windows_", "ubuntu_"))]
 
 
+def cmd_import_gemini_apps(args):
+    from relay import gemini_apps
+    _print_json(gemini_apps.import_file(args.path))
+    return 0
+
+
 def cmd_import_yuanbao(args):
     from relay import yuanbao
     _print_json(yuanbao.import_file(args.path))
@@ -541,6 +547,9 @@ def build_parser():
     import_backup.add_argument('--dry-run', action='store_true')
     import_backup.add_argument('--preview-token')
     import_backup.set_defaults(func=cmd_backup)
+    gemini_import = sub.add_parser('import-gemini-apps', help=T('h_import_gemini_apps'))
+    gemini_import.add_argument('path')
+    gemini_import.set_defaults(func=cmd_import_gemini_apps)
     yuanbao_import = sub.add_parser('import-yuanbao', help=T('h_import_yuanbao'))
     yuanbao_import.add_argument('path', help=T('h_import_yuanbao_path'))
     yuanbao_import.set_defaults(func=cmd_import_yuanbao)

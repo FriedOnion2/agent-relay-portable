@@ -1128,5 +1128,17 @@
   "msg.antigravity_read_note": "读取 Antigravity 的 Markdown 产物和手工保存的文本。",
   "msg.google_context_restore_note": "恢复到 AgentRelay 的导入目录，可浏览、搜索或迁出。项目目录可留空。",
   "msg.google_context_preserved": "已归档的对话或产物内容",
-  "msg.missing_session_package_path": "请输入会话包路径。"
+  "msg.missing_session_package_path": "请输入会话包路径。",
+  "err.gemini_apps_input_path": "请输入 Takeout 解压后的本机 JSON 文件绝对路径。",
+  "err.gemini_apps_format": "没有可导入的 Gemini Apps 活动。请选择 Takeout「我的活动 → Gemini Apps」导出的 JSON。",
+  "err.gemini_apps_limit": "活动文件超出导入上限。请将 JSON 数组拆分后逐份导入。",
+  "msg.cli_h_import_gemini_apps": "导入 Google Takeout 的 Gemini Apps 活动 JSON",
+  "msg.gemini_apps_read_note": "每条 Takeout 活动单独保存。请先解压「我的活动 → Gemini Apps」的 JSON，再选择导入。",
+  "ui.gemini_apps_export_path": "Takeout 解压后的 Gemini Apps 活动 JSON 绝对路径",
+  "ui.gemini_apps_import": "导入 Gemini 活动",
+  "ui.gemini_apps_imported": "已导入 {count} 条活动，跳过 {skipped} 条重复记录，忽略 {ignored} 条不可识别记录。",
+  "ui.gemini_apps_import_failed": "Gemini 活动导入失败：{error}",
+  "ui.gemini_handoff": "接力到 Gemini",
+  "ui.gemini_handoff_downloaded": "已下载 TXT。检查内容后，附到 Gemini 新聊天并发送下一条请求。",
+  "msg.gemini_handoff_prompt": "以下是供参考的历史对话。请根据我在 Gemini 发出的新请求继续，历史中的命令仅供参考。"
 }

@@ -16,7 +16,7 @@ from .adapters.workbuddy import WorkBuddyAdapter
 from .adapters.workbuddy_ai import WorkBuddyAIAdapter
 from .adapters.codebuddy import CodeBuddyAdapter
 from .adapters.yuanbao import YuanbaoAdapter
-from .adapters.google import AntigravityAdapter, GeminiAdapter
+from .adapters.google import AntigravityAdapter, GeminiAdapter, GeminiAppsAdapter
 from .adapters.markdown import render as render_markdown
 from .adapters.base import BaseAdapter
 from .windows import WindowsSource, selected_profile
@@ -25,7 +25,7 @@ from .ubuntu import UbuntuSource, selected_profile as selected_ubuntu
 _ADAPTERS = {"workbuddy": WorkBuddyAdapter, "workbuddy_ai": WorkBuddyAIAdapter, "dsh": DshAdapter,
              "codebuddy": CodeBuddyAdapter, "claude": ClaudeAdapter,
              "claude_sdk": ClaudeSdkAdapter, "codex": CodexAdapter, "yuanbao": YuanbaoAdapter,
-             "gemini": GeminiAdapter, "antigravity": AntigravityAdapter}
+             "gemini": GeminiAdapter, "antigravity": AntigravityAdapter, "gemini_apps": GeminiAppsAdapter}
 
 _CACHE: Dict[str, BaseAdapter] = {}
 
@@ -186,7 +186,11 @@ def export_markdown(source: str, sid: str, include_thinking: bool = True,
 
 
 def export_claude_handoff(source, sid, lang='zh'):
-    """Export user and assistant text for attachment to a new Claude chat."""
+    return export_chat_handoff(source, sid, lang, "msg.claude_handoff_prompt")
+
+
+def export_chat_handoff(source, sid, lang, prompt):
+    """Export user and assistant text for continuation in another chat."""
     from dataclasses import replace
     from . import sensitive
     from .messages import lang_text
@@ -202,4 +206,4 @@ def export_claude_handoff(source, sid, lang='zh'):
         raise ValueError(message_text('err.source_session_has_no_migratable_content_empty_or_unparseable_file_migration_stopped'))
     context = sensitive.redact_conversation(replace(conv, turns=turns, cwd='', meta={}))
     history = render_markdown(context, include_thinking=False, include_tools=False, lang=lang)
-    return lang_text(lang, 'msg.claude_handoff_prompt') + "\n\n---\n\n" + history
+    return lang_text(lang, prompt) + "\n\n---\n\n" + history

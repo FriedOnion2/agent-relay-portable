@@ -3,7 +3,7 @@ import json
 import uuid
 
 from . import archive, oplog, registry
-from .adapters.google import BLOCK_FIELDS, BLOCK_KINDS, PORTABLE_FORMAT, decode_context
+from .adapters.google import PORTABLE_FORMAT, decode_context, encode_context
 from .messages import text
 from .native_import import _exclusive_lock, _inside
 from .paths import atomic_write, ensure_directory, iso, validate_session_id
@@ -14,16 +14,7 @@ ENTRY = 'root0/context.json'
 
 def collect(adapter, sid, root):
     conv = adapter.read(sid)
-    doc = {key: value for key, value in conv.to_dict().items() if key not in ('meta', 'truncated')}
-    doc['format'] = PORTABLE_FORMAT
-    turns = []
-    for turn in doc['turns']:
-        turn['blocks'] = [{key: value for key, value in block.items() if key in BLOCK_FIELDS}
-                          for block in turn['blocks'] if block['kind'] in BLOCK_KINDS]
-        if turn['blocks']:
-            turns.append(turn)
-    doc['turns'] = turns
-    raw = json.dumps(doc, ensure_ascii=False, sort_keys=True).encode('utf-8')
+    raw = encode_context(conv)
     manifest = {'kind': KIND, 'agent': adapter.name, 'source': adapter.name, 'created_at': iso(),
                 'root_count': 1, 'entry': ENTRY,
                 'session': {'id': conv.id, 'native_id': conv.id, 'selection_id': sid, 'title': conv.title,
@@ -44,20 +35,26 @@ def load(data):
     return conv
 
 
+def context_home(adapter):
+    root = adapter.restored_home
+    if (root.is_symlink() or root.parent.is_symlink() or
+            any(_inside(root, home) for home in adapter.native_roots)):
+        raise ValueError(text('err.google_context_format'))
+    return root
+
+
 def report(data, cwd, session_id):
     from .preview import fingerprint
 
     adapter = registry.get(data.agent)
-    root = adapter.restored_home
-    if root.is_symlink() or root.parent.is_symlink() or _inside(root, adapter.home):
-        raise ValueError(text('err.google_context_format'))
+    root = context_home(adapter)
     if session_id is not None:
         validate_session_id(session_id)
     if cwd:
         cwd = project_directory(cwd)
     return {'ok': True, 'mode': PORTABLE_FORMAT, 'target': data.agent, 'target_cwd': cwd or '',
             'token': fingerprint({'manifest': data.manifest, 'cwd': cwd or '', 'session_id': session_id,
-                                  'destination': str(adapter.restored_home)}),
+                                  'destination': str(root)}),
             'blockers': [], 'preserved': [{'item': text('msg.google_context_preserved'),
                                            'count': len(data.google_conversation.turns)}],
             'degraded': [], 'dropped': [], 'unknown': [], 'warnings': [text('msg.google_context_restore_note')]}
@@ -69,7 +66,7 @@ def restore(data, package_path, cwd, session_id, token):
     plan = report(data, cwd, session_id)
     check_token(token, plan['token'])
     adapter = registry.get(data.agent)
-    root = adapter.restored_home
+    root = context_home(adapter)
     sid = session_id or data.session['id']
     name = validate_session_id(sid)
     destination = root / (name + '.json')

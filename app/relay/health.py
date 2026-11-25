@@ -56,6 +56,14 @@ def check(agent):
                          'toolCalls': [{'id': 'call-health', 'name': 'read_file', 'args': {},
                                         'result': [{'text': 'fixture result'}]}]}]
                 chat.write_text('\n'.join(map(json.dumps, rows)), encoding='utf-8')
+            elif agent == 'gemini_apps':
+                from .gemini_apps import activity
+                from .adapters.google import encode_context
+                item = activity({'header': 'Gemini Apps', 'title': 'Prompted health fixture request',
+                                 'time': '2026-01-01T00:00:00Z',
+                                 'safeHtmlItem': [{'html': '<p>health fixture response</p>'}]})
+                adapter.restored_home.mkdir(parents=True)
+                (adapter.restored_home / (item.id + '.json')).write_bytes(encode_context(item))
             elif agent == 'antigravity':
                 home.mkdir()
                 (home / 'walkthrough.md').write_text('# health fixture request\nhealth fixture response',
@@ -68,11 +76,11 @@ def check(agent):
             restored = adapter.read(discovered[0].id)
             content = '\n'.join(turn.text() for turn in restored.turns)
             expected = ['health fixture request', 'health fixture response']
-            if agent != 'antigravity':
+            if agent not in ('antigravity', 'gemini_apps'):
                 expected.append('fixture thinking' if agent == 'yuanbao' else 'fixture result')
             if not all(value in content for value in expected):
                 raise ValueError(message_text('msg.the_self_check_read_lost_expected_content'))
-            if restored.truncated or restored.stats()['tool_call'] != (0 if agent in ('yuanbao', 'antigravity') else 1):
+            if restored.truncated or restored.stats()['tool_call'] != (0 if agent in ('yuanbao', 'antigravity', 'gemini_apps') else 1):
                 raise ValueError(message_text('msg.wrong_tool_call_count_or_truncated_session_in_the_self_check'))
             row.update(status='passed', read='passed', native_file_roundtrip='passed', error='')
             if not cls.can_write and agent != 'claude_sdk' and agent != 'codebuddy':

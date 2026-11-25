@@ -27,6 +27,19 @@ def portable_home(agent):
     return project_root() / 'imports' / agent
 
 
+def encode_context(conv):
+    doc = {key: value for key, value in conv.to_dict().items() if key not in ('meta', 'truncated')}
+    doc['format'] = PORTABLE_FORMAT
+    turns = []
+    for turn in doc['turns']:
+        turn['blocks'] = [{key: value for key, value in block.items() if key in BLOCK_FIELDS}
+                          for block in turn['blocks'] if block['kind'] in BLOCK_KINDS]
+        if turn['blocks']:
+            turns.append(turn)
+    doc['turns'] = turns
+    return json.dumps(doc, ensure_ascii=False, sort_keys=True).encode('utf-8')
+
+
 def decode_context(raw, agent, path=''):
     doc = json.loads(raw.decode('utf-8-sig'))
     if not isinstance(doc, dict) or doc.get('format') != PORTABLE_FORMAT or doc.get('source') != agent:
@@ -177,11 +190,16 @@ def gemini_conversation(raw, path, identity):
 class GoogleSource(ReadOnlyAdapter):
     cross_system = False
     portable_context = True
+    managed_context = False
 
     def __init__(self, home=None, clean=True, restored_home=None):
         self.home = self.root = resolve_home(self.name, home)
-        self.restored_home = restored_home if restored_home is not None else portable_home(self.name)
-        self.roots = [self.home, str(self.restored_home)]
+        self.native_roots = [] if self.managed_context else [self.home]
+        if restored_home is not None:
+            self.restored_home = restored_home
+        else:
+            self.restored_home = Path(self.home) if self.managed_context else portable_home(self.name)
+        self.roots = [*self.native_roots, str(self.restored_home)]
         self._paths = {}
 
     def available(self):
@@ -317,3 +335,13 @@ class AntigravityAdapter(GoogleSource):
             title = f'{title} ({path.parent.name[:12]})'
         return ir.Conversation(source='antigravity', id=identity, path=str(path), title=ir.summarize_line(title),
                                turns=[ir.Turn(ir.ASSISTANT, [ir.Block.text_block(content)])])
+
+
+
+class GeminiAppsAdapter(GoogleSource):
+    name = 'gemini_apps'
+    label = 'Gemini Apps (Desktop / Web)'
+    managed_context = True
+
+    def native_files(self):
+        return ()

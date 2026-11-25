@@ -7,6 +7,7 @@
 
 ### Added
 - 支持浏览、搜索和迁出 Gemini CLI 的 JSON／JSONL 会话、Google Antigravity 的 Markdown 产物及手工保存的文本。两者均可完整或增量备份，在另一台设备的 AgentRelay 中恢复。
+- Gemini Apps 桌面端和网页端可导入 Takeout 活动 JSON 去重备份，也可下载 TXT 接力到新聊天。
 
 ## [1.2.5] - 2026-11-18
 

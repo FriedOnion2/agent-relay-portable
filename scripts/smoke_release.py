@@ -23,7 +23,7 @@ def smoke(binary):
     binary = Path(binary).resolve()
     with tempfile.TemporaryDirectory(prefix='AgentRelay release 中文 ') as folder:
         root = Path(folder)
-        homes = {name: str(root / name) for name in ('workbuddy', 'workbuddy_ai', 'dsh', 'codebuddy', 'claude', 'claude_sdk', 'codex', 'yuanbao', 'gemini', 'antigravity')}
+        homes = {name: str(root / name) for name in ('workbuddy', 'workbuddy_ai', 'dsh', 'codebuddy', 'claude', 'claude_sdk', 'codex', 'yuanbao', 'gemini', 'antigravity', 'gemini_apps')}
         for home in homes.values():
             Path(home).mkdir()
         (root / 'config.json').write_text(json.dumps({'agent_homes': homes, 'open_browser': False}), encoding='utf-8')
@@ -132,13 +132,23 @@ def smoke(binary):
             {'id': 'question', 'type': 'user', 'content': google_samples['gemini']},
         ]), encoding='utf-8')
         (Path(homes['antigravity']) / 'sample.md').write_text('# ' + google_samples['antigravity'], encoding='utf-8')
+        gemini_activity = root / 'MyActivity.json'
+        gemini_activity.write_text(json.dumps([{'header': 'Gemini Apps', 'time': '2026-01-01T00:00:00Z',
+            'title': 'Prompted portable question', 'safeHtmlItem': [{'html': '<p>便携客户端答复</p>'}]}],
+            ensure_ascii=False), encoding='utf-8')
+        assert json.loads(run('import-gemini-apps', str(gemini_activity)))['imported'] == 1
+        assert json.loads(run('import-gemini-apps', str(gemini_activity)))['skipped'] == 1
+        google_samples['gemini_apps'] = '便携客户端答复'
         for agent, sample in google_samples.items():
             sid = json.loads(run('list', agent, '--json'))[0]['id']
             assert sample in run('export', agent, sid)
             run('store-sessions', agent, sid)
         other = root / '设备 B new root'; other.mkdir()
         other_homes = {name:str(other / name) for name in homes}
-        for home in other_homes.values(): Path(home).mkdir()
+        for name, home in other_homes.items():
+            if name != 'gemini_apps':
+                Path(home).mkdir()
+        del other_homes['gemini_apps']
         (other / 'config.json').write_text(json.dumps({'agent_homes':other_homes}), encoding='utf-8')
         shutil.copytree(root / 'storage', other / 'storage')
         shutil.copytree(root / 'index', other / 'index')
@@ -176,7 +186,8 @@ def smoke(binary):
             context_plan = json.loads(run(*args, '--dry-run', device_root=other))
             restored = json.loads(run(*args, '--preview-token', context_plan['token'], device_root=other))
             assert Path(restored['to']['path']).parent == other.resolve() / 'imports' / agent
-            assert not list(Path(other_homes[agent]).iterdir())
+            if agent in other_homes:
+                assert not list(Path(other_homes[agent]).iterdir())
             assert sample in run('export', agent, restored['to']['id'], device_root=other)
         skill_package = next((other / 'storage/skills/workbuddy').glob('*.zip'))
         target_skills = other / 'skills'
@@ -312,7 +323,7 @@ def smoke_relocation(binary):
         root = parent / 'before'
         shutil.copytree(distribution, root, symlinks=True)
         homes = {name: 'fixtures/' + name for name in
-                 ('workbuddy', 'workbuddy_ai', 'dsh', 'codebuddy', 'claude', 'claude_sdk', 'codex', 'yuanbao', 'gemini', 'antigravity')}
+                 ('workbuddy', 'workbuddy_ai', 'dsh', 'codebuddy', 'claude', 'claude_sdk', 'codex', 'yuanbao', 'gemini', 'antigravity', 'gemini_apps')}
         for home in homes.values():
             (root / home).mkdir(parents=True, exist_ok=True)
         (root / 'config.json').write_text(json.dumps({'agent_homes': homes, 'open_browser': False}), encoding='utf-8')

@@ -67,7 +67,7 @@ function selectPackage(row){
 function renderSelectedPackage(){
   const row=workflow.selectedPackage;if(!row)return;
   $('#selectedPackage').textContent=tr('ui.selected_agent_title_original_project_cwd',{agent:AGENTS[row.agent]||row.agent,title:row.session?.title||row.session?.id||tr('ui.session'),cwd:row.session?.cwd||tr('ui.unknown')});
-  if(['gemini','antigravity'].includes(row.agent))$('#selectedPackage').textContent+='\n'+tr('msg.google_context_restore_note');
+  if(['gemini','antigravity','gemini_apps'].includes(row.agent))$('#selectedPackage').textContent+='\n'+tr('msg.google_context_restore_note');
   if(row.agent==='yuanbao')$('#selectedPackage').textContent+='\n'+tr('ui.yuanbao_package_selected');
 }
 function bindWorkflow(){

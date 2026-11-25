@@ -21,22 +21,34 @@ async function saveDeviceHome(){
   }catch(e){toast(tr('ui.save_failed_error',{error:e.message}),true);}
   finally{state.transferring=false;$('#saveDeviceHome').disabled=false;updateActions();}
 }
-function renderYuanbaoResult(){
-  $('#yuanbaoImportResult').textContent=state.yuanbaoResult?ts(state.yuanbaoResult):'';
+const clientExports = {
+  yuanbao:{field:'yuanbao', api:'yuanbao'},
+  gemini_apps:{field:'geminiApps', api:'gemini-apps'}
+};
+function renderClientImportResults(){
+  for(const [source,{field}] of Object.entries(clientExports)){
+    const message=state.clientImportResults[source];
+    $(`#${field}ImportResult`).textContent=message ? ts(message) : '';
+  }
 }
-async function importYuanbao(){
+function importYuanbao(){return importClientExport('yuanbao');}
+async function importClientExport(source){
   if(state.transferring) return;
-  const path=$('#yuanbaoPath').value.trim();
-  if(!path) return toast(tr('err.yuanbao_input_path'),true);
-  state.transferring=true;updateActions();state.yuanbaoResult=null;renderYuanbaoResult();
+  const {field,api: endpoint}=clientExports[source];
+  const path=$(`#${field}Path`).value.trim();
+  if(!path) return toast(tr(`err.${source}_input_path`),true);
+  state.transferring=true;updateActions();
+  delete state.clientImportResults[source];renderClientImportResults();
   try{
-    const r=await api('/api/import-yuanbao',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path})});
-    state.yuanbaoResult={code:'ui.yuanbao_imported',params:{count:r.imported,skipped:r.skipped}};renderYuanbaoResult();
-    state.source='yuanbao';$('#q').value='';
+    const r=await api('/api/import-'+endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path})});
+    state.clientImportResults[source]={code:`ui.${source}_imported`,params:{count:r.imported,skipped:r.skipped,ignored:r.ignored||0}};
+    renderClientImportResults();
+    state.source=source;$('#q').value='';
     await loadSources();buildTabs();await loadSessions();
   }catch(e){
-    state.yuanbaoResult={code:'ui.yuanbao_import_failed',params:{error:e.error_message||e.message}};
-    renderYuanbaoResult();toast(ts(state.yuanbaoResult),true);
+    const message={code:`ui.${source}_import_failed`,params:{error:e.error_message||e.message}};
+    state.clientImportResults[source]=message;
+    renderClientImportResults();toast(ts(message),true);
   }finally{state.transferring=false;updateActions();}
 }
 async function runHealth(){

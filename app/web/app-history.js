@@ -7,7 +7,7 @@ function historyTime(iso){
 }
 function historyKind(kind){
   return {transfer:tr('ui.converted_migration'),'import-windows':tr('ui.windows_ubuntu_native_migration'),'import-ubuntu':tr('ui.ubuntu_windows_native_migration'),
-          'export-windows':tr('ui.ubuntu_windows_native_migration'), 'google-context-restore':tr('ui.session_restored')}[kind]||kind||'';
+          'export-windows':tr('ui.ubuntu_windows_native_migration'), 'google-context-restore':tr('ui.session_restored'),'gemini-activity-import':tr('ui.gemini_apps_import')}[kind]||kind||'';
 }
 async function openHistory(){
   showPage('history');

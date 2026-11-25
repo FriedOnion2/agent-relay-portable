@@ -185,6 +185,7 @@ DEFAULT_CONFIG = {
         "codebuddy": "",
         "yuanbao": "",
         "gemini": "",
+        "gemini_apps": "",
         "antigravity": "",
     },
     "port": 8745,
