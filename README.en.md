@@ -43,7 +43,7 @@ The task home links to migration, moving between devices, full-text search, and 
 | OpenAI Codex | `~/.codex/sessions` | Read, export, write |
 | Tencent Yuanbao JSON exports | Portable root `imports/yuanbao` | Import JSON, read, migrate out, archive and restore export files |
 
-### New sources in development
+### Gemini and Antigravity
 
 | Source | Default location | Coverage |
 | --- | --- | --- |
@@ -60,16 +60,16 @@ CodeBuddy CLI and IDE appear under one source. DSH and WorkBuddy have separate n
 
 ## Download and launch
 
-### Backup and handoff in v1.2.5
+### Backup and handoff
 
 - Select any built-in agent under **Move between devices**. Filter conversations by project path and starting date. Use the previous full or incremental ZIP as a baseline to save new and changed items. Keep the full archive and all deltas in order. Existing IDs are skipped by default. Choose independent copies to keep changed versions. A DSH child needs its parent already restored or present in the same archive.
 - Select a ZIP and use **Check backup** to verify file checksums and see item counts and original export errors. Map local directories and preview to see restore conflicts.
 - Select a conversation and choose **Continue in Claude Desktop**. Review the TXT file, attach it to a new Claude Desktop chat, and send your next request. [Claude file upload guide](https://support.claude.com/en/articles/8241126-upload-files-to-claude)
 - Switch with **English** or **中文** in the web header. For the CLI, use `relay --lang en` or set `RELAY_LANG=en`.
 
-Stable release: [v1.2.5](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v1.2.5). Verified client coverage and file-level support remain distinct; see [compatibility](docs/reference/compatibility.md) (Chinese). **Rolling dev build:** [`dev`](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/dev) — rebuilt on every merge to `main`, always exactly one, may be unstable.
+Stable release: [v1.5.0](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v1.5.0). Verified client coverage and file-level support remain distinct; see [compatibility](docs/reference/compatibility.md) (Chinese). **Rolling dev build:** [`dev`](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/dev) — rebuilt on every merge to `main`, always exactly one, may be unstable.
 
-Current stable version: **1.2.5**. Portable launch and migration coverage are listed in the compatibility matrix; a stable release does not establish resume support in every client.
+Current stable version: **1.5.0**. Portable launch and migration coverage are listed in the compatibility matrix; a stable release does not establish resume support in every client.
 
 Download **`AgentRelay-<version>-universal.zip`** from [GitHub Releases](https://github.com/FriedOnion2/agent-relay-portable/releases), extract it completely, and use the launcher for your device. GitHub's automatically generated **Source code** archives are for development.
 
