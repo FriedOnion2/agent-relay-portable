@@ -43,6 +43,17 @@ The task home links to migration, moving between devices, full-text search, and 
 | OpenAI Codex | `~/.codex/sessions` | Read, export, write |
 | Tencent Yuanbao JSON exports | Portable root `imports/yuanbao` | Import JSON, read, migrate out, archive and restore export files |
 
+### New sources in development
+
+| Source | Default location | Coverage |
+| --- | --- | --- |
+| Gemini CLI | `~/.gemini/tmp/<project>/chats/` | JSON and JSONL sessions, tool calls and results, textual reasoning summaries |
+| Google Antigravity | `~/.gemini/antigravity/` | Task, implementation plan, and walkthrough Markdown under `brain/<task>/`. Manually saved Markdown or TXT at the source root or under `exports/`. |
+
+**Gemini Apps** is a separate desktop and web source. In Google Takeout, select **My Activity → Gemini Apps** and JSON. Extract the archive and select the activity JSON file in AgentRelay. Each activity is stored separately. Identical entries are skipped on reimport. Imported activities support search, export, migration out and full or incremental backup. Use **Continue in Gemini** in the conversation details to download a TXT attachment for a new Gemini chat. [Google Takeout instructions](https://support.google.com/gemini/answer/16920332)
+
+Set another source directory under **Environment**. Use **Migrate sessions** to browse, export Markdown, or transfer to a writable agent. Both sources support full-text search, session ZIPs, and full or incremental backups. The project folder is optional on restore. Restored records live under the portable root in `imports/gemini` or `imports/antigravity`. Gemini coverage is for local CLI sessions. Each Antigravity artifact or text file is one restorable item. Use the original clients for binary attachments, native resume, and cloud history.
+
 Choose Tencent Yuanbao on the migration page and enter the absolute path of a compatible local JSON export. Obtain the JSON export first: this integration does not read the desktop client database or cloud account, or restore ZIPs into the Yuanbao client. On another device, restore exports into AgentRelay to browse or migrate them out. See the [Yuanbao guide and format contract](docs/reference/formats/yuanbao.md) (Chinese).
 
 CodeBuddy CLI and IDE appear under one source. DSH and WorkBuddy have separate names, configuration, and directories. Claude Agent SDK shares Claude Code's default storage; logs cannot reliably identify the creator. The SDK entry is labelled “Shared Claude records”, and both lists may show the same conversation. CLI history is not automatically relabelled as SDK-specific history.

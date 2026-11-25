@@ -84,6 +84,17 @@ Ubuntu / macOS 可用 `Ubuntu首次准备.sh` / `Mac首次准备.command` 自动
 | OpenAI Codex | `~/.codex/sessions` | ✅ | ✅ | 真实客户端已验证 |
 | 腾讯元宝 JSON 导出 | 便携目录 `imports/yuanbao` | ✅ | 仅导出文件存包恢复 | 合成 JSON 回归，未验证原生客户端 |
 
+### 开发版新增来源
+
+| 来源 | 默认位置 | 支持范围 |
+| --- | --- | --- |
+| Gemini CLI | `~/.gemini/tmp/<项目>/chats/` | JSON／JSONL 会话、工具调用与结果、文本思考摘要 |
+| Google Antigravity | `~/.gemini/antigravity/` | `brain/<任务>/` 下的任务、实施计划和走查 Markdown，以及数据目录顶层或 `exports/` 下手工保存的 Markdown／TXT |
+
+Gemini 桌面端和网页端使用独立的 **Gemini Apps** 来源。在 Google Takeout 选择「我的活动 → Gemini Apps」和 JSON 格式，解压后在该来源选择活动 JSON 文件。每条活动单独保存，重复导入同一内容自动跳过。已导入的活动可搜索、导出、迁出及进行完整或增量备份。在会话详情选择「接力到 Gemini」可下载 TXT，将它附到 Gemini 新聊天，再发送下一条请求。 [Google Takeout 导出说明](https://support.google.com/gemini/answer/16920332)
+
+在「环境设置」修改来源目录，在「迁移会话」查看、导出 Markdown 或转到可写的 Agent。两者支持全文搜索、会话 ZIP 和完整／增量备份。恢复时项目目录可留空，记录写入便携目录的 `imports/gemini` 或 `imports/antigravity`。Gemini 支持范围是 CLI 本地记录。Antigravity 恢复单位为单份产物或文本。若要保留图片附件、恢复客户端原生会话或同步云端历史，继续使用各客户端的对应功能。
+
 元宝入口位于「迁移会话 → 腾讯元宝」：填入兼容 JSON 文件的本机绝对路径后导入。需要先取得 JSON 导出；本次不读取元宝电脑版数据库或云端账户，也不把 ZIP 写回元宝客户端。换设备后可恢复到 AgentRelay 再查看或迁出，见[元宝使用与格式说明](docs/reference/formats/yuanbao.md)。
 
 “实机验证”指用真实客户端打开、续聊过迁移或恢复后的会话；其余只验证了文件层读写。厂商格式可能变化，详见 [兼容状态](docs/reference/compatibility.md) 与 [当前限制](docs/reference/limitations.md)。

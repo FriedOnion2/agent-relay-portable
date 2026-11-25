@@ -1,3 +1,4 @@
+const sourcesWithoutSkills = new Set(['yuanbao','gemini','antigravity','gemini_apps']);
 // Skill 与对话存储、恢复
 // 经典脚本，由 index.html 按顺序加载并共享全局作用域。
 function buildSkillAgents(){
@@ -5,14 +6,14 @@ function buildSkillAgents(){
   source.innerHTML=''; target.innerHTML='';
   const labels={...AGENTS};
   state.sources.filter(s=>/^(windows_|ubuntu_)/.test(s.name)).forEach(s=>{labels[s.name]=tm(s,'label')||s.name;});
-  for(const [key,label] of Object.entries(labels).filter(([key])=>key.replace(/^(windows_|ubuntu_)/,'')!=='yuanbao')){
+  for(const [key,label] of Object.entries(labels).filter(([key])=>!sourcesWithoutSkills.has(key.replace(/^(windows_|ubuntu_)/,'')))){
     const option=document.createElement('option');option.value=key;option.textContent=label;source.appendChild(option);
   }
-  for(const [key,label] of Object.entries(AGENTS).filter(([key])=>key!=='yuanbao')){
+  for(const [key,label] of Object.entries(AGENTS).filter(([key])=>!sourcesWithoutSkills.has(key))){
     const option=document.createElement('option');option.value=key;option.textContent=label;target.appendChild(option);
   }
-  source.value=state.source in labels && state.source!=='yuanbao' ? state.source : 'codex';
-  target.value=state.source==='yuanbao' ? 'codex' : state.source.replace(/^(windows_|ubuntu_)/,'');
+  source.value=state.source in labels && !sourcesWithoutSkills.has(state.source) ? state.source : 'codex';
+  target.value=sourcesWithoutSkills.has(state.source) ? 'codex' : state.source.replace(/^(windows_|ubuntu_)/,'');
 }
 
 let skillRequest=0;
@@ -125,7 +126,7 @@ async function restoreStored(){
   if(state.transferring) return;
   if($('#restoreConflict').value==='new' && !payload.session_id){payload.session_id=generateId('#restoreId');if(!payload.session_id)return;}
   $('#restoreError').textContent='';
-  if(!payload.package || !payload.cwd) return toast(tr('ui.enter_the_session_package_path_and_the_target_project_directory_on_this_device'),true);
+  if(!payload.package) return toast(tr('msg.missing_session_package_path'),true);
   state.transferring=true; $('#restorePackage').disabled=true; updateActions();
   try{
     const token=await confirmMigration(payload,'restore-session');if(!token) return;

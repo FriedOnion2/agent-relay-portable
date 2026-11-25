@@ -73,6 +73,27 @@ test('Claude Desktop handoff requests the selected conversation in the chosen la
   await action;
 });
 
+test('Gemini Apps imports activity and offers handoff for the selected record',async()=>{
+  const t=setup();t.app.bind();t.app.state.source='gemini_apps';t.app.buildTabs();
+  assert.equal(t.el('#geminiAppsImport').style.display,'');
+  assert.equal(t.el('#yuanbaoImport').style.display,'none');
+  const file={name:'MyActivity.json'};t.el('#geminiAppsPath').files=[file];
+  const pending=t.el('#importGeminiApps').onclick();
+  assert.equal(t.requests[0].url,'/api/import-gemini-apps');
+  assert.equal(t.requests[0].options.body,file);
+  t.response(0,{ok:true,imported:2,skipped:1,ignored:1});await new Promise(resolve=>setImmediate(resolve));
+  t.response(1,{ok:true,sources:[{name:'gemini_apps',available:true,can_write:false}]});
+  await new Promise(resolve=>setImmediate(resolve));
+  t.response(2,{ok:true,sessions:[]});await pending;
+  t.app.setLang('en');
+  assert.match(t.el('#geminiAppsImportResult').textContent,/Imported 2 activities.*ignored 1/);
+  t.app.state.current={source:'gemini_apps',id:'activity-fixture'};
+  const handoff=t.el('#btnGeminiHandoff').onclick();
+  assert.equal(t.requests[3].url,'/api/gemini-handoff');
+  assert.deepEqual(JSON.parse(t.requests[3].options.body),{source:'gemini_apps',id:'activity-fixture',lang:'en'});
+  t.response(3,{ok:true,text:'fixture handoff'});await handoff;
+});
+
 test('batch import sends the preview token and reports partial results without claiming success',async()=>{
   const t=setup();t.app.bind();t.el('#backupPath').value='/backup.zip';t.el('#backupConflict').value='skip';
   const checking=t.app.previewBackup();
@@ -324,11 +345,11 @@ test('export failure is shown to the user and does not reject the event handler'
   assert.match(t.el('#toast').children[0].textContent,/offline/);
 });
 
-test('eight source tabs and only supported writable targets are offered',()=>{
+test('eleven source tabs and only supported writable targets are offered',()=>{
   const t=setup();
   t.app.buildTabs();
   assert.deepEqual(t.el('#tabs').children.map(x=>x.textContent),
-    ['WorkBuddy','WorkBuddy AI (International)','DeepSeek Harness','CodeBuddy','Claude Code','Claude Agent SDK','OpenAI Codex','Tencent Yuanbao']);
+    ['WorkBuddy','WorkBuddy AI (International)','DeepSeek Harness','CodeBuddy','Claude Code','Claude Agent SDK','OpenAI Codex','Tencent Yuanbao','Gemini CLI','Google Antigravity','Gemini Apps']);
   t.app.state.source='dsh';
   t.app.buildTarget();
   assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','workbuddy_ai','claude','codex']);
@@ -377,7 +398,7 @@ test('Windows sources appear separately with paths and never become writable tar
   t.app.state.source='windows_codex';
   t.app.buildTabs();
   t.app.buildTarget();
-  assert.equal(t.el('#tabs').children.length,9);
+  assert.equal(t.el('#tabs').children.length,12);
   assert.equal(t.el('#tabs').children.at(-1).textContent,'Windows · OpenAI Codex');
   assert.match(t.el('#sourceNote').textContent,/\/media\/Win/);
   assert.deepEqual(t.el('#target').children.map(x=>x.value),['workbuddy','workbuddy_ai','dsh','claude','codex']);

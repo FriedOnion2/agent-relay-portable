@@ -288,7 +288,7 @@ class HttpTests(unittest.TestCase):
         with patch("relay.session_store.restore_session", return_value={"ok":True}) as restore:
             self.assertEqual(self.request("POST", "/api/restore-session", json.dumps(payload), headers)[0], 200)
             restore.assert_called_once_with("/portable/session.zip", "/project", "new", "zstd", None)
-        for payload in ({"package":False,"cwd":"/p"}, {"package":"p.zip"}, {"storage":[]}, {}):
+        for payload in ({"package":False,"cwd":"/p"}, {"package":""}, {"storage":[]}, {}):
             with patch("relay.session_store.restore_session") as restore:
                 self.assertEqual(self.request("POST", "/api/restore-session", json.dumps(payload), headers)[0], 400)
                 restore.assert_not_called()

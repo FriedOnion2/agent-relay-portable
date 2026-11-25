@@ -91,6 +91,7 @@ Common `transfer` options:
 |---|---|
 | `export <source> <id> [-o file]` | Export a Markdown hand-off document; `--no-thinking`, `--no-tools`, `--max-chars N`, `--redact-secrets` trim the content |
 | `import-yuanbao <JSON file>` | Import a Yuanbao JSON export (never reads or modifies the Yuanbao client database) |
+| `import-gemini-apps <JSON file>` | Import extracted Takeout JSON from My Activity → Gemini Apps. Each activity is stored separately and repeated records are skipped. |
 
 ## Windows ↔ Ubuntu native transfer
 

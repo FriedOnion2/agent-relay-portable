@@ -236,6 +236,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(error_text(exc))
         if self.headers.get_content_type() != "application/json":
             return self._error(message_text('msg.the_request_must_use_application_json'), 415)
+        if u.path == '/api/import-gemini-apps':
+            try:
+                from relay import gemini_apps
+                return self._json(gemini_apps.receive(self.rfile, int(self.headers.get('Content-Length') or 0)))
+            except (OSError, ValueError, KeyError) as exc:
+                return self._error(error_text(exc))
         try:
             n = int(self.headers.get("Content-Length") or 0)
             if n < 0:
@@ -308,8 +314,8 @@ class Handler(BaseHTTPRequestHandler):
                 from relay import preview
                 mode = body.get('mode') or 'convert'
                 if mode == 'restore-session':
-                    if not body.get('package') or not body.get('cwd'):
-                        return self._error(message_text('msg.missing_package_path_local_project_directory'))
+                    if not body.get('package'):
+                        return self._error(message_text('msg.missing_session_package_path'))
                     return self._json(preview.package(body.get('package'), body.get('cwd'),
                                body.get('session_id') or None, body.get('dsh_compression') or 'zstd'))
                 if mode in ('import-windows', 'import-ubuntu', 'export-windows'):
@@ -348,9 +354,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(store_session(body["source"], body["id"], body.get("storage")))
             if u.path == "/api/restore-session":
                 from relay.session_store import restore_session
-                if not body.get("package") or not body.get("cwd"):
-                    return self._error(message_text('msg.missing_package_path_local_target_project_directory'))
-                return self._json(restore_session(body["package"], body["cwd"], body.get("session_id") or None,
+                if not body.get("package"):
+                    return self._error(message_text('msg.missing_session_package_path'))
+                return self._json(restore_session(body["package"], body.get("cwd"), body.get("session_id") or None,
                                                   body.get("dsh_compression") or "zstd", body.get('preview_token')))
             if u.path in ("/api/import-ubuntu", "/api/export-windows"):
                 from relay.native_import import import_ubuntu, export_windows
@@ -412,6 +418,9 @@ class Handler(BaseHTTPRequestHandler):
                     redact_secrets=bool(body.get('redact_secrets', False)),
                 )
                 return self._json(res)
+            if u.path == "/api/gemini-handoff":
+                return self._json({"ok": True, "text": registry.export_chat_handoff(
+                    body.get("source"), body.get("id"), normalize_lang(body.get("lang")), 'msg.gemini_handoff_prompt')})
             if u.path == "/api/claude-handoff":
                 return self._json({"ok": True, "text": registry.export_claude_handoff(
                     body.get("source"), body.get("id"), normalize_lang(body.get("lang")))})

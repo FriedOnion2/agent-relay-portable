@@ -215,17 +215,37 @@ class BackupTests(unittest.TestCase):
 
     def test_incremental_backups_cover_all_builtin_sources_and_chain(self):
         writers = {}
+        portable = self.root / 'portable-imports'
+        restore_home = patch('relay.adapters.google.portable_home', side_effect=lambda agent: portable / agent)
+        self.addCleanup(restore_home.stop)
+        restore_home.start()
         for agent in registry._ADAPTERS:
             home = str(self.root / 'incremental' / agent)
             registry._CACHE[agent] = registry.get(agent, home=home)
-            if agent != 'yuanbao':
+            if agent in registry.cross_system_keys():
                 writable = {'claude_sdk': 'claude', 'codebuddy': 'workbuddy'}.get(agent, agent)
                 writers[agent] = registry.get(writable, home=home)
 
         def seed(n):
+            from relay.gemini_apps import import_file
+            takeout = self.root / 'MyActivity.json'
+            takeout.write_text(json.dumps([{
+                'header': 'Gemini Apps', 'title': 'Prompted Gemini activity %d' % n,
+                'time': '2026-01-0%dT10:00:00Z' % n,
+            }]), encoding='utf-8')
+            self.assertEqual(import_file(str(takeout))['imported'], 1)
             for writer in writers.values():
                 writer.write(sample(), cwd=str(self.project),
                              session_id='11111111-1111-4111-8111-11111111111%d' % n)
+            chats = Path(registry.get('gemini').home) / 'sample' / 'chats'
+            chats.mkdir(parents=True, exist_ok=True)
+            (chats / ('session-%d.json' % n)).write_text(json.dumps({
+                'sessionId': 'gemini-%d' % n, 'projectHash': 'sample', 'cwd': str(self.project),
+                'messages': [{'id': 'request', 'type': 'user', 'content': 'gemini-fixture-%d' % n}],
+            }), encoding='utf-8')
+            artifacts = Path(registry.get('antigravity').home)
+            artifacts.mkdir(exist_ok=True)
+            (artifacts / ('artifact-%d.md' % n)).write_text('# artifact %d' % n, encoding='utf-8')
             adapter = registry._CACHE['yuanbao']
             folder = Path(adapter.home)
             folder.mkdir(parents=True, exist_ok=True)
@@ -236,7 +256,10 @@ class BackupTests(unittest.TestCase):
 
         agents = list(registry._ADAPTERS)
         seed(1)
-        full = backup.export('sessions', agents, project='old project', since='2000-01-01')
+        matches = backup.export('sessions', agents, project='old project', since='2000-01-01')
+        self.assertEqual(set(backup.inspect(matches['path'])['health']['agents']), set(agents) - {'antigravity', 'gemini_apps'})
+        with patch('relay.skill_store.Path.home', return_value=self.root):
+            full = backup.export('all', agents, since='2000-01-01')
         self.assertTrue(full['ok'], full)
         expected = set(agents)
         self.assertEqual(set(backup.inspect(full['path'])['health']['agents']), expected)
@@ -251,11 +274,16 @@ class BackupTests(unittest.TestCase):
         self.assertEqual(set(check['agents']), expected)
         self.assertEqual(backup.export('sessions', agents, baseline=delta['path'])['unchanged'], 2 * len(agents))
 
-        changed = Path(registry._CACHE['yuanbao'].home) / 'sample-1.json'
-        changed.write_text(changed.read_text().replace('fixture-1', 'edited content'), encoding='utf-8')
+        for agent, path in [('yuanbao', 'sample-1.json'), ('gemini', 'sample/chats/session-1.json'),
+                            ('antigravity', 'artifact-1.md')]:
+            changed = Path(registry.get(agent).home) / path
+            changed.write_text(changed.read_text(encoding='utf-8')
+                               .replace('fixture-1', 'edited content').replace('artifact 1', 'edited artifact'),
+                               encoding='utf-8')
         newer = backup.export('sessions', agents, baseline=delta['path'])
-        self.assertEqual((newer['processed'], newer['unchanged']), (1, 2 * len(agents) - 1))
-        self.assertEqual(backup.inspect(newer['path'])['health']['agents'], {'yuanbao': 1})
+        self.assertEqual((newer['processed'], newer['unchanged']), (3, 2 * len(agents) - 3))
+        self.assertEqual(backup.inspect(newer['path'])['health']['agents'],
+                         {'yuanbao': 1, 'gemini': 1, 'antigravity': 1})
 
         registry._CACHE.update({
             agent: registry.get(agent, home=str(self.root / 'restored' / agent)) for agent in agents
@@ -267,6 +295,13 @@ class BackupTests(unittest.TestCase):
             self.assertTrue(result['ok'], result)
             self.assertEqual(len(result['restored']), len(agents))
         self.assertTrue(all(len(list(registry.get(agent).discover())) == 2 for agent in agents))
+        for agent in ('gemini', 'antigravity'):
+            self.assertFalse(Path(registry.get(agent).home).exists())
+            self.assertTrue((portable / agent).is_dir())
+        latest = backup.plan(newer['path'], {'conflict': 'copy'})
+        self.assertEqual(latest['ready'], 3, latest)
+        changed = backup.restore(newer['path'], {'conflict': 'copy'}, latest['token'])
+        self.assertTrue(changed['ok'], changed)
 
     def test_batch_archive_uses_one_zip_and_skill_restore_has_an_undo_receipt(self):
         from relay import oplog

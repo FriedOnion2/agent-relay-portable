@@ -172,6 +172,9 @@ def package(package_path, cwd, session_id=None, dsh_compression='zstd'):
 
 def package_report(data, cwd, session_id=None, dsh_compression='zstd'):
     from . import session_store, registry
+    if data.google_conversation is not None:
+        from . import google_context
+        return google_context.report(data, cwd, session_id)
     if data.yuanbao_row is not None:
         from . import yuanbao
         return yuanbao.package_report(data.manifest, data.yuanbao_row, cwd, session_id, dsh_compression)
