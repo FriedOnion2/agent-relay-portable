@@ -23,7 +23,7 @@ async function saveDeviceHome(){
 }
 const clientExports = {
   yuanbao:{field:'yuanbao', api:'yuanbao'},
-  gemini_apps:{field:'geminiApps', api:'gemini-apps'}
+  gemini_apps:{field:'geminiApps', api:'gemini-apps', upload:true}
 };
 function renderClientImportResults(){
   for(const [source,{field}] of Object.entries(clientExports)){
@@ -34,13 +34,14 @@ function renderClientImportResults(){
 function importYuanbao(){return importClientExport('yuanbao');}
 async function importClientExport(source){
   if(state.transferring) return;
-  const {field,api: endpoint}=clientExports[source];
-  const path=$(`#${field}Path`).value.trim();
-  if(!path) return toast(tr(`err.${source}_input_path`),true);
+  const {field,api: endpoint,upload}=clientExports[source];
+  const input=$(`#${field}Path`);
+  const value=upload ? input.files[0] : input.value.trim();
+  if(!value) return toast(tr(upload?'err.gemini_apps_choose_file':'err.yuanbao_input_path'),true);
   state.transferring=true;updateActions();
   delete state.clientImportResults[source];renderClientImportResults();
   try{
-    const r=await api('/api/import-'+endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path})});
+    const r=await api('/api/import-'+endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:upload ? value : JSON.stringify({path:value})});
     state.clientImportResults[source]={code:`ui.${source}_imported`,params:{count:r.imported,skipped:r.skipped,ignored:r.ignored||0}};
     renderClientImportResults();
     state.source=source;$('#q').value='';

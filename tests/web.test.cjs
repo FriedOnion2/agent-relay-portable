@@ -77,10 +77,10 @@ test('Gemini Apps imports activity and offers handoff for the selected record',a
   const t=setup();t.app.bind();t.app.state.source='gemini_apps';t.app.buildTabs();
   assert.equal(t.el('#geminiAppsImport').style.display,'');
   assert.equal(t.el('#yuanbaoImport').style.display,'none');
-  t.el('#geminiAppsPath').value='/local/MyActivity.json';
+  const file={name:'MyActivity.json'};t.el('#geminiAppsPath').files=[file];
   const pending=t.el('#importGeminiApps').onclick();
   assert.equal(t.requests[0].url,'/api/import-gemini-apps');
-  assert.deepEqual(JSON.parse(t.requests[0].options.body),{path:'/local/MyActivity.json'});
+  assert.equal(t.requests[0].options.body,file);
   t.response(0,{ok:true,imported:2,skipped:1,ignored:1});await new Promise(resolve=>setImmediate(resolve));
   t.response(1,{ok:true,sources:[{name:'gemini_apps',available:true,can_write:false}]});
   await new Promise(resolve=>setImmediate(resolve));

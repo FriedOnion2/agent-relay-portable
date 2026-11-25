@@ -104,8 +104,21 @@ def import_file(path):
     source = Path(path).expanduser()
     if source.suffix.lower() != '.json':
         raise ValueError(text('err.gemini_apps_format'))
+    return import_bytes(archive.read_file(source))
+
+
+def receive(stream, size):
+    if not 0 < size <= archive.MAX_FILE:
+        raise ValueError(text('err.gemini_apps_limit'))
+    raw = stream.read(size)
+    if len(raw) != size:
+        raise ValueError(text('err.gemini_apps_format'))
+    return import_bytes(raw)
+
+
+def import_bytes(raw):
     try:
-        rows = json.loads(archive.read_file(source).decode('utf-8-sig'))
+        rows = json.loads(raw.decode('utf-8-sig'))
     except (UnicodeError, json.JSONDecodeError, RecursionError):
         raise ValueError(text('err.gemini_apps_format')) from None
     if not isinstance(rows, list):

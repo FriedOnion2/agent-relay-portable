@@ -236,6 +236,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(error_text(exc))
         if self.headers.get_content_type() != "application/json":
             return self._error(message_text('msg.the_request_must_use_application_json'), 415)
+        if u.path == '/api/import-gemini-apps':
+            try:
+                from relay import gemini_apps
+                return self._json(gemini_apps.receive(self.rfile, int(self.headers.get('Content-Length') or 0)))
+            except (OSError, ValueError, KeyError) as exc:
+                return self._error(error_text(exc))
         try:
             n = int(self.headers.get("Content-Length") or 0)
             if n < 0:
@@ -279,9 +285,6 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(self.server.jobs.start('index', lambda progress,cancel:Corpus().update(
                     sources=sources, include_thinking=body.get('include_thinking',False),
                     packages=body.get('packages',True), progress=progress, cancel=cancel)))
-            if u.path == '/api/import-gemini-apps':
-                from relay import gemini_apps
-                return self._json(gemini_apps.import_file(body.get('path')))
             if u.path == '/api/import-yuanbao':
                 from relay import yuanbao
                 return self._json(yuanbao.import_file(body.get('path')))
