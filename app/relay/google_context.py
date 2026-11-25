@@ -1,7 +1,6 @@
 """Portable, normalized snapshots of the Google sources, restored into Relay."""
 import json
 import uuid
-from pathlib import Path
 
 from . import archive, oplog, registry
 from .adapters.google import BLOCK_FIELDS, BLOCK_KINDS, PORTABLE_FORMAT, decode_context
@@ -89,6 +88,6 @@ def restore(data, package_path, cwd, session_id, token):
                 raise FileExistsError(text('msg.backup_exists'))
             atomic_write(str(destination), [content], encoding=None, overwrite=False)
     return {'ok': True, 'mode': PORTABLE_FORMAT, 'target_os': 'AgentRelay',
-            'from': {'source': data.agent, 'path': str(Path(package_path).resolve())},
+            'from': {'source': data.agent, 'path': str(package_path)},
             'to': {'source': data.agent, 'id': sid, 'native_id': sid, 'path': str(destination), 'cwd': doc['cwd']},
             'stats': data.google_conversation.stats(), 'notes': [text('msg.google_context_restore_note')], 'preview': plan}
