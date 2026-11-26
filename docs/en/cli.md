@@ -151,3 +151,10 @@ See [Search and Skills](../guide/search-and-skills.md) (Chinese).
 | 1 | An error (message on stderr); `diff` found differences; a `batch` entry failed; a storage command failed. Set `RELAY_DEBUG=1` for the full traceback |
 | 2 | `scan` found suspected secrets (0 when none), handy as a gate in scripts |
 | 130 | Cancelled with Ctrl+C |
+
+### `gemini-session` exports a Gemini CLI session file
+
+```sh
+relay gemini-session codex <id> -o session-agentrelay.json
+gemini --session-file session-agentrelay.json
+```

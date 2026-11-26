@@ -98,4 +98,4 @@ python3 app/cli.py batch codex --to claude --filter 关键词 --yes     # 实际
 - **读取上限**：每个源文件最多读 32MB，超出会明确标记；超限的会话只允许导出带标记的部分内容，迁移会停止。
 - **迁到 DSH**：命令行用 `--to dsh`，网页里目标选「迁移到 DeepSeek Harness」。写入后命令行输出会显示 DSH 的原生会话 ID，到 DSH 会话列表里按标题找。DSH 压缩读取和导入需要 `zstandard`（Release 已内置）。
 - **工具名互译**：默认把工具名译成目标软件的叫法，`--keep-tool-names` 可关闭。
-- **Claude Agent SDK**：与 Claude Code 共用 `~/.claude/projects`，两个入口显示相同的会话是正常的；SDK 入口只读，可导出和迁出。按当前 `parentUuid` 主链读取，避免混入旧分支或子代理。自行保存的 stream-json 输出不等于原生可恢复的会话。
+- **Claude Agent SDK**：与 Claude Code 共用 `~/.claude/projects`，两个入口显示相同的会话是正常的；SDK 入口使用共享 JSONL 格式，可迁入、导出和迁出。按当前 `parentUuid` 主链读取，避免混入旧分支或子代理。自行保存的 stream-json 输出不等于原生可恢复的会话。

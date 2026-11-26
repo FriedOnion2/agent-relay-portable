@@ -13,8 +13,6 @@ from .paths import iso
 
 def check(agent):
     from .registry import _ADAPTERS
-    from .adapters.claude import ClaudeAdapter
-    from .adapters.workbuddy import WorkBuddyAdapter
     cls = _ADAPTERS[agent]
     row = {'agent':agent, 'label':cls.label, 'api_version':cls.api_version,
            'coverage':message_text('msg.codebuddy_cli_jsonl_no_ide') if agent == 'codebuddy' else
@@ -38,8 +36,6 @@ def check(agent):
                 ir.Turn(ir.ASSISTANT, [ir.Block.tool_result('call-health', 'fixture result')])])
             adapter = (cls(home=str(home), restored_home=root / 'imports' / agent)
                        if getattr(cls, 'portable_context', False) else cls(home=str(home)))
-            writer = (ClaudeAdapter(home=str(home)) if agent == 'claude_sdk' else
-                      WorkBuddyAdapter(home=str(home)) if agent == 'codebuddy' else adapter)
             if agent == 'yuanbao':
                 home.mkdir()
                 (home / 'export.json').write_text(json.dumps({'exportTime': '2026-01-01 00:00:00',
@@ -69,7 +65,7 @@ def check(agent):
                 (home / 'walkthrough.md').write_text('# health fixture request\nhealth fixture response',
                                                     encoding='utf-8')
             else:
-                writer.write(conv, cwd=str(root), session_id='11111111-1111-4111-8111-111111111111')
+                adapter.write(conv, cwd=str(root), session_id='11111111-1111-4111-8111-111111111111')
             discovered = list(adapter.discover())
             if len(discovered) != 1 or not discovered[0].readable:
                 raise ValueError(message_text('msg.the_self_check_listing_did_not_return_exactly_one_readable_session'))
@@ -83,7 +79,7 @@ def check(agent):
             if restored.truncated or restored.stats()['tool_call'] != (0 if agent in ('yuanbao', 'antigravity', 'gemini_apps') else 1):
                 raise ValueError(message_text('msg.wrong_tool_call_count_or_truncated_session_in_the_self_check'))
             row.update(status='passed', read='passed', native_file_roundtrip='passed', error='')
-            if not cls.can_write and agent != 'claude_sdk' and agent != 'codebuddy':
+            if not cls.can_write:
                 row['native_file_roundtrip'] = 'unsupported'
     except ImportError as exc:
         row.update(status='unavailable', read='not-tested', native_file_roundtrip='not-tested', error=error_text(exc))

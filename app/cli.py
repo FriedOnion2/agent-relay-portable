@@ -359,6 +359,13 @@ def cmd_export(args):
         print(md)
 
 
+def cmd_gemini_session(args):
+    from relay.paths import atomic_write
+    data = registry.export_gemini_session(args.agent, args.id)
+    atomic_write(args.output, [json.dumps(data, ensure_ascii=False)], overwrite=False, journal=False)
+    print(T('exported', path=os.path.abspath(args.output)))
+
+
 def cmd_transfer(args):
     if args.dry_run:
         from relay import preview
@@ -597,6 +604,12 @@ def build_parser():
     p3.add_argument("--max-chars", type=int, default=2000, help=T('h_show_max'))
     p3.add_argument("--json", action="store_true")
     p3.set_defaults(func=cmd_show)
+
+    gemini = sub.add_parser("gemini-session", help=T('h_gemini_session'))
+    gemini.add_argument("agent", choices=read_agents)
+    gemini.add_argument("id")
+    gemini.add_argument("-o", "--output", required=True)
+    gemini.set_defaults(func=cmd_gemini_session)
 
     p4 = sub.add_parser("export", help=T('h_export'))
     p4.add_argument("agent", choices=read_agents)

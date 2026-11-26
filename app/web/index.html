@@ -65,6 +65,9 @@
       <p id="yuanbaoImportResult" class="meta" aria-live="polite"></p>
     </div>
     <div id="geminiAppsImport" class="side-tools" style="display:none">
+      <button class="btn" id="refreshGeminiDesktop"><span data-i18n="ui.gemini_desktop_refresh">刷新桌面最近聊天</span></button>
+      <p id="geminiDesktopStatus" class="meta" aria-live="polite"></p>
+      <ul id="geminiDesktopChats"></ul>
       <label class="field"><span data-i18n="ui.gemini_apps_export_file">Takeout 解压后的 Gemini Apps 活动 JSON</span><input class="input" id="geminiAppsPath" type="file" accept=".json,application/json"></label>
       <button class="btn" id="importGeminiApps"><span data-i18n="ui.gemini_apps_import">导入 Gemini 活动</span></button>
       <p id="geminiAppsImportResult" class="meta" aria-live="polite"></p>
@@ -97,6 +100,8 @@
     </div>
     <div class="bar session-actions">
       <button class="btn" id="btnGeminiHandoff" disabled><span data-i18n="ui.gemini_handoff">接力到 Gemini</span></button>
+      <button class="btn" id="btnGeminiSession" disabled><span data-i18n="ui.gemini_session">导出 Gemini CLI 会话</span></button>
+      <button class="btn" id="btnChatHandoff" disabled><span data-i18n="ui.chat_handoff">导出新聊天接力 TXT</span></button>
       <button class="btn" id="btnClaudeHandoff" disabled><span data-i18n="ui.claude_handoff">接力到 Claude 桌面</span></button>
       <button class="btn" id="btnMd" disabled><span data-i18n="ui.export_markdown">导出 Markdown</span></button>
       <button class="btn" id="btnStore" disabled><span data-i18n="ui.store_this_session">存储此会话</span></button>

@@ -32,6 +32,42 @@ function renderClientImportResults(){
   }
 }
 function importYuanbao(){return importClientExport('yuanbao');}
+let desktopRequest=0;
+async function loadGeminiDesktop(){
+  const request=++desktopRequest;
+  const status=$('#geminiDesktopStatus'), list=$('#geminiDesktopChats');
+  status.textContent=tr('ui.loading');list.innerHTML='';
+  try{
+    const r=await api('/api/gemini-desktop');
+    if(request!==desktopRequest) return;
+    const key=r.status==='ready' ? (r.chats.length?'recent':'empty') : r.status;
+    const messages={recent:'ui.gemini_desktop_recent',empty:'ui.gemini_desktop_empty',
+      window:'ui.gemini_desktop_window',unsupported:'ui.gemini_desktop_unsupported'};
+    status.textContent=tr(messages[key],{count:r.chats.length});
+    for(const chat of r.chats){
+      const li=document.createElement('li');
+      li.textContent=chat.title;
+      if(chat.active){
+        const button=document.createElement('button');
+        button.className='btn';button.textContent=tr('ui.gemini_desktop_save');
+        button.onclick=()=>importGeminiDesktop(chat.key,button);
+        li.appendChild(button);
+      }
+      list.appendChild(li);
+    }
+  }catch(e){if(request===desktopRequest) status.textContent=e.message;}
+}
+
+async function importGeminiDesktop(id,button){
+  if(state.transferring) return;
+  state.transferring=true;button.disabled=true;updateActions();
+  try{
+    const r=await api('/api/import-gemini-desktop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});
+    toast(tr(r.imported?'ui.gemini_desktop_saved':'ui.gemini_desktop_duplicate'));
+    await loadSources();buildTabs();await loadSessions();
+  }catch(e){toast(e.message,true);}
+  finally{state.transferring=false;button.disabled=false;updateActions();}
+}
 async function importClientExport(source){
   if(state.transferring) return;
   const {field,api: endpoint,upload}=clientExports[source];

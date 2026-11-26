@@ -323,7 +323,8 @@ def _plan(manifest, files, options):
                         row.update(native_id=header['id'], parent=header.get('parentSession'), origin=header.get('origin'))
                     if agent not in existing:
                         existing[agent] = ({target.read(r.id).meta['header']['id'] for r in target.discover() if r.readable}
-                                           if agent == 'dsh' else {r.native_id or r.id for r in target.discover()})
+                                           if agent == 'dsh' else {key for r in target.discover()
+                                                                   for key in (r.id, r.native_id) if key})
                     sid = row['session_id'] or row.get('native_id') or session.get('native_id') or session['id']
                     if sid in existing[agent] or (session['id'] in existing[agent] and not row['session_id']):
                         row['status'] = 'skip'

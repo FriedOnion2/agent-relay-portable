@@ -73,25 +73,42 @@ test('Claude Desktop handoff requests the selected conversation in the chosen la
   await action;
 });
 
+test('Gemini CLI session download preserves the selected source and bilingual instructions',async()=>{
+  const t=setup();t.app.bind();t.app.setLang('en');
+  t.app.state.current={source:'antigravity',id:'fixture'};
+  const action=t.el('#btnGeminiSession').onclick();
+  assert.equal(t.requests[0].url,'/api/gemini-session');
+  assert.deepEqual(JSON.parse(t.requests[0].options.body),{source:'antigravity',id:'fixture'});
+  t.response(0,{ok:true,session:{messages:[{type:'user',content:[{text:'fixture'}]}]}});await action;
+  assert.match(t.el('#toast').children[0].textContent,/gemini --session-file/);
+});
+
 test('Gemini Apps imports activity and offers handoff for the selected record',async()=>{
   const t=setup();t.app.bind();t.app.state.source='gemini_apps';t.app.buildTabs();
   assert.equal(t.el('#geminiAppsImport').style.display,'');
   assert.equal(t.el('#yuanbaoImport').style.display,'none');
+  assert.equal(t.requests[0].url,'/api/gemini-desktop');
+  t.response(0,{ok:true,status:'ready',chats:[{key:'app/abc',title:'Example',active:true}]});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(t.el('#geminiDesktopChats').children.length,1);
+  assert.equal(t.el('#geminiDesktopChats').children[0].children[0].tagName,'BUTTON');
   const file={name:'MyActivity.json'};t.el('#geminiAppsPath').files=[file];
   const pending=t.el('#importGeminiApps').onclick();
-  assert.equal(t.requests[0].url,'/api/import-gemini-apps');
-  assert.equal(t.requests[0].options.body,file);
-  t.response(0,{ok:true,imported:2,skipped:1,ignored:1});await new Promise(resolve=>setImmediate(resolve));
-  t.response(1,{ok:true,sources:[{name:'gemini_apps',available:true,can_write:false}]});
+  assert.equal(t.requests[1].url,'/api/import-gemini-apps');
+  assert.equal(t.requests[1].options.body,file);
+  t.response(1,{ok:true,imported:2,skipped:1,ignored:1});await new Promise(resolve=>setImmediate(resolve));
+  t.response(2,{ok:true,sources:[{name:'gemini_apps',available:true,can_write:false}]});
   await new Promise(resolve=>setImmediate(resolve));
-  t.response(2,{ok:true,sessions:[]});await pending;
+  t.response(3,{ok:true,status:'window',chats:[]});
+  t.response(4,{ok:true,sessions:[]});await pending;
   t.app.setLang('en');
   assert.match(t.el('#geminiAppsImportResult').textContent,/Imported 2 activities.*ignored 1/);
   t.app.state.current={source:'gemini_apps',id:'activity-fixture'};
   const handoff=t.el('#btnGeminiHandoff').onclick();
-  assert.equal(t.requests[3].url,'/api/gemini-handoff');
-  assert.deepEqual(JSON.parse(t.requests[3].options.body),{source:'gemini_apps',id:'activity-fixture',lang:'en'});
-  t.response(3,{ok:true,text:'fixture handoff'});await handoff;
+  const index=t.requests.length-1;
+  assert.equal(t.requests[index].url,'/api/gemini-handoff');
+  assert.deepEqual(JSON.parse(t.requests[index].options.body),{source:'gemini_apps',id:'activity-fixture',lang:'en'});
+  t.response(index,{ok:true,text:'fixture handoff'});await handoff;
 });
 
 test('batch import sends the preview token and reports partial results without claiming success',async()=>{
@@ -229,7 +246,7 @@ function setup({automaticPreview=true,confirmed=true,randomUUID}={}){
     createElement(tag){return new Element(tag);},
     createTextNode(text){return {textContent:text};},
   };
-  const context = vm.createContext({document, encodeURIComponent, Blob, URL, navigator:{}, crypto:randomUUID?{randomUUID}:undefined, location:{origin:'http://127.0.0.1:18945'}, confirm(){return confirmed;},
+  const context = vm.createContext({document, encodeURIComponent, Blob, URL, URLSearchParams, navigator:{}, crypto:randomUUID?{randomUUID}:undefined, location:{origin:'http://127.0.0.1:18945'}, confirm(){return confirmed;},
     setTimeout(){return 1;}, clearTimeout(){},
     fetch(url,options){
       if(url==='/api/preview' && automaticPreview){previews.push({url,options});return Promise.resolve({ok:true,status:200,json:async()=>({ok:true,token:'verified-fixture',target:'claude',blockers:[],warnings:[]})});}
@@ -239,10 +256,34 @@ function setup({automaticPreview=true,confirmed=true,randomUUID}={}){
   vm.runInContext(i18nScript,context);
   context.RelayI18n.configure(catalogs.zh,catalogs.en);
   for(const [name,text] of scriptParts)vm.runInContext(text,context,{filename:name});
-  vm.runInContext('globalThis.app={backupState,backupOptions,buildBackupAgents,exportBackup,inspectBackup,previewBackup,importBackup,importYuanbao,workflow,showPage,renderOperationResult,selectPackage,selections,selectAll,storeBatch,state,loadSessions,openSession,doTransfer,doImportWindows,updateActions,bind,buildTarget,buildTabs,loadSources,storeCurrent,refreshStorage,restoreStored,buildSkillAgents,loadSkills,refreshSkillPackages,storeSelectedSkill,restoreSelectedSkill,corpusState,searchCorpus,openCorpusDocument,renderDraftCandidates,exportDraft,updateDraftAction,startCorpusJob,pollCorpusJob,cancelCorpusJob,setLang,sep,tr,ts,applyStatic,renderChips,renderList,renderDetail,doBatch,openHistory,refreshHistory,renderHistory,undoOperation,getLang:()=>lang};',context);
+  vm.runInContext('globalThis.app={init,backupState,backupOptions,buildBackupAgents,exportBackup,inspectBackup,previewBackup,importBackup,importYuanbao,workflow,showPage,renderOperationResult,selectPackage,selections,selectAll,storeBatch,state,loadSessions,openSession,doTransfer,doImportWindows,updateActions,bind,buildTarget,buildTabs,loadSources,storeCurrent,refreshStorage,restoreStored,buildSkillAgents,loadSkills,refreshSkillPackages,storeSelectedSkill,restoreSelectedSkill,corpusState,searchCorpus,openCorpusDocument,renderDraftCandidates,exportDraft,updateDraftAction,startCorpusJob,pollCorpusJob,cancelCorpusJob,setLang,sep,tr,ts,applyStatic,renderChips,renderList,renderDetail,doBatch,openHistory,refreshHistory,renderHistory,undoOperation,getLang:()=>lang};',context);
   const response = (index,body,status=200)=>requests[index].resolve({ok:status<400,status,json:async()=>body});
   return {app:context.app, elements, requests, previews, response, document, el:document.querySelector};
 }
+
+test('home defers session listing until navigation and reuses the list on return', async()=>{
+  const t=setup();
+  const starting=t.app.init();
+  t.response(0,catalogs.zh);
+  t.response(1,catalogs.en);
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(t.requests[2].url,'/api/sources');
+  t.response(2,{ok:true,sources:[{name:'codex',available:true}]});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(t.requests.length,3);
+  await starting;
+
+  const loading=t.el('#homeMigrate').onclick();
+  assert.match(t.requests[3].url,/^\/api\/sessions\?agent=codex&/);
+  t.el('#btnSessions').onclick();
+  assert.equal(t.requests.length,4);
+  t.response(3,{ok:true,sessions:[]});
+  await loading;
+  t.el('#btnHome').onclick();
+  t.el('#chooseToStore').onclick();
+  assert.equal(t.requests.length,4);
+  assert.equal(t.app.workflow.page,'sessions');
+});
 
 test('a late session-list response cannot replace the newly selected source',async()=>{
   const t=setup();

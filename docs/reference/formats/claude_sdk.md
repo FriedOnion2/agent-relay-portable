@@ -2,8 +2,8 @@
 
 - 位置：官方默认 `~/.claude/projects`，尊重 `CLAUDE_CONFIG_DIR` / `RELAY_CLAUDE_SDK_HOME`，与 Claude Code 共享。
 - 识别：native transcript 按官方 reader 的 parentUuid 主链读取，排除 sidechain/meta/team；SDK stream/wire 记录不当作 native transcript。
-- 能力：读取、导出、迁出、同款原生迁移/存包恢复；不作为通用写入目标。
-- 验证与限制：Claude writer 合成样本回读、官方 reader 语义回归；creator=unknown，不从同一个共享日志猜 SDK 创建者。未执行真实 SDK resume 或模型调用。
+- 能力：读取、导出、迁出、同款原生迁移/存包恢复；跨软件写入共享的 Claude 原生 JSONL。
+- 验证与限制：Claude writer 合成样本回读、官方 SDK 0.2.189 在 Windows 已列出并读取迁入样本的两轮问答；creator=unknown，不从同一个共享日志猜 SDK 创建者。未执行真实 SDK resume 或模型调用。
 
 Windows 与 Ubuntu 用户目录备份通过独立只读来源读取。迁移必须指定目标系统实际项目目录；正文、工具参数中的旧路径不重写，同 ID 不覆盖。附件、子代理旁路文件和完整客户端运行状态不在原生包保证范围。
 

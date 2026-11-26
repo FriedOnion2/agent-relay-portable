@@ -20,6 +20,11 @@ function showPage(page,focus=true){
   renderWorkflow();
   if(focus)$('#pageTitle').focus?.();
 }
+function showSessionsPage(){
+  showPage('sessions');
+  updateActions();
+  if(!state.listRequest && !state.current) return loadSessions();
+}
 function renderWorkflow(){
   $('#pageTitle').textContent=tr(taskLabels[workflow.page]);
   $('#pageDescription').textContent=tr(taskDescriptions[workflow.page]);
@@ -47,8 +52,13 @@ function renderHome(){
     const note=document.createElement('p');note.textContent=tm(source,'error')||tm(source,'read_note')||
       (source.available?tr('ui.choose_a_session_from_this_source_and_preview_before_migrating'):tr('ui.ignore_this_if_the_client_is_not_installed_configure_its_directory_if_you_have_r'));card.appendChild(note);
     const button=document.createElement('button');button.className='btn';button.textContent=source.available?tr('ui.browse_sessions'):tr('ui.configure_directories');
+    const desktop=source.name==='gemini_apps';
+    if(desktop){
+      status.className='status';status.textContent=tr('ui.gemini_desktop_stored',{count:source.session_count||0});
+      button.textContent=tr('ui.browse_sessions');
+    }
     button.onclick=async()=>{
-      if(source.available){workflow.carrying=false;state.source=source.name;buildTabs();showPage('sessions');await loadSessions();}
+      if(source.available||desktop){workflow.carrying=false;state.source=source.name;buildTabs();showPage('sessions');await loadSessions();}
       else{await $('#btnEnvironment').onclick();if([...$('#deviceAgent').options].some(option=>option.value===source.name))$('#deviceAgent').value=source.name;$('#deviceHome').focus?.();}
     };card.appendChild(button);box.appendChild(card);
   }
@@ -73,13 +83,13 @@ function renderSelectedPackage(){
 function bindWorkflow(){
   bindBackup();
   $('#btnHome').onclick=()=>showPage('home');
-  $('#btnSessions').onclick=()=>{workflow.carrying=false;showPage('sessions');updateActions();};
+  $('#btnSessions').onclick=()=>{workflow.carrying=false;return showSessionsPage();};
   $('#homeMigrate').onclick=()=>$('#btnSessions').onclick();
   $('#homeMove').onclick=()=>$('#btnStorage').onclick();
   $('#homeSearch').onclick=()=>openCorpus();
   $('#homeSkills').onclick=()=>$('#btnSkillStorage').onclick();
   $('#homeConfigure').onclick=()=>$('#btnEnvironment').onclick();
-  $('#chooseToStore').onclick=()=>{workflow.carrying=true;showPage('sessions');updateActions();};
+  $('#chooseToStore').onclick=()=>{workflow.carrying=true;return showSessionsPage();};
   $('#backToStorage').onclick=()=>$('#btnStorage').onclick();
   $('#restoreConflict').onchange=()=>{
     $('#restoreId').value='';

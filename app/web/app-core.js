@@ -160,7 +160,7 @@ function updateActions(){
   $('#btnImport').disabled = !native || !state.current || state.current.truncated ||
     !$('#cwd').value.trim() || (mode==='export-windows' && !$('#projectPath').value.trim()) || state.transferring;
   $('#btnMd').disabled = !state.current;
-  for(const id of ['#btnClaudeHandoff','#btnGeminiHandoff']) $(id).disabled = !state.current;
+  for(const id of ['#btnClaudeHandoff','#btnGeminiHandoff','#btnChatHandoff','#btnGeminiSession']) $(id).disabled = !state.current;
   $('#btnStore').disabled = !state.current || state.current.truncated || state.transferring ||
     !!state.sources.find(s=>s.name===state.source)?.community;
 }
@@ -180,8 +180,8 @@ function toast(msg, bad=false, action=null){
   t._t = setTimeout(()=>{ t.className = 'toast' + (bad?' bad':''); }, action ? 7000 : 3200);
 }
 
-function download(name, text){
-  const b = new Blob([text], {type:'text/markdown;charset=utf-8'});
+function download(name, text, type='text/markdown;charset=utf-8'){
+  const b = new Blob([text], {type});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(b);
   a.download = name;
