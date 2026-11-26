@@ -123,10 +123,13 @@ def import_bytes(raw):
         raise ValueError(text('err.gemini_apps_format')) from None
     if not isinstance(rows, list):
         raise ValueError(text('err.gemini_apps_format'))
+    return save_conversations((activity(row) for row in rows), count=len(rows))
+
+
+def save_conversations(conversations, count=None):
     files = {}
     recognized = 0
-    for row in rows:
-        conv = activity(row)
+    for conv in conversations:
         if conv is not None:
             recognized += 1
             files[conv.id + '.json'] = encode_context(conv)
@@ -161,4 +164,4 @@ def import_bytes(raw):
                     destination.unlink()
                 raise
     return {'ok': True, 'imported': len(created), 'skipped': recognized - len(created),
-            'ignored': len(rows) - recognized}
+            'ignored': 0 if count is None else count - recognized}

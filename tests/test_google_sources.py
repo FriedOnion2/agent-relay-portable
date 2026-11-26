@@ -158,6 +158,27 @@ class GoogleTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             session_store.SessionPackage(manifest, {data.entry: (json.dumps(doc).encode(), False)})
 
+    def test_desktop_open_chat_is_validated_and_imports_once(self):
+        from relay import gemini_desktop
+        from relay.adapters.google import GeminiAppsAdapter
+
+        adapter = GeminiAppsAdapter(str(self.root / 'chats'))
+        registry._CACHE['gemini_apps'] = adapter
+        key = 'u/0/app/example'
+        snapshot = {'status': 'ready', 'chats': [{'key': key, 'active': True, 'title': 'Example'}],
+                    'turns': [{'role': 'user', 'text': 'Question'}, {'role': 'assistant', 'text': 'Answer'}]}
+        with patch.object(gemini_desktop, '_read', return_value=snapshot):
+            self.assertEqual(gemini_desktop.import_open(key)['imported'], 1)
+            self.assertEqual(gemini_desktop.import_open(key)['skipped'], 1)
+            with self.assertRaises(ValueError):
+                gemini_desktop.import_open('app/other')
+            snapshot['turns'].pop()
+            with self.assertRaises(ValueError):
+                gemini_desktop.import_open(key)
+        row, = adapter.discover()
+        session = registry.export_gemini_session('gemini_apps', row.id)
+        self.assertEqual([m['content'][0]['text'] for m in session['messages']], ['Question', 'Answer'])
+
     def test_gemini_apps_takeout_is_idempotent_and_handoff_is_text(self):
         from relay import gemini_apps
         from relay.adapters.google import GeminiAppsAdapter

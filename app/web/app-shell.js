@@ -50,6 +50,7 @@ function buildTabs(){
     $(`#${field}Import`).style.display = state.source===source ? '' : 'none';
   }
   const labels = {...AGENTS};
+  if(state.source==='gemini_apps') loadGeminiDesktop();
   state.sources.forEach(s=>{ labels[s.name] = tm(s,'label') || s.name; });
   Object.keys(labels).forEach(k=>{
     const b = document.createElement('button');
@@ -123,6 +124,7 @@ function bind(){
   $('#saveDeviceHome').onclick=saveDeviceHome;
   $('#importYuanbao').onclick=importYuanbao;
   $('#importGeminiApps').onclick=()=>importClientExport('gemini_apps');
+  $('#refreshGeminiDesktop').onclick=loadGeminiDesktop;
   $('#runHealth').onclick=runHealth;
   $('#selectAllSessions').onchange=e=>selectAll('sessions',e.target.checked);
   $('#selectAllSkills').onchange=e=>selectAll('skills',e.target.checked);

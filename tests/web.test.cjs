@@ -87,21 +87,28 @@ test('Gemini Apps imports activity and offers handoff for the selected record',a
   const t=setup();t.app.bind();t.app.state.source='gemini_apps';t.app.buildTabs();
   assert.equal(t.el('#geminiAppsImport').style.display,'');
   assert.equal(t.el('#yuanbaoImport').style.display,'none');
+  assert.equal(t.requests[0].url,'/api/gemini-desktop');
+  t.response(0,{ok:true,status:'ready',chats:[{key:'app/abc',title:'Example',active:true}]});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(t.el('#geminiDesktopChats').children.length,1);
+  assert.equal(t.el('#geminiDesktopChats').children[0].children[0].tagName,'BUTTON');
   const file={name:'MyActivity.json'};t.el('#geminiAppsPath').files=[file];
   const pending=t.el('#importGeminiApps').onclick();
-  assert.equal(t.requests[0].url,'/api/import-gemini-apps');
-  assert.equal(t.requests[0].options.body,file);
-  t.response(0,{ok:true,imported:2,skipped:1,ignored:1});await new Promise(resolve=>setImmediate(resolve));
-  t.response(1,{ok:true,sources:[{name:'gemini_apps',available:true,can_write:false}]});
+  assert.equal(t.requests[1].url,'/api/import-gemini-apps');
+  assert.equal(t.requests[1].options.body,file);
+  t.response(1,{ok:true,imported:2,skipped:1,ignored:1});await new Promise(resolve=>setImmediate(resolve));
+  t.response(2,{ok:true,sources:[{name:'gemini_apps',available:true,can_write:false}]});
   await new Promise(resolve=>setImmediate(resolve));
-  t.response(2,{ok:true,sessions:[]});await pending;
+  t.response(3,{ok:true,status:'window',chats:[]});
+  t.response(4,{ok:true,sessions:[]});await pending;
   t.app.setLang('en');
   assert.match(t.el('#geminiAppsImportResult').textContent,/Imported 2 activities.*ignored 1/);
   t.app.state.current={source:'gemini_apps',id:'activity-fixture'};
   const handoff=t.el('#btnGeminiHandoff').onclick();
-  assert.equal(t.requests[3].url,'/api/gemini-handoff');
-  assert.deepEqual(JSON.parse(t.requests[3].options.body),{source:'gemini_apps',id:'activity-fixture',lang:'en'});
-  t.response(3,{ok:true,text:'fixture handoff'});await handoff;
+  const index=t.requests.length-1;
+  assert.equal(t.requests[index].url,'/api/gemini-handoff');
+  assert.deepEqual(JSON.parse(t.requests[index].options.body),{source:'gemini_apps',id:'activity-fixture',lang:'en'});
+  t.response(index,{ok:true,text:'fixture handoff'});await handoff;
 });
 
 test('batch import sends the preview token and reports partial results without claiming success',async()=>{

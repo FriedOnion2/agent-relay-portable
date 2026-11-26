@@ -178,6 +178,9 @@ class Handler(BaseHTTPRequestHandler):
                 root = (q.get("storage") or [None])[0]
                 return self._json({"ok":True, "root":str(storage_root(root)),
                                   "packages":list_packages(KIND, (q.get("agent") or [None])[0], root)})
+            if path == '/api/gemini-desktop':
+                from relay import gemini_desktop
+                return self._json(gemini_desktop.recent())
             if path == "/api/sessions":
                 agent = (q.get("agent") or [""])[0]
                 if not agent:
@@ -262,6 +265,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._error(message_text('err.failed_to_parse_request_body_e', e=e))
 
         try:
+            if u.path == '/api/import-gemini-desktop':
+                from relay import gemini_desktop
+                return self._json(gemini_desktop.import_open(body.get('id')))
             if u.path in ('/api/backup-export', '/api/backup-inspect', '/api/backup-preview', '/api/backup-import'):
                 from relay import backup
                 if u.path == '/api/backup-export':

@@ -95,6 +95,8 @@ Antigravity 可读取 `brain/<会话>/.system_generated/logs/transcript_full.jso
 | Gemini CLI | `~/.gemini/tmp/<项目>/chats/` | JSON／JSONL 会话、工具调用与结果、文本思考摘要 |
 | Google Antigravity | `~/.gemini/antigravity/` | `brain/<任务>/` 下的任务、实施计划和走查 Markdown，以及数据目录顶层或 `exports/` 下手工保存的 Markdown／TXT |
 
+Windows 用户可以展开 Gemini 桌面版的侧栏，在 AgentRelay 首页进入 **Gemini Apps → 浏览会话**，查看窗口里的最近聊天。在 Gemini 打开所需聊天，回到 AgentRelay 刷新，选择「保存当前聊天文字」。每次保存当前已加载的问答文字，内容相同会自动跳过。图片、附件和未加载的早期消息不在这份快照中。
+
 Gemini 桌面端和网页端使用独立的 **Gemini Apps** 来源。在 Google Takeout 选择「我的活动 → Gemini Apps」和 JSON 格式，解压后在该来源选择活动 JSON 文件。每条活动单独保存，重复导入同一内容自动跳过。已导入的活动可搜索、导出、迁出及进行完整或增量备份。在会话详情选择「接力到 Gemini」可下载 TXT，将它附到 Gemini 新聊天，再发送下一条请求。 [Google Takeout 导出说明](https://support.google.com/gemini/answer/16920332)
 
 在「环境设置」修改来源目录，在「迁移会话」查看、导出 Markdown 或转到可写的 Agent。两者支持全文搜索、会话 ZIP 和完整／增量备份。恢复时项目目录可留空，记录写入便携目录的 `imports/gemini` 或 `imports/antigravity`。Gemini 支持范围是 CLI 本地记录。Antigravity 恢复单位为单份产物或文本。若要保留图片附件、恢复客户端原生会话或同步云端历史，继续使用各客户端的对应功能。
