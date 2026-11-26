@@ -33,6 +33,27 @@ class HttpTests(unittest.TestCase):
         finally:
             connection.close()
 
+    def test_gemini_sidebar_refresh_only_lists_metadata(self):
+        chat = {'key': 'u/0/app/example', 'title': 'Example', 'active': True}
+        with patch('relay.gemini_desktop._read', return_value={'status': 'ready', 'chats': [chat]}) as reader, \
+                patch('relay.gemini_desktop.save_conversations') as save:
+            for _ in range(2):
+                status, body = self.request('GET', '/api/gemini-desktop')
+                self.assertEqual(status, 200)
+                self.assertEqual(json.loads(body), {'ok': True, 'status': 'ready', 'chats': [chat]})
+            self.assertEqual(reader.call_count, 2)
+            reader.assert_called_with()
+            save.assert_not_called()
+
+    def test_gemini_sidebar_unavailable_on_other_platforms(self):
+        for system in ('darwin', 'linux'):
+            with self.subTest(system=system), patch('sys.platform', system), \
+                    patch('relay.gemini_desktop.subprocess.run') as launch:
+                status, body = self.request('GET', '/api/gemini-desktop')
+                self.assertEqual(status, 200)
+                self.assertEqual(json.loads(body), {'ok': True, 'status': 'unsupported', 'chats': []})
+                launch.assert_not_called()
+
     def test_ui_is_served(self):
         status, body = self.request("GET", "/")
         self.assertEqual(status, 200)
