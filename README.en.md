@@ -73,9 +73,9 @@ CodeBuddy CLI and IDE appear under one source. DSH and WorkBuddy have separate n
 - Select a conversation and choose **Continue in Claude Desktop**. Review the TXT file, attach it to a new Claude Desktop chat, and send your next request. [Claude file upload guide](https://support.claude.com/en/articles/8241126-upload-files-to-claude)
 - Switch with **English** or **中文** in the web header. For the CLI, use `relay --lang en` or set `RELAY_LANG=en`.
 
-Stable release: [v1.5.0](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v1.5.0). Verified client coverage and file-level support remain distinct; see [compatibility](docs/reference/compatibility.md) (Chinese). **Rolling dev build:** [`dev`](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/dev) — rebuilt on every merge to `main`, always exactly one, may be unstable.
+Stable release: [v1.6.0](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v1.6.0). Verified client coverage and file-level support remain distinct; see [compatibility](docs/reference/compatibility.md) (Chinese). **Rolling dev build:** [`dev`](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/dev) — rebuilt on every merge to `main`, always exactly one, may be unstable.
 
-Current stable version: **1.5.0**. Portable launch and migration coverage are listed in the compatibility matrix; a stable release does not establish resume support in every client.
+Current stable version: **1.6.0**. Portable launch and migration coverage are listed in the compatibility matrix; a stable release does not establish resume support in every client.
 
 Download **`AgentRelay-<version>-universal.zip`** from [GitHub Releases](https://github.com/FriedOnion2/agent-relay-portable/releases), extract it completely, and use the launcher for your device. GitHub's automatically generated **Source code** archives are for development.
 
