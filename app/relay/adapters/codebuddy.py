@@ -9,7 +9,7 @@ from .. import ir
 from ..clean import strip_scaffolding
 from ..locations import resolve_home, default_home
 from ..paths import iso, safe_ms, validate_session_id
-from .base import ReadOnlyAdapter, SessionInfo
+from .base import SessionInfo
 from .workbuddy import WorkBuddyAdapter
 from .dsh import blocks, json_text
 
@@ -24,7 +24,16 @@ def object_value(value):
     return value
 
 
-class CodeBuddyAdapter(ReadOnlyAdapter, WorkBuddyAdapter):
+class _CodeBuddyCliWriter(WorkBuddyAdapter):
+    def project_dir_for(self, cwd):
+        # CodeBuddy preserves spaces, dots, underscores and Unicode in project keys.
+        directory = os.path.abspath(cwd).replace("\\", "/")
+        if len(directory) >= 2 and directory[1] == ":":
+            directory = directory[0].lower() + directory[2:]
+        return directory.replace("/", "-")
+
+
+class CodeBuddyAdapter(WorkBuddyAdapter):
     name = "codebuddy"
     label = "CodeBuddy"
 
@@ -34,6 +43,10 @@ class CodeBuddyAdapter(ReadOnlyAdapter, WorkBuddyAdapter):
         self.roots = [self.root] if explicit and explicit.strip() else [self.root, default_home("codebuddy-ide")]
         self.home = self.root
         self.clean = clean
+
+    def write(self, conv, **kwargs):
+        # Only the CLI uses the shared Tencent projects/<slug>/<id>.jsonl format.
+        return _CodeBuddyCliWriter(home=self.root, clean=self.clean).write(conv, **kwargs)
 
     def available(self):
         return any(os.path.isdir(root) for root in self.roots)
@@ -79,7 +92,8 @@ class CodeBuddyAdapter(ReadOnlyAdapter, WorkBuddyAdapter):
                               conv.cwd if conv else "", (conv.model or "") if conv else "",
                               safe_ms(conv.created_at) if conv else None,
                               safe_ms(conv.updated_at) if conv else st["updated_ms"], st["size"],
-                              len(conv.turns) if conv else 0, path, not bool(error), error)
+                              len(conv.turns) if conv else 0, path, not bool(error), error,
+                              native_id=os.path.splitext(os.path.basename(path))[0] if format_name == "cli" else "")
 
     def read(self, sid):
         for identity, path, format_name in self._candidates():

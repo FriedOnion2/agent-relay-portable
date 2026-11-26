@@ -8,7 +8,7 @@
 
 Browse, export, and migrate AI coding assistant conversations locally, or carry conversation and Skill archives on a portable drive and restore them on another device. AgentRelay provides a **Chinese/English web interface and a command-line interface** for Windows, macOS, and Ubuntu / Linux.
 
-**Domestic and international WorkBuddy are identified separately:** `workbuddy` / `~/.workbuddy` and `workbuddy_ai` / `~/.workbuddy-ai` have separate sources, targets, directory settings, and native archive identities. Sessions are never merged automatically; DSH and CodeBuddy remain separate too. Regression tests cover bidirectional file conversion between the two editions and between each edition and DSH, Claude Code, and Codex. CodeBuddy, Claude Agent SDK, and Yuanbao support migration into either edition only. File conversion does not establish client resume compatibility; see the [transfer matrix](docs/en/compatibility.md#workbuddy-edition-transfer-matrix).
+**Domestic and international WorkBuddy are identified separately:** `workbuddy` / `~/.workbuddy` and `workbuddy_ai` / `~/.workbuddy-ai` have separate sources, targets, directory settings, and native archive identities. Sessions are never merged automatically; DSH and CodeBuddy remain separate too. Regression tests cover bidirectional file conversion between the two editions and between each edition and DSH, Claude Code, and Codex. CodeBuddy CLI and Claude Agent SDK support bidirectional file conversion. Yuanbao exports can be migrated into either edition. File conversion does not establish client resume compatibility; see the [transfer matrix](docs/en/compatibility.md#workbuddy-edition-transfer-matrix).
 
 **Interface language:** the web interface is fully available in English and Chinese. It follows the browser language on first load; use the language button at the top right to switch (the choice is remembered), or open `/?lang=en` once. Markdown exports and Skill drafts generated from the page use the language you are viewing. The command line prints Chinese by default; add `--lang en` before the subcommand (for example `python app/cli.py --lang en sources`) or set `RELAY_LANG=en` to get English output, `--help` text and error messages. The default is not taken from your system locale, so existing scripts keep their output.
 
@@ -36,19 +36,25 @@ The task home links to migration, moving between devices, full-text search, and 
 | WorkBuddy (Domestic) | `~/.workbuddy/projects` | Read, export, write |
 | WorkBuddy AI (International) | `~/.workbuddy-ai/[user-…/]projects` | Read, export, write, native archives; 5.8.4 native reading and file roundtrip checked; desktop history index is not registered, restored-session resume has not passed validation |
 | DeepSeek Harness / DSH | `~/.dsh/sessions` | Read v0–v4, export, write native compressed history |
-| CodeBuddy CLI | `~/.codebuddy/projects` | Read, export, migrate out |
+| CodeBuddy CLI | `~/.codebuddy/projects` | Read, export, import into CLI, migrate out |
 | CodeBuddy CN IDE / Extension | System `CodeBuddyExtension/Data/**/history` | Read manifests and messages, export, migrate out |
 | Claude Code | `~/.claude/projects` | Read, export, write |
-| Claude Agent SDK | `~/.claude/projects` (shared with Claude Code) | Read, export, migrate out |
+| Claude Agent SDK | `~/.claude/projects` (shared with Claude Code) | Read, export, migrate in and out |
 | OpenAI Codex | `~/.codex/sessions` | Read, export, write |
 | Tencent Yuanbao JSON exports | Portable root `imports/yuanbao` | Import JSON, read, migrate out, archive and restore export files |
 
 ### Gemini and Antigravity
 
+In the development version, select **Export Gemini CLI session** or run `relay gemini-session <source> <id> -o session-agentrelay.json`. In the target project run `gemini --session-file session-agentrelay.json`. The exported recording contains redacted user and assistant text, without tools, attachments or reasoning. Gemini CLI 0.71.1 lists the imported recording.
+
+Antigravity reads user and assistant turns from `brain/<session>/.system_generated/logs/transcript_full.jsonl`, preferring it over the compact transcript. All three standard data directories are scanned. An explicit directory in Environment limits discovery to that location. To continue in Antigravity or Yuanbao, use **Export TXT for a new chat** and attach or paste the result. This creates a text handoff; it does not register native history.
+
 | Source | Default location | Coverage |
 | --- | --- | --- |
 | Gemini CLI | `~/.gemini/tmp/<project>/chats/` | JSON and JSONL sessions, tool calls and results, textual reasoning summaries |
 | Google Antigravity | `~/.gemini/antigravity/` | Task, implementation plan, and walkthrough Markdown under `brain/<task>/`. Manually saved Markdown or TXT at the source root or under `exports/`. |
+
+On Windows, expand the sidebar in Gemini desktop and open **Gemini Apps → Browse sessions** in AgentRelay to see recent chats. Open the desired chat in Gemini, refresh in AgentRelay and choose **Save open chat text**. This saves the loaded question and answer text and skips duplicate snapshots. Images, attachments and earlier messages that have not loaded are outside the snapshot.
 
 **Gemini Apps** is a separate desktop and web source. In Google Takeout, select **My Activity → Gemini Apps** and JSON. Extract the archive and select the activity JSON file in AgentRelay. Each activity is stored separately. Identical entries are skipped on reimport. Imported activities support search, export, migration out and full or incremental backup. Use **Continue in Gemini** in the conversation details to download a TXT attachment for a new Gemini chat. [Google Takeout instructions](https://support.google.com/gemini/answer/16920332)
 
@@ -210,7 +216,7 @@ Release builds validate bundled dependencies with an empty `PATH`, DSH import, s
 - WorkBuddy / Claude / SDK / Codex / CodeBuddy CLI read at most 32 MiB; oversized records may export marked partial content but cannot be converted. Oversized DSH input/decompressed data and CodeBuddy IDE aggregate input are rejected.
 - Claude / SDK read the current `parentUuid` main chain, without merging old branches or subagents. Pre-compaction text remains in the original file but is not duplicated into the current migrated context.
 - DSH export preserves event history without replaying surface replacement, compaction, seed, or native resume state.
-- Generic conversion has five targets: WorkBuddy, WorkBuddy AI, DSH, Claude, and Codex. CodeBuddy and SDK are read-only for generic conversion. This restriction does not prevent same-assistant native migration or archive restoration.
+- Generic conversion supports WorkBuddy, WorkBuddy AI, DSH, Claude Code, Claude Agent SDK, CodeBuddy CLI and Codex. This restriction does not prevent same-assistant native migration or archive restoration.
 - DSH import writes native v0 Zstd logs, validated with 0.1.2-rc.1 and strict official 0.2.1-alpha.1 catalog migration to v4. Historical tool calls are disabled; calls missing results become text rather than pending work. Images and non-native blocks become annotated text. The target working directory must be absolute on the current OS.
 - Native DSH migration supports full v4 and verifiable v0 seed records. Migrate a fork's parent first; subagents are not imported separately. CodeBuddy IDE needs a uniquely matching existing native workspace and must be closed during import.
 - SDK `stream-json` output is not a native transcript. Applications with persistence disabled or only an external SessionStore may have no default local history.

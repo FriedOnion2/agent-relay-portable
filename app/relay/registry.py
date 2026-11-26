@@ -189,6 +189,30 @@ def export_claude_handoff(source, sid, lang='zh'):
     return export_chat_handoff(source, sid, lang, "msg.claude_handoff_prompt")
 
 
+def export_gemini_session(source, sid):
+    """Make a text-only recording for Gemini CLI's official --session-file importer."""
+    from .paths import iso, uuid7
+    from . import sensitive
+    conv = read_conversation(source, sid)
+    if conv.truncated:
+        raise ValueError(message_text('msg.the_source_session_is_incomplete_and_cannot_be_migrated'))
+    conv = sensitive.redact_conversation(conv)
+    started = conv.created_at or iso()
+    messages = []
+    for turn in conv.turns:
+        if turn.role not in (ir.USER, ir.ASSISTANT):
+            continue
+        parts = [{'text': b.text} for b in turn.blocks if b.kind == ir.TEXT and b.text]
+        if parts:
+            messages.append({'id': uuid7(), 'timestamp': turn.ts or started,
+                             'type': 'user' if turn.role == ir.USER else 'gemini', 'content': parts})
+    if not messages:
+        raise ValueError(message_text('err.source_session_has_no_migratable_content_empty_or_unparseable_file_migration_stopped'))
+    return {'sessionId': uuid7(), 'projectHash': 'agent-relay-import', 'startTime': started,
+            'lastUpdated': conv.updated_at or messages[-1]['timestamp'], 'summary': sensitive.redact_text(conv.title or ''),
+            'messages': messages}
+
+
 def export_chat_handoff(source, sid, lang, prompt):
     """Export user and assistant text for continuation in another chat."""
     from dataclasses import replace

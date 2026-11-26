@@ -50,6 +50,7 @@ function buildTabs(){
     $(`#${field}Import`).style.display = state.source===source ? '' : 'none';
   }
   const labels = {...AGENTS};
+  if(state.source==='gemini_apps') loadGeminiDesktop();
   state.sources.forEach(s=>{ labels[s.name] = tm(s,'label') || s.name; });
   Object.keys(labels).forEach(k=>{
     const b = document.createElement('button');
@@ -123,6 +124,7 @@ function bind(){
   $('#saveDeviceHome').onclick=saveDeviceHome;
   $('#importYuanbao').onclick=importYuanbao;
   $('#importGeminiApps').onclick=()=>importClientExport('gemini_apps');
+  $('#refreshGeminiDesktop').onclick=loadGeminiDesktop;
   $('#runHealth').onclick=runHealth;
   $('#selectAllSessions').onchange=e=>selectAll('sessions',e.target.checked);
   $('#selectAllSkills').onchange=e=>selectAll('skills',e.target.checked);
@@ -162,7 +164,17 @@ function bind(){
     if(id) $('#importId').value = id;
     else toast(tr('ui.this_browser_cannot_generate_a_uuid_enter_a_new_session_id_manually'),true);
   };
-  for(const client of ['Claude','Gemini']){
+  $('#btnGeminiSession').onclick=async()=>{
+    const selected=state.current;
+    if(!selected)return;
+    try{
+      const result=await api('/api/gemini-session',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({source:selected.source,id:selected.id})});
+      download('session-agentrelay.json',JSON.stringify(result.session),'application/json;charset=utf-8');
+      toast(tr('ui.gemini_session_downloaded'));
+    }catch(error){toast(tr('ui.export_failed_error',{error:error.message}),true);}
+  };
+  for(const client of ['Claude','Gemini','Chat']){
     const key=client.toLowerCase();
     $(`#btn${client}Handoff`).onclick = async ()=>{
       const selected=state.current;

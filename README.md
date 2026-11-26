@@ -12,7 +12,7 @@
 
 支持 **WorkBuddy、WorkBuddy AI 国际版、DeepSeek Harness（DSH）、CodeBuddy、Claude Code、Claude Agent SDK、OpenAI Codex、腾讯元宝 JSON 导出、Gemini CLI、Gemini Apps 与 Google Antigravity**，提供中英文网页和命令行，适用于 Windows、macOS、Ubuntu / Linux。
 
-**WorkBuddy 国内版与国际版已分开识别**：国内版使用 `workbuddy` / `~/.workbuddy`，国际版使用 `workbuddy_ai` / `~/.workbuddy-ai`。两版拥有独立的来源、目标、目录配置和原生包标识，不自动混合会话；DSH、CodeBuddy 也保持独立。两版之间及各自与 DSH、Claude Code、Codex 的双向文件转换已加入回归验证；CodeBuddy、Claude Agent SDK、元宝仅支持迁出到两版。文件转换通过不代表客户端续聊通过，详见[互传验证矩阵](docs/reference/compatibility.md#workbuddy-国内版与国际版互传)。
+**WorkBuddy 国内版与国际版已分开识别**：国内版使用 `workbuddy` / `~/.workbuddy`，国际版使用 `workbuddy_ai` / `~/.workbuddy-ai`。两版拥有独立的来源、目标、目录配置和原生包标识，不自动混合会话；DSH、CodeBuddy 也保持独立。两版之间及各自与 DSH、Claude Code、Codex 的双向文件转换已加入回归验证；CodeBuddy CLI、Claude Agent SDK 也支持双向文件转换，元宝支持从兼容 JSON 迁出。文件转换通过不代表客户端续聊通过，详见[互传验证矩阵](docs/reference/compatibility.md#workbuddy-国内版与国际版互传)。
 
 ![AgentRelay 任务首页：迁移会话、跨设备搬运、全文搜索与 Skill 资产](docs/images/task-home.jpg)
 
@@ -78,18 +78,24 @@ Ubuntu / macOS 可用 `Ubuntu首次准备.sh` / `Mac首次准备.command` 自动
 | WorkBuddy 国内版 | `~/.workbuddy/projects` | ✅ | ✅ | 仅文件层核对 |
 | WorkBuddy AI 国际版 | `~/.workbuddy-ai/[user-…/]projects` | ✅ | ✅ | 5.8.4 原生读取及 ZIP 文件往返实测；不登记桌面历史索引，恢复副本续聊未通过验证 |
 | DeepSeek Harness / DSH | `~/.dsh/sessions` | ✅（v0–v4） | ✅ | 真实客户端已验证 |
-| CodeBuddy CLI / IDE | `~/.codebuddy/projects` 等 | ✅ | — | 仅文件层核对 |
+| CodeBuddy CLI / IDE | `~/.codebuddy/projects` 等 | ✅ | CLI | CodeBuddy Code 2.187.0 在 Windows 识别迁入 ID；IDE 仅迁出 |
 | Claude Code | `~/.claude/projects` | ✅ | ✅ | 导出已验证 |
-| Claude Agent SDK | `~/.claude/projects`（与 Claude Code 共享） | ✅ | — | 与 Claude Code 共享存储 |
+| Claude Agent SDK | `~/.claude/projects`（与 Claude Code 共享） | ✅ | ✅ | 官方 SDK 可列出并读取迁入问答 |
 | OpenAI Codex | `~/.codex/sessions` | ✅ | ✅ | 真实客户端已验证 |
 | 腾讯元宝 JSON 导出 | 便携目录 `imports/yuanbao` | ✅ | 仅导出文件存包恢复 | 合成 JSON 回归，未验证原生客户端 |
 
 ### Gemini 与 Antigravity
 
+开发版支持从任意已接入的来源导出 Gemini CLI 会话。在会话详情点「导出 Gemini CLI 会话」，然后在目标项目运行 `gemini --session-file session-agentrelay.json`。CLI 也可运行 `relay gemini-session <来源> <ID> -o session-agentrelay.json`。文件含按角色排列、经过敏感值匹配脱敏的问答正文。源工具、附件与思考不会进入导入文件。Gemini CLI 0.71.1 的项目列表可找到导入记录。
+
+Antigravity 可读取 `brain/<会话>/.system_generated/logs/transcript_full.jsonl` 的用户和助手正文，同一会话优先使用完整版。默认扫描桌面版、IDE 和 CLI 的三个数据目录；在环境设置指定目录后只扫描该位置。要把上下文带回反重力或元宝，在详情中点「导出新聊天接力 TXT」，将内容放入新聊天。这一步需要手动操作，目标客户端不会因此出现还原的原生历史线程。
+
 | 来源 | 默认位置 | 支持范围 |
 | --- | --- | --- |
 | Gemini CLI | `~/.gemini/tmp/<项目>/chats/` | JSON／JSONL 会话、工具调用与结果、文本思考摘要 |
 | Google Antigravity | `~/.gemini/antigravity/` | `brain/<任务>/` 下的任务、实施计划和走查 Markdown，以及数据目录顶层或 `exports/` 下手工保存的 Markdown／TXT |
+
+Windows 用户可以展开 Gemini 桌面版的侧栏，在 AgentRelay 首页进入 **Gemini Apps → 浏览会话**，查看窗口里的最近聊天。在 Gemini 打开所需聊天，回到 AgentRelay 刷新，选择「保存当前聊天文字」。每次保存当前已加载的问答文字，内容相同会自动跳过。图片、附件和未加载的早期消息不在这份快照中。
 
 Gemini 桌面端和网页端使用独立的 **Gemini Apps** 来源。在 Google Takeout 选择「我的活动 → Gemini Apps」和 JSON 格式，解压后在该来源选择活动 JSON 文件。每条活动单独保存，重复导入同一内容自动跳过。已导入的活动可搜索、导出、迁出及进行完整或增量备份。在会话详情选择「接力到 Gemini」可下载 TXT，将它附到 Gemini 新聊天，再发送下一条请求。 [Google Takeout 导出说明](https://support.google.com/gemini/answer/16920332)
 

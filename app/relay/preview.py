@@ -113,7 +113,7 @@ def report(conv, target, options, destination, native=False):
         warnings += [message_text('msg.the_preview_describes_the_file_conversion_it_installs_no_tools_and_runs_no_histo'), message_text('msg.mapped_tool_names_do_not_mean_the_arguments_and_interfaces_are_compatible')]
         if target == 'codex':
             warnings.append(message_text('msg.the_codex_desktop_sqlite_index_is_not_updated'))
-        if target == 'claude':
+        if target in ('claude', 'claude_sdk'):
             warnings.append(message_text('msg.thinking_signatures_billing_info_and_client_hidden_fields_are_not_preserved_nati'))
     findings = sensitive.scan_conversation(conv)
     if findings['total']:

@@ -151,3 +151,10 @@ python3 app/cli.py import-backup <搬家包.zip> --mapping mapping.json --previe
 | 1 | 出错（错误信息写到标准错误）；`diff` 发现内容不一致；`batch` 有条目失败；存储类命令失败。设置环境变量 `RELAY_DEBUG=1` 可看到完整堆栈 |
 | 2 | `scan` 发现了疑似敏感信息（没发现时返回 0），方便在脚本里做拦截 |
 | 130 | 用户按 Ctrl+C 取消 |
+
+### `gemini-session` 导出 Gemini CLI 会话文件
+
+```sh
+relay gemini-session codex <id> -o session-agentrelay.json
+gemini --session-file session-agentrelay.json
+```

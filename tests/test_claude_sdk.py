@@ -1,4 +1,4 @@
-"""SDK shared-storage view: no inferred creator and no writes to SDK target."""
+"""SDK shared-storage view: no inferred creator and shared native writer."""
 import json
 import os
 import sys
@@ -64,23 +64,21 @@ class ClaudeSdkTests(unittest.TestCase):
             self.assertIn("无法仅凭日志确认创建者", render(conv))
             self.assertIn("result", render(conv))
 
-    def test_sdk_is_not_a_writer_but_can_migrate_out(self):
+    def test_sdk_migrates_both_ways_through_the_shared_writer(self):
         with tempfile.TemporaryDirectory() as root:
             path = fixture(root)
             original = path.read_bytes()
             sdk = ClaudeSdkAdapter(home=root)
-            with self.assertRaises(ValueError):
-                sdk.write(ir.Conversation())
-            with patch.dict(registry._CACHE, {"claude_sdk":sdk}, clear=True):
-                with patch.object(sdk, "read", side_effect=AssertionError("should not read")):
-                    with self.assertRaisesRegex(ValueError, "迁移目标"):
-                        registry.transfer("claude_sdk", "shared", "claude_sdk")
+            sdk.write(sdk.read("shared"), cwd=root, session_id="shared-copy")
+            self.assertEqual(ClaudeAdapter(home=root).read("shared-copy").first_user_text(), "question")
             for target in registry.writable_keys():
+                if target == "claude_sdk":
+                    continue
                 with self.subTest(target=target):
                     dst = registry.get(target, home=os.path.join(root, "target-"+target))
                     with patch.dict(registry._CACHE, {"claude_sdk":sdk, target:dst}, clear=True):
                         registry.transfer("claude_sdk", "shared", target, cwd=root, session_id="output")
-                    result = dst.read("output")
+                    result = dst.read(next(row.id for row in dst.discover()))
                     self.assertEqual(result.stats()["tool_result"], 1)
                     self.assertEqual(result.first_user_text(), "question")
             self.assertEqual(path.read_bytes(), original)
@@ -115,7 +113,7 @@ class ClaudeSdkTests(unittest.TestCase):
             with patch.dict(registry._CACHE, adapters, clear=True):
                 row = next(r for r in registry.sources_info() if r["name"] == "claude_sdk")
                 self.assertEqual(row["session_count"], 1)
-                self.assertFalse(row["can_write"])
+                self.assertTrue(row["can_write"])
                 self.assertIn("共用", row["read_note"])
                 self.assertTrue(registry.list_sessions("claude_sdk")[0]["shared_store"])
 
