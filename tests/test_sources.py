@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 import bootstrap
-from relay import ir, registry, locations
+from relay import registry, locations
 from relay.adapters.dsh import DshAdapter, read_records
 from relay.adapters.workbuddy import WorkBuddyAdapter
 from relay.adapters.codebuddy import CodeBuddyAdapter
@@ -84,12 +84,12 @@ class IndependentSourcesTests(unittest.TestCase):
             self.assertIn("WorkBuddy", row.error)
 
     def test_read_only_targets_rejected_before_source_read(self):
-        for target in ("codebuddy",):
+        for target in ("gemini_apps", "antigravity", "yuanbao"):
             with self.subTest(target=target), patch.dict(registry._CACHE, {}, clear=True):
                 with patch.object(WorkBuddyAdapter, "read", side_effect=AssertionError("must not read")):
                     with self.assertRaisesRegex(ValueError, "迁移目标"):
                         registry.transfer("workbuddy", "none", target)
-        self.assertEqual(registry.writable_keys(), ["workbuddy", "workbuddy_ai", "dsh", "claude", "codex"])
+        self.assertEqual(registry.writable_keys(), ["workbuddy", "workbuddy_ai", "dsh", "codebuddy", "claude", "claude_sdk", "codex"])
 
 
 class DshTests(unittest.TestCase):
@@ -225,8 +225,10 @@ class CodeBuddyTests(unittest.TestCase):
                     self.assertIn("output", render(conv))
                 else:
                     self.assertEqual(conv.turns[0].text(), "CLI query")
-            with self.assertRaises(ValueError):
-                a.write(ir.Conversation())
+            path = Path(a.write(conv, cwd=root, session_id="converted"))
+            self.assertEqual(path.parent.parent, Path(root)/"projects")
+            with self.assertRaises(FileExistsError):
+                a.write(conv, cwd=root, session_id="converted")
 
     def test_missing_messages_and_traversal_are_not_partial_migrations(self):
         for reference in ("missing", "../../outside", "../outside", "a/b", "a\\b"):
@@ -264,7 +266,7 @@ class CodeBuddyTests(unittest.TestCase):
                         dst = registry.get(target, home=os.path.join(root, "target-"+source+target))
                         with patch.dict(registry._CACHE, {source:src, target:dst}, clear=True):
                             result = registry.transfer(source, sid, target, cwd=root, session_id="migrated")
-                        migrated = dst.read("migrated")
+                        migrated = dst.read(next(row.id for row in dst.discover() if row.path == result["to"]["path"]))
                         self.assertEqual(migrated.stats()["tool_result"], original.stats()["tool_result"])
                         self.assertEqual(migrated.first_user_text(), original.first_user_text())
                         self.assertTrue(Path(result["to"]["path"]).is_file())

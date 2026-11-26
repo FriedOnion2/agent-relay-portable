@@ -4,6 +4,12 @@ The development build adds [WorkBuddy AI International](../reference/formats/wor
 
 A summary of the Chinese page [reference/compatibility.md](../reference/compatibility.md), which holds the full evidence and wins if the two differ.
 
+## Development migration checks on 2026-11-26
+
+CodeBuddy CLI and Claude Agent SDK pass file round trips with both WorkBuddy editions. All 42 directed pairs among seven writable entries preserve a four-turn text fixture. Windows CodeBuddy Code 2.187.0 accepted the imported ID with `--resume` and rejected a missing ID. No model turn was sent.  Claude Agent SDK 0.2.189 listed and read an imported conversation. Gemini CLI 0.71.1 imported a session file under a new ID, listed it and exposed both turns for export. Antigravity exports user and assistant transcript turns and accepts a manual new-chat text handoff. The matrix below records earlier versions.
+
+Implementation references include [Gemini CLI session import](https://github.com/google-gemini/gemini-cli/blob/main/packages/cli/src/gemini.tsx), [Antigravity transcript records](https://github.com/rimio-ai/rimz/blob/main/docs/externals/agent-adapter/antigravity-reference.md), [Antigravity native resume](https://antigravity.google/docs/cli/commands/resume/). [showagent](https://github.com/aytzey/showagent) also documents the limits of conversion into Antigravity.
+
 ## WorkBuddy edition transfer matrix
 
 The 2026-10-20 isolated regressions cover 14 writable directions, six imports from read-only sources, and six rejected reverse attempts. No user history, model calls, or historical tool execution is involved.

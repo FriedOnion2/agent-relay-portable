@@ -94,7 +94,7 @@ If the target already holds a migration result from the same source, it is skipp
 - **Read limit:** at most 32 MB per source file; beyond that it is clearly marked, only the marked partial content may be exported, and migration stops.
 - **Migrating to DSH:** use `--to dsh` (or choose DeepSeek Harness as the target in the web UI). The command prints DSH's native session id; find the session by title in DSH's list. Reading and importing compressed DSH history needs `zstandard` (built into the Release).
 - **Tool names** are translated to the target tool's names by default; `--keep-tool-names` turns that off.
-- **Claude Agent SDK** shares `~/.claude/projects` with Claude Code, so both entries showing the same session is normal. The SDK entry is read-only (export and migrate out). Sessions are read along the current `parentUuid` main chain so old branches and sub-agents are not mixed in. A saved stream-json output is not a native resumable session.
+- **Claude Agent SDK** shares `~/.claude/projects` with Claude Code, so both entries showing the same session is normal. The SDK entry reads and writes shared native JSONL sessions. Sessions are read along the current `parentUuid` main chain so old branches and sub-agents are not mixed in. A saved stream-json output is not a native resumable session.
 
 ## Prefer not to type commands
 

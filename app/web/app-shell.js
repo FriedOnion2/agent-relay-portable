@@ -162,7 +162,17 @@ function bind(){
     if(id) $('#importId').value = id;
     else toast(tr('ui.this_browser_cannot_generate_a_uuid_enter_a_new_session_id_manually'),true);
   };
-  for(const client of ['Claude','Gemini']){
+  $('#btnGeminiSession').onclick=async()=>{
+    const selected=state.current;
+    if(!selected)return;
+    try{
+      const result=await api('/api/gemini-session',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({source:selected.source,id:selected.id})});
+      download('session-agentrelay.json',JSON.stringify(result.session),'application/json;charset=utf-8');
+      toast(tr('ui.gemini_session_downloaded'));
+    }catch(error){toast(tr('ui.export_failed_error',{error:error.message}),true);}
+  };
+  for(const client of ['Claude','Gemini','Chat']){
     const key=client.toLowerCase();
     $(`#btn${client}Handoff`).onclick = async ()=>{
       const selected=state.current;

@@ -418,6 +418,11 @@ class Handler(BaseHTTPRequestHandler):
                     redact_secrets=bool(body.get('redact_secrets', False)),
                 )
                 return self._json(res)
+            if u.path == "/api/gemini-session":
+                return self._json({"ok": True, "session": registry.export_gemini_session(body.get("source"), body.get("id"))})
+            if u.path == "/api/chat-handoff":
+                return self._json({"ok": True, "text": registry.export_chat_handoff(
+                    body.get("source"), body.get("id"), normalize_lang(body.get("lang")), 'msg.chat_handoff_prompt')})
             if u.path == "/api/gemini-handoff":
                 return self._json({"ok": True, "text": registry.export_chat_handoff(
                     body.get("source"), body.get("id"), normalize_lang(body.get("lang")), 'msg.gemini_handoff_prompt')})

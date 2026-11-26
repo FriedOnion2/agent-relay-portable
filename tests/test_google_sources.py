@@ -14,6 +14,47 @@ from relay.corpus import Corpus
 
 
 class GoogleTests(unittest.TestCase):
+    def test_antigravity_transcript_to_gemini_import_file_and_back(self):
+        folder = 'antigravity/brain/conversation/.system_generated/logs/'
+        steps = [{'type': 'USER_INPUT', 'content': '<USER_REQUEST>中文问题</USER_REQUEST>'},
+                 {'type': 'CHECKPOINT', 'content': 'internal'},
+                 {'type': 'PLANNER_RESPONSE', 'content': 'answer', 'thinking': 'internal'}]
+        compact = self.file(folder + 'transcript.jsonl', '\n'.join(map(json.dumps, steps)))
+        source = AntigravityAdapter(str(self.root / 'antigravity'), restored_home=self.root / 'imports')
+        registry._CACHE['antigravity'] = source
+        sid = next(source.discover()).id
+        full = self.file(folder + 'transcript_full.jsonl', compact.read_text(encoding='utf8'))
+        compact.write_text('{bad', encoding='utf8')
+        self.assertEqual([(r.id, Path(r.path)) for r in source.discover()], [(sid, full)])
+        doc = registry.export_gemini_session('antigravity', sid)
+        self.assertNotIn('internal', json.dumps(doc))
+        self.file('gemini/demo/chats/session-fixture.json', json.dumps(doc))
+        target = GeminiAdapter(str(self.root / 'gemini'), restored_home=self.root / 'imports')
+        reread = target.read(next(target.discover()).id)
+        self.assertEqual([(t.role, t.text()) for t in reread.turns], [('user', '中文问题'), ('assistant', 'answer')])
+        full.unlink()
+        self.assertFalse(next(source.discover()).readable)
+        steps[0]['truncated_fields'] = ['content']
+        compact.write_text('\n'.join(map(json.dumps, steps)), encoding='utf8')
+        with self.assertRaises(ValueError):
+            registry.export_gemini_session('antigravity', sid)
+        with self.assertRaises(ValueError):
+            session_store.store_session('antigravity', sid, str(self.root / 'storage'))
+
+    def test_antigravity_default_discovers_each_client_and_honors_explicit_home(self):
+        desktop = self.root / '.gemini/antigravity'
+        for name in ('antigravity', 'antigravity-cli', 'antigravity-ide'):
+            self.file('.gemini/' + name + '/brain/shared/.system_generated/logs/transcript.jsonl',
+                      json.dumps({'type': 'USER_INPUT', 'content': name}))
+        with patch.dict('os.environ', {'RELAY_ANTIGRAVITY_HOME': '', 'ANTIGRAVITY_HISTORY_HOME': ''}), \
+                patch('pathlib.Path.home', return_value=self.root):
+            all_clients = AntigravityAdapter(restored_home=self.root / 'restored')
+            rows = list(all_clients.discover())
+            self.assertEqual(len({row.id for row in rows}), 3)
+            self.assertEqual({row.title for row in rows}, {'antigravity', 'antigravity-cli', 'antigravity-ide'})
+            only_desktop = AntigravityAdapter(str(desktop), restored_home=self.root / 'restored')
+            self.assertEqual([row.title for row in only_desktop.discover()], ['antigravity'])
+
     def setUp(self):
         temp = tempfile.TemporaryDirectory(prefix='relay-google-')
         self.addCleanup(temp.cleanup)

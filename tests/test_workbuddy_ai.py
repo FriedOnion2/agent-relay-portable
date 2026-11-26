@@ -152,7 +152,7 @@ class WorkBuddyAITests(unittest.TestCase):
                         self.assertEqual(Path(converted.path).read_bytes(), converted_bytes)
                     self.assertEqual(path.read_bytes(), before)
 
-    def test_read_only_sources_migrate_into_both_editions_but_reject_reverse(self):
+    def test_file_sources_migrate_into_both_editions_and_keep_originals(self):
         from relay.adapters.claude import ClaudeAdapter
         from relay.adapters.yuanbao import encode
 
@@ -180,10 +180,11 @@ class WorkBuddyAITests(unittest.TestCase):
                         imported_id, imported = self.read_output(dst, result['to']['path'])
                         self.assert_transfer_content(imported, expected)
                         self.assertEqual(imported.source, edition)
-                        with self.assertRaises(ValueError) as error:
-                            registry.transfer(edition, imported_id, source, cwd=str(self.project))
-                        self.assertEqual(error.exception.args[0].code,
-                                         'err.label_does_not_support_migration_writes_yet')
+                        if source == 'yuanbao':
+                            with self.assertRaises(ValueError) as error:
+                                registry.transfer(edition, imported_id, source, cwd=str(self.project))
+                            self.assertEqual(error.exception.args[0].code,
+                                             'err.label_does_not_support_migration_writes_yet')
             self.assertEqual({path: path.read_bytes() for path in home.rglob('*') if path.is_file()}, before)
 
     def test_same_id_in_both_editions_stays_separate_through_archive_restore(self):

@@ -1,6 +1,7 @@
 """Gemini CLI recordings and readable Antigravity artifacts."""
 import hashlib
 import json
+import os
 from pathlib import Path
 
 from .. import archive, ir
@@ -28,6 +29,8 @@ def portable_home(agent):
 
 
 def encode_context(conv):
+    if conv.truncated:
+        raise ValueError(text('err.source_session_is_incomplete_cannot_save_a_native_storage_package'))
     doc = {key: value for key, value in conv.to_dict().items() if key not in ('meta', 'truncated')}
     doc['format'] = PORTABLE_FORMAT
     turns = []
@@ -195,6 +198,10 @@ class GoogleSource(ReadOnlyAdapter):
     def __init__(self, home=None, clean=True, restored_home=None):
         self.home = self.root = resolve_home(self.name, home)
         self.native_roots = [] if self.managed_context else [self.home]
+        if self.name == 'antigravity' and not any(str(value or '').strip() for value in
+                (home, os.environ.get('RELAY_ANTIGRAVITY_HOME'), os.environ.get('ANTIGRAVITY_HISTORY_HOME'))):
+            parent = Path(self.home).parent
+            self.native_roots.extend(str(parent / name) for name in ('antigravity-ide', 'antigravity-cli'))
         if restored_home is not None:
             self.restored_home = restored_home
         else:
@@ -203,7 +210,7 @@ class GoogleSource(ReadOnlyAdapter):
         self._paths = {}
 
     def available(self):
-        return self.restored_home.is_dir() or super().available()
+        return any(Path(root).is_dir() for root in self.roots)
 
     def info(self):
         return dict(super().info(), capabilities=['read', 'export', 'native_store', 'export_restore'],
@@ -213,8 +220,9 @@ class GoogleSource(ReadOnlyAdapter):
         if self.restored_home.is_dir():
             for path in self.restored_home.glob('*.json'):
                 yield path, self.restored_home, True
-        for path in self.native_files():
-            yield Path(path), Path(self.home), False
+        for root in self.native_roots:
+            for path in self.native_files(Path(root)):
+                yield Path(path), Path(root), False
 
     def project_for(self, path):
         return ''
@@ -231,6 +239,11 @@ class GoogleSource(ReadOnlyAdapter):
                 raise _invalid()
             return conv
         relative = path.relative_to(root).as_posix()
+        if self.name == 'antigravity':
+            if path.suffix == '.jsonl':
+                relative = path.with_name('transcript.jsonl').relative_to(root).as_posix()
+            if root.name in ('antigravity-cli', 'antigravity-ide'):
+                relative = root.name + '/' + relative
         identity = 'file-' + hashlib.sha256(relative.encode('utf-8')).hexdigest()
         return self.parse_native(raw, path, identity)
 
@@ -282,10 +295,10 @@ class GeminiAdapter(GoogleSource):
     name = 'gemini'
     label = 'Gemini CLI'
 
-    def native_files(self):
-        for path in self._iter_files(self.home, 'session-*'):
+    def native_files(self, root):
+        for path in self._iter_files(str(root), 'session-*'):
             candidate = Path(path)
-            if 'chats' in candidate.relative_to(self.home).parts[:-1] and candidate.suffix in ('.json', '.jsonl'):
+            if 'chats' in candidate.relative_to(root).parts[:-1] and candidate.suffix in ('.json', '.jsonl'):
                 yield path
 
     def project_for(self, path):
@@ -310,8 +323,13 @@ class AntigravityAdapter(GoogleSource):
     label = 'Google Antigravity'
     ARTIFACTS = {'task.md', 'implementation_plan.md', 'walkthrough.md'}
 
-    def native_files(self):
-        root = Path(self.home)
+    def native_files(self, root):
+        for logs in sorted((root / 'brain').glob('*/.system_generated/logs')):
+            for name in ('transcript_full.jsonl', 'transcript.jsonl'):
+                path = logs / name
+                if path.is_file():
+                    yield str(path)
+                    break
         # Files users explicitly put at the configured root or in exports.
         if root.is_dir():
             for path in sorted(root.iterdir()):
@@ -326,6 +344,36 @@ class AntigravityAdapter(GoogleSource):
 
     @staticmethod
     def parse_native(raw, path, identity):
+        if path.suffix == '.jsonl':
+            # The full and compact journals describe the same session.
+            conv = ir.Conversation(source='antigravity', id=identity, path=str(path),
+                meta={'notes': [text('msg.antigravity_transcript_note')]})
+            roles = {'USER_INPUT': ir.USER, 'PLANNER_RESPONSE': ir.ASSISTANT}
+            for line in raw.decode('utf-8-sig').split('\n'):
+                if not line.strip():
+                    continue
+                step = json.loads(line)
+                if not isinstance(step, dict) or not isinstance(step.get('type'), str):
+                    raise _invalid()
+                role = roles.get(step['type'])
+                body = _string(step.get('content'))
+                if not role:
+                    continue
+                if step.get('truncated_fields') and 'content' in step['truncated_fields']:
+                    conv.truncated = True
+                if role == ir.USER and body.startswith('<USER_REQUEST>'):
+                    request, closing, metadata = body[len('<USER_REQUEST>'):].rpartition('</USER_REQUEST>')
+                    if closing and (not metadata.strip() or metadata.lstrip().startswith('<ADDITIONAL_METADATA>')):
+                        body = request.strip()
+                if body:
+                    stamp = _string(step.get('created_at'))
+                    conv.turns.append(ir.Turn(role, [ir.Block.text_block(body)], ts=stamp))
+                    conv.created_at = conv.created_at or stamp
+                    conv.updated_at = stamp or conv.updated_at
+            if not conv.turns:
+                raise _invalid()
+            conv.title = conv.first_user_text() or path.parents[2].name
+            return conv
         content = raw.decode('utf-8-sig')
         if not content.strip() or '\x00' in content:
             raise _invalid()
@@ -343,5 +391,5 @@ class GeminiAppsAdapter(GoogleSource):
     label = 'Gemini Apps (Desktop / Web)'
     managed_context = True
 
-    def native_files(self):
+    def native_files(self, root):
         return ()

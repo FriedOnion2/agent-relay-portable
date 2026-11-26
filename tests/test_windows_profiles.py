@@ -73,7 +73,7 @@ class WindowsProfilesTests(unittest.TestCase):
                 adapter.write(sample())
             with self.assertRaisesRegex(ValueError, "迁移目标"):
                 registry.transfer("codex", "missing", key)
-        self.assertEqual(registry.writable_keys(), ["workbuddy", "workbuddy_ai", "dsh", "claude", "codex"])
+        self.assertEqual(registry.writable_keys(), ["workbuddy", "workbuddy_ai", "dsh", "codebuddy", "claude", "claude_sdk", "codex"])
         self.assertEqual(before, {p: p.read_bytes() for p in self.profile.rglob("*") if p.is_file()})
         self.assertTrue(registry.get("codex").root.endswith(".codex"))
         self.assertNotEqual(registry.get("codex").root, str(self.profile / ".codex"))

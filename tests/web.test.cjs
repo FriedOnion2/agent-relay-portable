@@ -73,6 +73,16 @@ test('Claude Desktop handoff requests the selected conversation in the chosen la
   await action;
 });
 
+test('Gemini CLI session download preserves the selected source and bilingual instructions',async()=>{
+  const t=setup();t.app.bind();t.app.setLang('en');
+  t.app.state.current={source:'antigravity',id:'fixture'};
+  const action=t.el('#btnGeminiSession').onclick();
+  assert.equal(t.requests[0].url,'/api/gemini-session');
+  assert.deepEqual(JSON.parse(t.requests[0].options.body),{source:'antigravity',id:'fixture'});
+  t.response(0,{ok:true,session:{messages:[{type:'user',content:[{text:'fixture'}]}]}});await action;
+  assert.match(t.el('#toast').children[0].textContent,/gemini --session-file/);
+});
+
 test('Gemini Apps imports activity and offers handoff for the selected record',async()=>{
   const t=setup();t.app.bind();t.app.state.source='gemini_apps';t.app.buildTabs();
   assert.equal(t.el('#geminiAppsImport').style.display,'');

@@ -2,6 +2,12 @@
 
 开发版新增 [WorkBuddy AI 国际版](formats/workbuddy_ai.md)：5.8.4 安装包静态核查、隔离合成数据测试及 Windows 客户端合成会话实测。原生读取和 ZIP 文件往返通过；恢复副本没有桌面历史索引，侧栏和全局搜索未发现该副本，恢复后续聊未通过验证。国内版 WorkBuddy 与国际版分别配置。
 
+## 2026-11-26 开发版迁移验证
+
+CodeBuddy CLI、Claude Agent SDK 与两版 WorkBuddy 已通过双向文件层回归。 7 个可写入口间的 42 个有向组合逐一核对四轮问答。Windows CodeBuddy Code 2.187.0 的 `--resume` 识别了迁入 ID；随机不存在的 ID 被客户端拒绝。整个探测没有发送模型请求。Claude Agent SDK 0.2.189 的 `list_sessions` 和 `get_session_messages` 读回了迁入问答。Gemini CLI 0.71.1 的 `--session-file` 生成了带新 ID 的原生记录，`--list-sessions` 可见，AgentRelay 可重新迁出。反重力通过逐轮 JSONL 迁出用户和助手正文；迁入通过新聊天文本接力。下方矩阵记录较早版本。
+
+实现参考了 [Gemini CLI session import](https://github.com/google-gemini/gemini-cli/blob/main/packages/cli/src/gemini.tsx), [Antigravity transcript records](https://github.com/rimio-ai/rimz/blob/main/docs/externals/agent-adapter/antigravity-reference.md), [Antigravity native resume](https://antigravity.google/docs/cli/commands/resume/)。同类工具 [showagent](https://github.com/aytzey/showagent) 也区分反重力历史迁出和新聊天接力。
+
 ## WorkBuddy 国内版与国际版互传
 
 2026-10-20 扩展隔离文件层回归。`workbuddy`（国内）与 `workbuddy_ai`（国际）分别创建独立来源和目标，不读取用户历史、不调用模型、不执行历史工具。下表覆盖 14 个可写方向、6 个只读来源迁入方向及对应 6 个反向拒绝检查。
