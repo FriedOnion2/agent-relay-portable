@@ -229,7 +229,7 @@ function setup({automaticPreview=true,confirmed=true,randomUUID}={}){
     createElement(tag){return new Element(tag);},
     createTextNode(text){return {textContent:text};},
   };
-  const context = vm.createContext({document, encodeURIComponent, Blob, URL, navigator:{}, crypto:randomUUID?{randomUUID}:undefined, location:{origin:'http://127.0.0.1:18945'}, confirm(){return confirmed;},
+  const context = vm.createContext({document, encodeURIComponent, Blob, URL, URLSearchParams, navigator:{}, crypto:randomUUID?{randomUUID}:undefined, location:{origin:'http://127.0.0.1:18945'}, confirm(){return confirmed;},
     setTimeout(){return 1;}, clearTimeout(){},
     fetch(url,options){
       if(url==='/api/preview' && automaticPreview){previews.push({url,options});return Promise.resolve({ok:true,status:200,json:async()=>({ok:true,token:'verified-fixture',target:'claude',blockers:[],warnings:[]})});}
@@ -239,10 +239,34 @@ function setup({automaticPreview=true,confirmed=true,randomUUID}={}){
   vm.runInContext(i18nScript,context);
   context.RelayI18n.configure(catalogs.zh,catalogs.en);
   for(const [name,text] of scriptParts)vm.runInContext(text,context,{filename:name});
-  vm.runInContext('globalThis.app={backupState,backupOptions,buildBackupAgents,exportBackup,inspectBackup,previewBackup,importBackup,importYuanbao,workflow,showPage,renderOperationResult,selectPackage,selections,selectAll,storeBatch,state,loadSessions,openSession,doTransfer,doImportWindows,updateActions,bind,buildTarget,buildTabs,loadSources,storeCurrent,refreshStorage,restoreStored,buildSkillAgents,loadSkills,refreshSkillPackages,storeSelectedSkill,restoreSelectedSkill,corpusState,searchCorpus,openCorpusDocument,renderDraftCandidates,exportDraft,updateDraftAction,startCorpusJob,pollCorpusJob,cancelCorpusJob,setLang,sep,tr,ts,applyStatic,renderChips,renderList,renderDetail,doBatch,openHistory,refreshHistory,renderHistory,undoOperation,getLang:()=>lang};',context);
+  vm.runInContext('globalThis.app={init,backupState,backupOptions,buildBackupAgents,exportBackup,inspectBackup,previewBackup,importBackup,importYuanbao,workflow,showPage,renderOperationResult,selectPackage,selections,selectAll,storeBatch,state,loadSessions,openSession,doTransfer,doImportWindows,updateActions,bind,buildTarget,buildTabs,loadSources,storeCurrent,refreshStorage,restoreStored,buildSkillAgents,loadSkills,refreshSkillPackages,storeSelectedSkill,restoreSelectedSkill,corpusState,searchCorpus,openCorpusDocument,renderDraftCandidates,exportDraft,updateDraftAction,startCorpusJob,pollCorpusJob,cancelCorpusJob,setLang,sep,tr,ts,applyStatic,renderChips,renderList,renderDetail,doBatch,openHistory,refreshHistory,renderHistory,undoOperation,getLang:()=>lang};',context);
   const response = (index,body,status=200)=>requests[index].resolve({ok:status<400,status,json:async()=>body});
   return {app:context.app, elements, requests, previews, response, document, el:document.querySelector};
 }
+
+test('home defers session listing until navigation and reuses the list on return', async()=>{
+  const t=setup();
+  const starting=t.app.init();
+  t.response(0,catalogs.zh);
+  t.response(1,catalogs.en);
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(t.requests[2].url,'/api/sources');
+  t.response(2,{ok:true,sources:[{name:'codex',available:true}]});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(t.requests.length,3);
+  await starting;
+
+  const loading=t.el('#homeMigrate').onclick();
+  assert.match(t.requests[3].url,/^\/api\/sessions\?agent=codex&/);
+  t.el('#btnSessions').onclick();
+  assert.equal(t.requests.length,4);
+  t.response(3,{ok:true,sessions:[]});
+  await loading;
+  t.el('#btnHome').onclick();
+  t.el('#chooseToStore').onclick();
+  assert.equal(t.requests.length,4);
+  assert.equal(t.app.workflow.page,'sessions');
+});
 
 test('a late session-list response cannot replace the newly selected source',async()=>{
   const t=setup();

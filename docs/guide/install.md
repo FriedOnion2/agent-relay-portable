@@ -47,6 +47,7 @@ python app/cli.py doctor
 ```
 
 Linux / macOS 按实际解释器将 `python` 换为 `python3`。`RELAY_PYTHON` 可指定解释器完整路径。
+Windows 源码启动器直接启动网页服务。要手动打开浏览器并指定端口，可运行 `.\启动_AgentRelay.bat --no-browser --port 9000`。完整的环境体检可单独运行 `python app/cli.py doctor`。
 默认网址为 `http://127.0.0.1:8745/`；占用时尝试后续 5 个端口，实际网址以启动输出或打开的网页为准。
 程序会保留占用端口的旧服务或其他软件，**不会自动结束它们**。所有候选端口都被占用时才报错。
 要释放旧 AgentRelay 的端口，打开旧网页，点击 **退出服务**，或在旧终端按 **Ctrl+C**。

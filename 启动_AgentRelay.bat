@@ -20,9 +20,7 @@ if not defined PY goto :nopy
 
 echo Python: "%PY%"
 REM -c adds app/ to sys.path even for the Windows embeddable runtime.
-"%PY%" -c "import runpy,sys;sys.path.insert(0,'app');runpy.run_path('app/bootstrap.py',run_name='__main__')"
-if errorlevel 1 goto :failed
-"%PY%" -c "import runpy,sys;sys.path.insert(0,'app');runpy.run_path('app/cli.py',run_name='__main__')" serve
+"%PY%" -c "import runpy,sys;sys.path.insert(0,'app');runpy.run_path('app/cli.py',run_name='__main__')" serve %*
 if errorlevel 1 goto :failed
 exit /b 0
 

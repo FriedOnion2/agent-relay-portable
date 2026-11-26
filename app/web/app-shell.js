@@ -9,7 +9,6 @@ async function init(){
   buildTabs();
   buildTarget();
   bind();
-  await loadSessions();
   showPage('home',false);
   const evidence=new URLSearchParams(globalThis.location?.search||'').get('document');
   if(evidence){await openCorpus();await openCorpusDocument(evidence);}
@@ -97,7 +96,7 @@ async function exitService(){
 function bind(){
   bindWorkflow();
   $('#btnCorpus').onclick=openCorpus;
-  $('#closeCorpus').onclick=()=>{showPage('sessions');};
+  $('#closeCorpus').onclick=showSessionsPage;
   $('#updateCorpus').onclick=()=>startCorpusJob('index');
   $('#extractDrafts').onclick=()=>startCorpusJob('extract');
   $('#cancelCorpus').onclick=cancelCorpusJob;
@@ -120,7 +119,7 @@ function bind(){
     }
     try{showEnvironment(await api('/api/environment'));}catch(e){toast(e.message,true);}
   };
-  $('#closeEnvironment').onclick=()=>{showPage('sessions');};
+  $('#closeEnvironment').onclick=showSessionsPage;
   $('#saveDeviceHome').onclick=saveDeviceHome;
   $('#importYuanbao').onclick=importYuanbao;
   $('#importGeminiApps').onclick=()=>importClientExport('gemini_apps');
@@ -131,7 +130,7 @@ function bind(){
   $('#batchMigrate').onclick=doBatch;
   $('#btnHistory').onclick=openHistory;
   $('#refreshHistory').onclick=refreshHistory;
-  $('#closeHistory').onclick=()=>{showPage('sessions');};
+  $('#closeHistory').onclick=showSessionsPage;
   $('#storeSkills').onclick=()=>storeBatch('skills');
   $('#btnExit').onclick = exitService;
   $('#btnLang').onclick = ()=>setLang(lang === 'en' ? 'zh' : 'en');
@@ -140,7 +139,7 @@ function bind(){
     $('#skillStorageRoot').value=$('#storageRoot').value;
     loadSkills(); refreshSkillPackages();
   };
-  $('#closeSkills').onclick = ()=>{showPage('sessions');};
+  $('#closeSkills').onclick = showSessionsPage;
   $('#discoverSkills').onclick=loadSkills;
   $('#skillAgent').onchange=loadSkills;
   $('#storeSkill').onclick=storeSelectedSkill;
@@ -148,7 +147,7 @@ function bind(){
   $('#restoreSkill').onclick=restoreSelectedSkill;
   $('#btnStore').onclick = storeCurrent;
   $('#btnStorage').onclick = ()=>{ showPage('storage'); refreshStorage(); };
-  $('#closeStorage').onclick = ()=>{ showPage('sessions'); };
+  $('#closeStorage').onclick = showSessionsPage;
   $('#refreshStorage').onclick = refreshStorage;
   $('#restorePackage').onclick = restoreStored;
   $('#target').onchange = e => {state.target = e.target.value; updateActions();};

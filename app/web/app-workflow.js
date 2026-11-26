@@ -20,6 +20,11 @@ function showPage(page,focus=true){
   renderWorkflow();
   if(focus)$('#pageTitle').focus?.();
 }
+function showSessionsPage(){
+  showPage('sessions');
+  updateActions();
+  if(!state.listRequest && !state.current) return loadSessions();
+}
 function renderWorkflow(){
   $('#pageTitle').textContent=tr(taskLabels[workflow.page]);
   $('#pageDescription').textContent=tr(taskDescriptions[workflow.page]);
@@ -73,13 +78,13 @@ function renderSelectedPackage(){
 function bindWorkflow(){
   bindBackup();
   $('#btnHome').onclick=()=>showPage('home');
-  $('#btnSessions').onclick=()=>{workflow.carrying=false;showPage('sessions');updateActions();};
+  $('#btnSessions').onclick=()=>{workflow.carrying=false;return showSessionsPage();};
   $('#homeMigrate').onclick=()=>$('#btnSessions').onclick();
   $('#homeMove').onclick=()=>$('#btnStorage').onclick();
   $('#homeSearch').onclick=()=>openCorpus();
   $('#homeSkills').onclick=()=>$('#btnSkillStorage').onclick();
   $('#homeConfigure').onclick=()=>$('#btnEnvironment').onclick();
-  $('#chooseToStore').onclick=()=>{workflow.carrying=true;showPage('sessions');updateActions();};
+  $('#chooseToStore').onclick=()=>{workflow.carrying=true;return showSessionsPage();};
   $('#backToStorage').onclick=()=>$('#btnStorage').onclick();
   $('#restoreConflict').onchange=()=>{
     $('#restoreId').value='';
