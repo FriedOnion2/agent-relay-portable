@@ -25,7 +25,7 @@
     position:sticky; top:0; z-index:20;
   }
   .logo{display:flex;align-items:center;gap:9px;font-weight:600;font-size:15px;letter-spacing:.2px;flex:none}
-  .logo svg{flex:none}
+  .logo img,.logo svg{flex:none;display:block;border-radius:6px}
   .tagline{color:var(--text-3);font-size:12.5px;min-width:0;max-width:220px}
   .agent-chips{display:flex;flex:1;gap:6px;margin-left:auto;align-items:center;min-width:0;overflow-x:auto}
   header > .btn,.agent-chips .chip{flex:none}

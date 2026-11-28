@@ -12,6 +12,8 @@ hooks:
 theme:
   name: material
   language: zh
+  logo: images/icon.svg
+  favicon: images/icon.svg
   features:
     - navigation.sections
     - navigation.top

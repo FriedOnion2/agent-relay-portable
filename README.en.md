@@ -1,3 +1,7 @@
+<p>
+  <img src="docs/images/icon.svg" width="76" height="76" alt="AgentRelay Portable">
+</p>
+
 # AgentRelay Portable
 
 [![Tests](https://github.com/FriedOnion2/agent-relay-portable/actions/workflows/tests.yml/badge.svg)](https://github.com/FriedOnion2/agent-relay-portable/actions/workflows/tests.yml)

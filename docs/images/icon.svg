@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="AgentRelay icon">
+  <defs>
+    <linearGradient id="bg" x1="40" y1="24" x2="472" y2="488" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1E3A8A"/>
+      <stop offset="50%" stop-color="#2563EB"/>
+      <stop offset="100%" stop-color="#0284C7"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="28%" cy="20%" r="72%">
+      <stop offset="0%" stop-color="#93C5FD" stop-opacity="0.34"/>
+      <stop offset="100%" stop-color="#1E3A8A" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="spark" x1="210" y1="200" x2="302" y2="312" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#E0F2FE"/>
+    </linearGradient>
+    <linearGradient id="nodeCore" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7DD3FC"/>
+      <stop offset="100%" stop-color="#0EA5E9"/>
+    </linearGradient>
+    <filter id="softShadow" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="8" stdDeviation="11" flood-color="#0F172A" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+
+  <!-- App squircle container -->
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#bg)"/>
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#glow)"/>
+  <rect x="18" y="18" width="476" height="476" rx="110" fill="none" stroke="#FFFFFF" stroke-opacity="0.24" stroke-width="4"/>
+
+  <g filter="url(#softShadow)">
+    <!-- Top relay path (left agent node -> right arrow) -->
+    <path d="M 118 242 L 118 192 A 54 54 0 0 1 172 138 L 368 138"
+          fill="none" stroke="#FFFFFF" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M 334 94 L 386 138 L 334 182"
+          fill="none" stroke="#FFFFFF" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- Bottom relay path (right agent node -> left arrow) -->
+    <path d="M 394 270 L 394 320 A 54 54 0 0 1 340 374 L 144 374"
+          fill="none" stroke="#FFFFFF" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M 178 330 L 126 374 L 178 418"
+          fill="none" stroke="#FFFFFF" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- Agent endpoint nodes seamlessly joined with white collars -->
+    <circle cx="118" cy="242" r="24" fill="url(#nodeCore)" stroke="#FFFFFF" stroke-width="10"/>
+    <circle cx="394" cy="270" r="24" fill="url(#nodeCore)" stroke="#FFFFFF" stroke-width="10"/>
+
+    <!-- Center AI Spark -->
+    <path d="M 256 194 C 266 236 276 246 318 256 C 276 266 266 276 256 318 C 246 276 236 266 194 256 C 236 246 246 236 256 194 Z"
+          fill="url(#spark)"/>
+  </g>
+</svg>
