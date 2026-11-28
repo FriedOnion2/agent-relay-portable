@@ -1,239 +1,118 @@
 # AgentRelay Portable
 
 [![Tests](https://github.com/FriedOnion2/agent-relay-portable/actions/workflows/tests.yml/badge.svg)](https://github.com/FriedOnion2/agent-relay-portable/actions/workflows/tests.yml)
+[![Lint](https://github.com/FriedOnion2/agent-relay-portable/actions/workflows/lint.yml/badge.svg)](https://github.com/FriedOnion2/agent-relay-portable/actions/workflows/lint.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/FriedOnion2/agent-relay-portable?include_prereleases)](https://github.com/FriedOnion2/agent-relay-portable/releases)
+![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 
 [中文](README.md) | **English**
 
-Browse, export, and migrate AI coding assistant conversations locally, or carry conversation and Skill archives on a portable drive and restore them on another device. AgentRelay provides a **Chinese/English web interface and a command-line interface** for Windows, macOS, and Ubuntu / Linux.
+**Local-first portable Web & CLI tool to browse, search, export, migrate, and incrementally back up AI coding agent chats and Skills across Windows, macOS, and Linux.**
 
-**Domestic and international WorkBuddy are identified separately:** `workbuddy` / `~/.workbuddy` and `workbuddy_ai` / `~/.workbuddy-ai` have separate sources, targets, directory settings, and native archive identities. Sessions are never merged automatically; DSH and CodeBuddy remain separate too. Regression tests cover bidirectional file conversion between the two editions and between each edition and DSH, Claude Code, and Codex. CodeBuddy CLI and Claude Agent SDK support bidirectional file conversion. Yuanbao exports can be migrated into either edition. File conversion does not establish client resume compatibility; see the [transfer matrix](docs/en/compatibility.md#workbuddy-edition-transfer-matrix).
+Supports **Claude Code / Claude Agent SDK · OpenAI Codex · Gemini CLI / Gemini Apps · Google Antigravity · WorkBuddy (Domestic / International) · DeepSeek Harness (DSH) · CodeBuddy (CLI / IDE) · Tencent Yuanbao (JSON exports)** with a bilingual Chinese/English Web UI and CLI.
 
-**Interface language:** the web interface is fully available in English and Chinese. It follows the browser language on first load; use the language button at the top right to switch (the choice is remembered), or open `/?lang=en` once. Markdown exports and Skill drafts generated from the page use the language you are viewing. The command line prints Chinese by default; add `--lang en` before the subcommand (for example `python app/cli.py --lang en sources`) or set `RELAY_LANG=en` to get English output, `--help` text and error messages. The default is not taken from your system locale, so existing scripts keep their output.
+> 🔒 **Local-first by design:** listens only on localhost, never uploads conversations, and never calls external models. Every migration previews `preserved / degraded / dropped / unknown` differences before writing, and supports undo based on recorded file writes.
 
-**The universal release bundles Python 3.12 and `zstandard`. Extract the complete archive and launch it: no Python or Node.js installation and no dependency downloads on first launch.** One archive contains Windows, macOS, and Linux runtimes for switching devices.
+![AgentRelay task home: session migration, cross-device transfer, full-text search, and Skill assets](docs/images/task-home.jpg)
 
-The service listens only on the local machine. It does not upload conversations or call models. Python installation instructions below apply only to running the source code.
+## Key capabilities
 
-The task home links to migration, moving between devices, full-text search, and Skill assets. Restore archives with an explicit local project mapping and keep the original ID or create a separate copy; completed migration results remain available when switching pages. Reviewed draft exports can be handed to Skill storage, which requires a separate explicit save. See the [web workflow guide](docs/guide/web-workflow.md) (Chinese).
+- **Browse, export, and handoff:** inspect conversations by source, export Markdown, generate **Claude Desktop / Gemini / Antigravity / Yuanbao** continuation TXT files, or export redacted Gemini CLI JSON for `gemini --session-file`.
+- **Cross-agent format conversion:** bidirectional conversion across **7 writable targets** — WorkBuddy (Domestic), WorkBuddy AI (International), DSH, Claude Code, Claude Agent SDK, CodeBuddy CLI, and OpenAI Codex (42 directed pairs covered by regression checks), preserving representable text, reasoning, and tool history.
+- **Portable archives & incremental backup:** bundle conversations and complete Skill directories into SHA-256 verified native ZIPs; filter by project path and start date, run **incremental backups** against a prior baseline, run **Check backup**, map target directories, and preview conflicts (skip existing IDs by default or restore as independent copies).
+- **Local full-text search (SQLite / FTS5):** fast offline search with Chinese short-term segmentation, mixed-language queries, and source / project / date / tool filters (reasoning excluded by default).
+- **Evidence-backed Skill drafting:** extract editable Skill drafts from similar completed sessions with cited evidence; review before explicit export or saving — no model calls, auto-install, or script execution.
+- **Windows ↔ Ubuntu dual-boot migration:** transfer native records for the same assistant between mounted Windows drives and Ubuntu backups.
+- **Zero-dependency portable bundle & bilingual UI:** the universal release bundles Python 3.12 and `zstandard`; switch `English / 中文` in the header or pass `relay --lang en` (`RELAY_LANG=en`) in the CLI.
 
-![Task home](docs/images/task-home.jpg)
+## Quick start
 
-## Features and supported sources
+**Latest stable release: [v1.6.0](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v1.6.0)** (see [compatibility summary](docs/en/compatibility.md) for client-resume vs. file-level test coverage).
 
-- Browse, search, preview, and export conversations to Markdown.
-- Convert conversations to WorkBuddy, WorkBuddy AI, DSH, Claude Code, or Codex, preserving representable text, reasoning, and tool history.
-- Save individual or selected conversations as native ZIP archives for another device.
-- Archive complete Skill directories, including `SKILL.md`, scripts, and resources; select multiple items or the entire current list.
-- Transfer native records between the same assistant on Windows and Ubuntu using mounted or backed-up user directories.
-- Retry available ports automatically and stop the server from the web interface after active requests finish.
-- Portable SQLite/FTS5 full-text search: Chinese short terms, mixed-language queries, source/project/date/tool filters and offline cached conversations. Reasoning is excluded by default.
-- Extract editable Skill drafts from at least three independent complete conversations. Review evidence and outcomes before explicitly exporting; no model calls, installation or script execution. See [search and draft guide](docs/guide/search-and-skills.md) (Chinese).
+### 1. Portable release (recommended)
 
-| Source | Default conversation location | Support |
+Download `AgentRelay-<version>-universal.zip` from [GitHub Releases](https://github.com/FriedOnion2/agent-relay-portable/releases) (**do not** use GitHub's auto-generated Source code archives), extract the full folder, and run the launcher for your OS. No Python/Node.js installation or first-launch downloads required.
+
+| OS | Launcher | Supported systems |
 |---|---|---|
-| WorkBuddy (Domestic) | `~/.workbuddy/projects` | Read, export, write |
-| WorkBuddy AI (International) | `~/.workbuddy-ai/[user-…/]projects` | Read, export, write, native archives; 5.8.4 native reading and file roundtrip checked; desktop history index is not registered, restored-session resume has not passed validation |
-| DeepSeek Harness / DSH | `~/.dsh/sessions` | Read v0–v4, export, write native compressed history |
-| CodeBuddy CLI | `~/.codebuddy/projects` | Read, export, import into CLI, migrate out |
-| CodeBuddy CN IDE / Extension | System `CodeBuddyExtension/Data/**/history` | Read manifests and messages, export, migrate out |
-| Claude Code | `~/.claude/projects` | Read, export, write |
-| Claude Agent SDK | `~/.claude/projects` (shared with Claude Code) | Read, export, migrate in and out |
-| OpenAI Codex | `~/.codex/sessions` | Read, export, write |
-| Tencent Yuanbao JSON exports | Portable root `imports/yuanbao` | Import JSON, read, migrate out, archive and restore export files |
-
-### Gemini and Antigravity
-
-In the development version, select **Export Gemini CLI session** or run `relay gemini-session <source> <id> -o session-agentrelay.json`. In the target project run `gemini --session-file session-agentrelay.json`. The exported recording contains redacted user and assistant text, without tools, attachments or reasoning. Gemini CLI 0.71.1 lists the imported recording.
-
-Antigravity reads user and assistant turns from `brain/<session>/.system_generated/logs/transcript_full.jsonl`, preferring it over the compact transcript. All three standard data directories are scanned. An explicit directory in Environment limits discovery to that location. To continue in Antigravity or Yuanbao, use **Export TXT for a new chat** and attach or paste the result. This creates a text handoff; it does not register native history.
-
-| Source | Default location | Coverage |
-| --- | --- | --- |
-| Gemini CLI | `~/.gemini/tmp/<project>/chats/` | JSON and JSONL sessions, tool calls and results, textual reasoning summaries |
-| Google Antigravity | `~/.gemini/antigravity/` | Task, implementation plan, and walkthrough Markdown under `brain/<task>/`. Manually saved Markdown or TXT at the source root or under `exports/`. |
-
-On Windows, expand the sidebar in Gemini desktop and open **Gemini Apps → Browse sessions** in AgentRelay to see recent chats. Open the desired chat in Gemini, refresh in AgentRelay and choose **Save open chat text**. This saves the loaded question and answer text and skips duplicate snapshots. Images, attachments and earlier messages that have not loaded are outside the snapshot.
-
-**Gemini Apps** is a separate desktop and web source. In Google Takeout, select **My Activity → Gemini Apps** and JSON. Extract the archive and select the activity JSON file in AgentRelay. Each activity is stored separately. Identical entries are skipped on reimport. Imported activities support search, export, migration out and full or incremental backup. Use **Continue in Gemini** in the conversation details to download a TXT attachment for a new Gemini chat. [Google Takeout instructions](https://support.google.com/gemini/answer/16920332)
-
-Set another source directory under **Environment**. Use **Migrate sessions** to browse, export Markdown, or transfer to a writable agent. Both sources support full-text search, session ZIPs, and full or incremental backups. The project folder is optional on restore. Restored records live under the portable root in `imports/gemini` or `imports/antigravity`. Gemini coverage is for local CLI sessions. Each Antigravity artifact or text file is one restorable item. Use the original clients for binary attachments, native resume, and cloud history.
-
-Choose Tencent Yuanbao on the migration page and enter the absolute path of a compatible local JSON export. Obtain the JSON export first: this integration does not read the desktop client database or cloud account, or restore ZIPs into the Yuanbao client. On another device, restore exports into AgentRelay to browse or migrate them out. See the [Yuanbao guide and format contract](docs/reference/formats/yuanbao.md) (Chinese).
-
-CodeBuddy CLI and IDE appear under one source. DSH and WorkBuddy have separate names, configuration, and directories. Claude Agent SDK shares Claude Code's default storage; logs cannot reliably identify the creator. The SDK entry is labelled “Shared Claude records”, and both lists may show the same conversation. CLI history is not automatically relabelled as SDK-specific history.
-
-## Download and launch
-
-### Backup and handoff
-
-- Select any built-in agent under **Move between devices**. Filter conversations by project path and starting date. Use the previous full or incremental ZIP as a baseline to save new and changed items. Keep the full archive and all deltas in order. Existing IDs are skipped by default. Choose independent copies to keep changed versions. A DSH child needs its parent already restored or present in the same archive.
-- Select a ZIP and use **Check backup** to verify file checksums and see item counts and original export errors. Map local directories and preview to see restore conflicts.
-- Select a conversation and choose **Continue in Claude Desktop**. Review the TXT file, attach it to a new Claude Desktop chat, and send your next request. [Claude file upload guide](https://support.claude.com/en/articles/8241126-upload-files-to-claude)
-- Switch with **English** or **中文** in the web header. For the CLI, use `relay --lang en` or set `RELAY_LANG=en`.
-
-Stable release: [v1.6.0](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/v1.6.0). Verified client coverage and file-level support remain distinct; see [compatibility](docs/reference/compatibility.md) (Chinese). **Rolling dev build:** [`dev`](https://github.com/FriedOnion2/agent-relay-portable/releases/tag/dev) — rebuilt on every merge to `main`, always exactly one, may be unstable.
-
-Current stable version: **1.6.0**. Portable launch and migration coverage are listed in the compatibility matrix; a stable release does not establish resume support in every client.
-
-Download **`AgentRelay-<version>-universal.zip`** from [GitHub Releases](https://github.com/FriedOnion2/agent-relay-portable/releases), extract it completely, and use the launcher for your device. GitHub's automatically generated **Source code** archives are for development.
-
-| Device | Release launcher | Supported systems |
-|---|---|---|
-| Windows | Double-click `启动_AgentRelay.bat` | Windows 10/11 x64 |
-| Mac | `AgentRelay.app` or `bash 启动_AgentRelay.command` | Apple Silicon: macOS 14+; Intel: macOS 15+ |
+| Windows | `启动_AgentRelay.bat` | Windows 10 / 11 x64 |
+| macOS | `AgentRelay.app` or `bash 启动_AgentRelay.command` | Apple Silicon: macOS 14+; Intel: macOS 15+ |
 | Linux | `bash 启动_AgentRelay.sh` | Ubuntu 22.04+ / glibc 2.35+ x64 |
 
-Keep the entire extracted folder on your portable drive. Its optional `config.json`, `storage/`, and `index/` directories are shared across devices. Finish background jobs and exit the service before copying; copy drafts exported elsewhere separately. The launcher extracts only the matching runtime into a local cache, avoiding portable-drive executable restrictions and Mac symlink differences. **Keep `runtimes/`; no runtime is downloaded at startup.** Device overrides live in `devices/<device-id>.json`; another device starts with its own defaults. Inaccessible shared paths prompt reselection in **Environment**; save an empty directory to restore automatic detection.
+The browser opens `http://127.0.0.1:8745/` (auto-retrying nearby ports if occupied). Click **Stop service** at the top right to shut down cleanly. For macOS Gatekeeper / unnotarized app steps, see [install and launch](docs/en/install.md).
 
-The Mac app is not notarized by Apple. If macOS blocks it, run `bash Mac首次运行.command` in the trusted extracted directory, then launch again. Runtime caches are `%LOCALAPPDATA%/AgentRelay/<version>/` on Windows, `~/Library/Caches/AgentRelay/<version>/` on Mac, and `~/.cache/agentrelay/<version>/` on Linux (respecting `XDG_CACHE_HOME`). If extraction is interrupted, remove that version's cache and retry.
-
-Release archives contain only runtime files, launchers, a configuration example, and the short `开始使用.txt` getting-started guide. Tests, development documents, format research, and personal data are excluded. Development previews are marked **Pre-release**; use `SHA256SUMS.txt` to verify your download. The assistant you restore into still needs its own installation, dependencies, and authentication.
-
-## Stop the server and release its port
-
-The default URL is `http://127.0.0.1:8745/`. If occupied, AgentRelay tries the next five ports; use the URL printed by the launcher or opened in the browser. It does not terminate an existing service or another application. Startup fails if all candidate ports are occupied.
-
-To free an old AgentRelay port, open that service's page and click **Stop service** at the top right, then confirm, or press **Ctrl+C** in its terminal. This also stops a background service launched by `.app`. Active requests finish before shutdown, and other pages connected to that service disconnect. Closing the browser alone does not stop the server. Run the launcher again to restart; stop the old service before restarting updated code.
-
-## Run from source (optional)
-
-Release users can skip this section. Source users need **Python 3.8 or later**. Node.js is used only for web tests. Download or clone the complete repository and run commands from its root.
-
-| System | Initial setup | Launch |
-|---|---|---|
-| Windows | Install Python, or place a complete embedded Windows Python in `runtime/python/`; install the optional DSH dependency below | Double-click `启动_AgentRelay.bat` |
-| macOS | `bash Mac首次准备.command` | Double-click `AgentRelay.app` or `启动_AgentRelay.command` |
-| Ubuntu / Linux | `bash Ubuntu首次准备.sh`; install `python3 python3-venv` first if missing | `bash 启动_AgentRelay.sh` |
+### 2. Install via pip / pipx (CLI & Web without USB portability)
 
 ```sh
-python app/cli.py serve
-python app/cli.py serve --no-browser --port 8745
-python app/cli.py doctor
-python -m pip install -r requirements-optional.txt
+pipx install git+https://github.com/FriedOnion2/agent-relay-portable   # or pip install .
+relay serve
+relay list codex
 ```
 
-Use `python3` where appropriate on Linux / macOS, or set `RELAY_PYTHON` to the interpreter's full path. Basic source functionality uses the Python standard library; reading compressed DSH sessions and generic DSH imports require `zstandard`. Installing source dependencies requires network access; releases already include them.
+Config, logs, and archives are stored in your per-user data directory (`~/.local/share/agent-relay` on Linux, `~/Library/Application Support/AgentRelay` on macOS, `%APPDATA%\AgentRelay` on Windows), or override with `RELAY_PORTABLE_ROOT`.
 
-Mac setup creates `runtime/macos-<architecture>/` and installs `zstandard`; retry failed dependency installation with `bash Mac安装依赖.command`. Prepare again on another machine: this virtual environment depends on the local Python and is not a portable interpreter. Ubuntu setup uses a user-level virtual environment to avoid PEP 668 restrictions. See [runtime notes](runtime/README.txt) (Chinese). Without the decoder, DSH sessions are listed with an installation prompt; damaged, incomplete, oversized, or unknown-version logs show restricted reading.
-
-The source Mac `.app` opens the browser after HTTP becomes ready and respects `open_browser`. Logs use project `logs/`, falling back to `~/Library/Logs/AgentRelay/` if the drive prevents writes. A source launcher in Documents previously stalled during Python detection; the cause is unconfirmed. Use the terminal launcher and check macOS file/folder permissions if affected.
-
-## Batch conversation and Skill storage
-
-For conversations, select rows in the current source list or click **Select all in list**, then **Store selected conversations**. **Store this session** remains available in an individual preview. Use **Move between devices** to choose a storage directory, inspect archives, and restore.
-
-For Skills, open **Skill assets**, choose the source agent, and click **Find Skills**. Enter the actual Skill root if discovery finds nothing. Select directories or the entire current list, then click **Store selected Skills**. You can also enter a directory directly for individual storage.
-
-Select all includes only readable items in the current list. Changing the source or conversation search, or rescanning Skills, clears selections. Each item gets its own archive and success/failure result. Successful items are deselected; failed items stay selected for retry. Restore operates on one archive at a time.
-
-```text
-storage/
-├── conversations/<agent>/<archive-id>.zip
-└── skills/<agent>/<archive-id>.zip
-```
-
-Copy archives or the entire `storage/` directory to the destination device. In Conversation storage, choose an archive and an existing local project directory to restore into the corresponding assistant. In Skill storage, choose an archive, destination agent, and actual Skill root, then click **Restore Skill**.
-
-Contents and paths are validated before restoration. Existing conversation IDs and Skill names are not overwritten; choose a new ID or directory name when needed. Skill instructions and scripts are not automatically executed. Archives are unencrypted and are not uploaded to GitHub. Conversation archives restore native records for the corresponding assistant; use **Migrate to target** for conversion between assistants. See [portable storage](docs/guide/portable-storage.md) (Chinese).
+### 3. Run from source (Python 3.8+)
 
 ```sh
-python app/cli.py store-sessions codex <ID1> <ID2>
-python app/cli.py store-sessions codex --all
-python app/cli.py stored-sessions --agent codex
-python app/cli.py restore-session <conversation.zip> --cwd <absolute-local-project-path>
-python app/cli.py skills codex
-python app/cli.py store-skills codex --all --skills-dir <actual-skill-root>
-python app/cli.py stored-skills --agent codex
-python app/cli.py restore-skill <skill.zip> --skills-dir <destination-skill-root>
+python -m pip install -r requirements-optional.txt              # zstandard is required for compressed DSH logs
+python app/cli.py serve                                         # start the web UI
+python app/cli.py list codex                                    # list sessions
+python app/cli.py export codex <session-id> -o out.md           # export Markdown
+python app/cli.py transfer codex <session-id> --to dsh --dry-run   # preview migration without writing
+python app/cli.py --lang en list codex                          # English CLI output (or set RELAY_LANG=en)
 ```
 
-## Conversion and Windows / Ubuntu native migration
+On Ubuntu / macOS, run `Ubuntu首次准备.sh` or `Mac首次准备.command` to create an isolated virtual environment. Full instructions: [install and launch](docs/en/install.md).
 
-Select a source conversation and writable target in the web interface, provide a local target project directory when needed, and click **Migrate to target**. DSH imports write native v0 history without executing historical tool calls. Replace a source working directory from another operating system with a local absolute path.
+## Supported agents & coverage
 
-```sh
-python app/cli.py list codex
-python app/cli.py transfer codex <session-id> --to claude
-python app/cli.py transfer codex <session-id> --to dsh
-python app/cli.py export codex <session-id> -o handoff.md
-```
+| Source / Agent | Default session location | Read / Export | Write / Target | Verification & notes |
+|---|---|:---:|:---:|---|
+| WorkBuddy (Domestic) | `~/.workbuddy/projects` | ✅ | ✅ | File-level read/write & conversion checked |
+| WorkBuddy AI (International) | `~/.workbuddy-ai/[user-…/]projects` | ✅ | ✅ | 5.8.4 native read & ZIP roundtrip checked; desktop history index not registered, restored resume unverified |
+| DeepSeek Harness (DSH) | `~/.dsh/sessions` | ✅ (v0–v4) | ✅ | Verified in real DSH client |
+| CodeBuddy CLI / IDE | `~/.codebuddy/projects`, IDE `Data` | ✅ | CLI | CodeBuddy Code 2.187.0 on Windows recognizes imported IDs; IDE is export-only |
+| Claude Code | `~/.claude/projects` | ✅ | ✅ | Export verified; supports **Continue in Claude Desktop** TXT |
+| Claude Agent SDK | `~/.claude/projects` (shared with Claude Code) | ✅ | ✅ | Official SDK lists and reads migrated Q&A; labelled "Shared Claude records" |
+| OpenAI Codex | `~/.codex/sessions` | ✅ | ✅ | Verified in real Codex client |
+| Gemini CLI | `~/.gemini/tmp/<project>/chats/` | ✅ | `gemini --session-file` | Reads JSON/JSONL sessions, tool calls, and reasoning; exports redacted JSON from any source |
+| Gemini Apps (Desktop / Web) | Google Takeout JSON / Windows sidebar | ✅ | Handoff TXT | Deduplicated Takeout JSON import & Windows desktop open-chat snapshots; **Continue in Gemini** TXT |
+| Google Antigravity | `~/.gemini/antigravity/` | ✅ | Handoff TXT | Prefers `transcript_full.jsonl`, covers `brain/<task>/` & `exports/` artifacts; new-chat handoff TXT |
+| Tencent Yuanbao JSON | Portable root `imports/yuanbao` | ✅ | Archive restore only | Import compatible JSON, search, migrate out, and ZIP backup/restore; no desktop DB or cloud access |
 
-For a dual-boot system, mount the Windows partition in Ubuntu, then run:
+### Source notes & verification boundaries
 
-```sh
-python3 app/cli.py windows-users
-python3 app/cli.py windows-use "/media/<ubuntu-user>/<windows-volume>/Users/<windows-user>"
-bash 启动_AgentRelay.sh
-python3 app/cli.py import-windows codex <session-id> --cwd /home/<user>/<project>
-```
+- **Separate WorkBuddy editions:** domestic (`workbuddy` / `~/.workbuddy`) and international (`workbuddy_ai` / `~/.workbuddy-ai`) use separate sources, targets, directory settings, and native archive IDs — never merged automatically. DSH and CodeBuddy also remain separate; see the [WorkBuddy edition transfer matrix](docs/en/compatibility.md#workbuddy-edition-transfer-matrix).
+- **Gemini CLI / Apps & Antigravity:**
+  - **Gemini CLI:** click **Export Gemini CLI session** or run `relay gemini-session <source> <id> -o session-agentrelay.json`, then load it with `gemini --session-file session-agentrelay.json` (contains redacted Q&A text; excludes source tools, attachments, and reasoning).
+  - **Gemini Apps:** on Windows, open **Gemini Apps → Browse sessions** to snapshot loaded Q&A text from the active Gemini desktop chat (duplicates skipped). On all platforms, import **My Activity → Gemini Apps** JSON from [Google Takeout](https://support.google.com/gemini/answer/16920332) with deduplication, and export **Continue in Gemini** TXT.
+  - **Google Antigravity:** scans desktop, IDE, and CLI roots by default (or a single configured root in **Environment**), preferring `brain/<session>/.system_generated/logs/transcript_full.jsonl`; restores per artifact/text file and exports **Export TXT for a new chat**.
+- **Tencent Yuanbao:** open **Migrate sessions → Tencent Yuanbao** and provide the absolute path to a compatible local JSON export; see the [Yuanbao format guide](docs/reference/formats/yuanbao.md) (Chinese).
+- **Verification boundary:** "verified in real client" means opening and continuing a migrated/restored session in the actual vendor client; file-level regression checks do not guarantee native resume compatibility across future vendor updates. See [compatibility summary](docs/en/compatibility.md) and [known limitations](docs/en/limitations.md).
 
-The web interface keeps Ubuntu sources and adds seven read-only Windows sources. Select a Windows conversation, enter an existing Ubuntu project directory, and click **Migrate to the Ubuntu counterpart** to preserve native records. Supported sources include WorkBuddy, Claude, SDK, Codex, DSH v4 / v0 seed, and CodeBuddy CLI/IDE; create the local IDE workspace first. Historical Windows paths are not automatically rewritten.
+## Documentation
 
-For Ubuntu → Windows, enter the Windows project path and its mounted path in Ubuntu, then click **Migrate to the Windows counterpart**, or run:
+English docs start at [docs/en/README.md](docs/en/README.md); full Chinese index at [docs/README.md](docs/README.md).
 
-```sh
-python3 app/cli.py export-windows codex <session-id> --cwd 'D:\project' --project-path /mnt/data/project
-```
+| Topic | Document |
+|---|---|
+| Download, install, launch & quit | [docs/en/install.md](docs/en/install.md) |
+| Tutorial: migrate a session (CLI) | [docs/en/migrate-a-session.md](docs/en/migrate-a-session.md) |
+| Web workflow, restore & Skill assets | [docs/guide/web-workflow.md](docs/guide/web-workflow.md) (Chinese) |
+| Batch storage, conversion & preview | [docs/guide/storage-and-migration.md](docs/guide/storage-and-migration.md) (Chinese) |
+| Full-text search & Skill drafting | [docs/guide/search-and-skills.md](docs/guide/search-and-skills.md) (Chinese) |
+| Portable archives & Ubuntu dual boot | [docs/guide/portable-storage.md](docs/guide/portable-storage.md) · [docs/guide/ubuntu-dual-boot.md](docs/guide/ubuntu-dual-boot.md) (Chinese) |
+| Configuration & troubleshooting | [docs/en/configuration.md](docs/en/configuration.md) · [docs/en/troubleshooting.md](docs/en/troubleshooting.md) |
+| Compatibility, limitations & formats | [docs/en/compatibility.md](docs/en/compatibility.md) · [docs/en/limitations.md](docs/en/limitations.md) · [docs/reference/source-formats.md](docs/reference/source-formats.md) (Chinese) |
+| Yuanbao compatibility scope | [docs/reference/yuanbao-compatibility.md](docs/reference/yuanbao-compatibility.md) (Chinese) |
+| Adapters, plugins & testing | [docs/dev/adapters.md](docs/dev/adapters.md) · [docs/dev/writing-a-plugin.md](docs/dev/writing-a-plugin.md) · [docs/dev/testing.md](docs/dev/testing.md) (Chinese) |
+| CLI reference | [docs/en/cli.md](docs/en/cli.md) (Quick start: [使用说明.md](使用说明.md)) |
 
-On Windows, `python app/cli.py ubuntu-use "D:\UbuntuBackup\alice"` selects an accessible Ubuntu user-directory backup; use `python app/cli.py import-ubuntu codex <session-id> --cwd "D:\project"` to import. Windows does not directly read ext4. Both directions preserve source files, reject existing IDs, and do not merge histories continued independently on both devices. A new ID can retain another copy. See [dual-boot instructions](docs/guide/ubuntu-dual-boot.md) and [migration research](docs/research/session-migration-alternatives.md) (Chinese).
+## Contributing
 
-## Configuration and data
+Issues and pull requests are welcome — please read [CONTRIBUTING.md](CONTRIBUTING.md) first. Report security issues privately via [SECURITY.md](SECURITY.md). See [CHANGELOG.md](CHANGELOG.md) for release history and [docs/dev/maintainers.md](docs/dev/maintainers.md) for maintainer workflows.
 
-Copy `config.example.json` to `config.json` to configure source roots, the port, and browser opening. Directory precedence is: device configuration → shared configuration → `RELAY_<AGENT>_HOME` → assistant environment variable → current user's default directory. Relative roots resolve against the portable folder. DSH respects `DSH_HOME`, WorkBuddy `WORKBUDDY_HOME`, and CodeBuddy `CODEBUDDY_HOME`.
+## License
 
-Phase one adds migration previews with preserved/degraded/dropped/unknown categories, consistency tokens, device environment checks, trusted read-only adapter plugins, and daily synthetic format reports. Migration and `restore-session` commands accept `--dry-run` and `--preview-token`; existing direct calls remain compatible. CLI commands `device-config`, `plugins`, and `health --output health-output` expose these features. Native client continuation and latest client versions remain explicitly unverified. See [compatibility evidence](docs/reference/compatibility.md), [adapter API and example](docs/dev/adapters.md), and [portable troubleshooting](docs/guide/troubleshooting.md) (Chinese).
-
-SDK defaults respect `CLAUDE_CONFIG_DIR`; override separately with `agent_homes.claude_sdk` / `RELAY_CLAUDE_SDK_HOME`. It does not inherit a Claude Code-only `RELAY_CLAUDE_HOME`. Supply an assistant's root directory, not its `projects` / `sessions` subdirectory.
-
-`windows_user_home` / `RELAY_WINDOWS_USER_HOME` selects the mounted Windows user directory on Linux only. Temporary `--windows-user` overrides the saved selection. This adds read-only sources and does not change local write targets.
-
-For old configurations pointing `agent_homes.dsh` or `RELAY_DSH_HOME` at `.workbuddy`, move that value to `workbuddy` / `RELAY_WORKBUDDY_HOME`. `dsh` now means DeepSeek Harness and is not silently aliased to WorkBuddy.
-
-CodeBuddy scans CLI and IDE by default. IDE roots are `%LOCALAPPDATA%/CodeBuddyExtension/Data` on Windows, `~/Library/Application Support/CodeBuddyExtension/Data` on macOS, and `~/.config/CodeBuddyExtension/Data` on Linux. An explicit CodeBuddy root scans only that directory, which can be a backed-up `.codebuddy` or IDE `Data` root.
-
-Conversions read the source and write new files to the target assistant's conversation directory without overwriting existing targets. Keep logs, local configuration, runtimes, caches, and real conversation data out of GitHub; repository ignore rules cover these paths.
-
-## Validation
-
-```sh
-python -m pip install -r requirements-optional.txt
-python -m unittest discover -s tests -v
-node --test tests/web.test.cjs
-```
-
-As of 2026-10-08, stage-two local regression coverage is **140 Python tests (4 environment-dependent skips on Windows) and 28 web tests**. GitHub Actions tests Python 3.8, 3.12, and 3.14 across Windows, Ubuntu, and macOS in eight combinations (macOS excludes Python 3.8). Release smoke runs exercise FTS5, Chinese queries, reasoning exclusion/purge, workflow drafts, explicit export and a relocated corpus inside every frozen runtime.
-
-Tests cover conversion, archive round trips, integrity and conflict protection, occupied ports, shutdown waiting, asynchronous lists, and partial batch failures. They use temporary synthetic data without modifying real conversations or executing Skill scripts.
-
-Optional Mac validation: `python3 tests/macos_launch_smoke.py` launches the actual `.app`, probes local sources read-only, verifies HTTP and shutdown, and stops its service. Official DSH native checks are in `tests/dsh_native_smoke.mjs` / `tests/dsh_catalog_smoke.mjs`; see their headers for arguments.
-
-Release builds validate bundled dependencies with an empty `PATH`, DSH import, shared storage roots, port retry, HTTP, and shutdown on all four native platforms. The assembled universal archive is also tested on each platform before publication. CI validates AgentRelay's behavior; actual vendor continuation, permissions, and mounts still need checking in the destination environment.
-
-## Current limitations
-
-- WorkBuddy / Claude / SDK / Codex / CodeBuddy CLI read at most 32 MiB; oversized records may export marked partial content but cannot be converted. Oversized DSH input/decompressed data and CodeBuddy IDE aggregate input are rejected.
-- Claude / SDK read the current `parentUuid` main chain, without merging old branches or subagents. Pre-compaction text remains in the original file but is not duplicated into the current migrated context.
-- DSH export preserves event history without replaying surface replacement, compaction, seed, or native resume state.
-- Generic conversion supports WorkBuddy, WorkBuddy AI, DSH, Claude Code, Claude Agent SDK, CodeBuddy CLI and Codex. This restriction does not prevent same-assistant native migration or archive restoration.
-- DSH import writes native v0 Zstd logs, validated with 0.1.2-rc.1 and strict official 0.2.1-alpha.1 catalog migration to v4. Historical tool calls are disabled; calls missing results become text rather than pending work. Images and non-native blocks become annotated text. The target working directory must be absolute on the current OS.
-- Native DSH migration supports full v4 and verifiable v0 seed records. Migrate a fork's parent first; subagents are not imported separately. CodeBuddy IDE needs a uniquely matching existing native workspace and must be closed during import.
-- SDK `stream-json` output is not a native transcript. Applications with persistence disabled or only an external SessionStore may have no default local history.
-- CodeBuddy CLI/IDE formats are based on observations from third-party consumers, without vendor-native continuation verification; see [source format notes](docs/reference/source-formats.md) (Chinese).
-- Images, encrypted reasoning, and vendor-specific metadata may not be fully preserved. Tool-name conversion neither installs target tools nor converts their argument protocols.
-- Codex Desktop may require its own database index; generated JSONL does not guarantee appearance in its conversation list.
-- Vendor formats can change. AgentRelay read-back tests do not replace actual continuation checks in the destination assistant.
-- `.app` and terminal launch have been tested on an Apple Silicon Mac; Gatekeeper permissions and native continuation depend on the destination device.
-
-## Further documentation (Chinese)
-
-- [Quick start](使用说明.md) (Chinese): launch and shutdown; see the [CLI reference](docs/reference/cli.md) (Chinese) for all commands.
-- [Portable storage](docs/guide/portable-storage.md): conversation and Skill archives, restoration, and boundaries.
-- [Ubuntu dual boot](docs/guide/ubuntu-dual-boot.md): mounting and native migration in both directions.
-- [Source formats](docs/reference/source-formats.md): format references and official sources.
-- [Native migration research](docs/research/session-migration-alternatives.md): related projects and implementation differences.
-
----
-
-Contributing: [CONTRIBUTING.md](CONTRIBUTING.md) · Security: [SECURITY.md](SECURITY.md) · [CHANGELOG.md](CHANGELOG.md) · [MIT License](LICENSE)
+[MIT License](LICENSE)
